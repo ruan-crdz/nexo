@@ -1,8 +1,9 @@
 import { NavLink, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
-import { Home, NotebookPen, MessageCircle, Settings } from 'lucide-react';
+import { Home, NotebookPen, MessageCircle, Settings, CircleHelp } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
 import { Brand, Button } from '../design-system/components';
+import { ThemeToggle } from '../design-system/theme';
 export { Brand } from '../design-system/components';
 
 const navigation = [
@@ -44,10 +45,17 @@ export function Shell() {
         <Link to="/inicio" aria-label="Nexo início">
           <Brand />
         </Link>
-        <span>Uma anotação de cada vez.</span>
-        <Link to="/ajuda" className="button button-secondary">
-          Preciso de ajuda
-        </Link>
+        <span className="workspace-label">Finanças pessoais</span>
+        <div className="simple-topbar-actions">
+          <ThemeToggle />
+          <Link to="/ajuda" className="button button-ghost" title="Preciso de ajuda">
+            <CircleHelp size={20} />
+            <span>Preciso de ajuda</span>
+          </Link>
+          <Link to="/perfil" className="simple-profile" aria-label="Abrir meus ajustes">
+            {app.data.profile.name.slice(0, 1).toUpperCase()}
+          </Link>
+        </div>
       </header>
       <nav className="simple-nav" aria-label="Principal">
         {navigation.map(({ to, label, icon: Icon }) => (
@@ -57,7 +65,7 @@ export function Shell() {
           </NavLink>
         ))}
       </nav>
-      <main id="main-content" ref={main} tabIndex={-1} className="simple-content">
+      <main id="main-content" ref={main} tabIndex={-1} className="simple-content" data-page={pathname}>
         {app.demo && (
           <div className="simple-demo">
             Você está experimentando com dados de exemplo. <Link to="/cadastro">Criar minha conta</Link>

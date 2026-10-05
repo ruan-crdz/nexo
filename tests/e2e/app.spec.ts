@@ -171,9 +171,10 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
 });
 
 test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
+  test.setTimeout(60_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  for (const width of [320, 390, 768]) {
+  for (const width of [320, 360, 390, 430, 768, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 844 });
     for (const route of ['inicio', 'movimentos', 'integracoes', 'perfil', 'ajuda', 'privacidade']) {
       await page.goto(`/#/${route}`);
@@ -185,11 +186,14 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
         .toBeLessThanOrEqual(width);
     }
   }
+  await page.setViewportSize({ width: 768, height: 844 });
   await page.goto('/#/inicio');
   await page.addStyleTag({ content: 'body { font-size: 200% !important; font-family: Arial, sans-serif; }' });
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth), {
-    message: 'O texto ampliado não deve criar rolagem horizontal',
-  }).toBeLessThanOrEqual(768);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth), {
+      message: 'O texto ampliado não deve criar rolagem horizontal',
+    })
+    .toBeLessThanOrEqual(768);
   expect(errors).toEqual([]);
 });
 
@@ -202,6 +206,68 @@ test('formulário tem foco, Escape cancela e campos são acessíveis', async ({ 
   expect(result.violations).toEqual([]);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).not.toBeVisible();
+});
+
+test('resumo seleciona o mês e categorias conservam os gastos pagos', async ({ page }) => {
+  const selected = page.locator('.flow-month').first();
+  const month = await selected.getAttribute('data-month');
+  await selected.click();
+  await expect(page.getByLabel('Mês do resumo', { exact: true })).toHaveValue(month!);
+  await expect(page.locator('.simple-totals')).toHaveAttribute('data-month', month!);
+  const expected = await page.evaluate((selectedMonth) => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    return data.transactions
+      .filter(
+        (transaction: { date: string; status: string; type: string }) =>
+          transaction.date.startsWith(selectedMonth!) &&
+          transaction.status === 'paid' &&
+          transaction.type === 'expense',
+      )
+      .reduce((total: number, transaction: { amount: number }) => total + transaction.amount, 0);
+  }, month);
+  const rendered = await page.locator('.category-list strong').allTextContents();
+  const total = rendered.reduce(
+    (amount, text) => amount + Math.round(Number(text.replace(/[^\d,]/g, '').replace(',', '.')) * 100),
+    0,
+  );
+  expect(total).toBe(expected);
+});
+
+test('PC distribui os blocos e celular mantém ações visíveis', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const evolution = await page.locator('.money-evolution').boundingBox();
+  const breakdown = await page.locator('.money-breakdown').boundingBox();
+  expect(evolution).not.toBeNull();
+  expect(breakdown!.x).toBeGreaterThan(evolution!.x + evolution!.width);
+  expect(Math.abs(breakdown!.y - evolution!.y)).toBeLessThan(2);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await expect(page.getByRole('button', { name: 'Anotar gasto' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Anotar entrada' })).toBeVisible();
+});
+
+test('modal não rola horizontalmente e trava o fundo em celular e PC', async ({ page }) => {
+  for (const width of [320, 390, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.getByRole('button', { name: 'Anotar gasto' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByText('Mais detalhes (opcional)', { exact: true }).click();
+    await expect(dialog.getByRole('combobox', { name: 'Categoria', exact: true })).toBeVisible();
+    expect(
+      await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      `Modal em ${width}px`,
+    ).toBe(true);
+    expect(
+      await dialog.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.left >= 0 && bounds.right <= window.innerWidth;
+      }),
+    ).toBe(true);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden');
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.style.overflow)).not.toBe('hidden');
+  }
 });
 
 test('capturas da nova experiência', async ({ page }) => {
@@ -227,6 +293,8 @@ test('entrada e cadastro têm instruções simples e permitem conferir a senha',
   await page.getByRole('link', { name: 'Ainda não tenho conta' }).click();
   await expect(page.getByRole('heading', { name: 'Criar minha conta' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+  const result = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+    .analyze();
   expect(result.violations).toEqual([]);
 });

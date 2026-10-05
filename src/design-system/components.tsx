@@ -158,9 +158,14 @@ export function Dialog({
     titleId = useId();
   useEffect(() => {
     const el = ref.current;
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
     el?.showModal();
     el?.querySelector<HTMLElement>('[data-dialog-autofocus]')?.focus();
-    return () => el?.close();
+    return () => {
+      el?.close();
+      document.documentElement.style.overflow = previousOverflow;
+    };
   }, []);
   return (
     <dialog

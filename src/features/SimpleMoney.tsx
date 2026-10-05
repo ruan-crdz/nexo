@@ -8,6 +8,8 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageCircle,
+  ChartNoAxesColumnIncreasing,
+  Wallet,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -220,96 +222,237 @@ export function SimpleHome() {
   });
   const [adding, setAdding] = useState<Transaction['type'] | null>(null);
   const today = civilDate(new Date(), app.data.profile.timezone);
-  const flow = monthlyFlow(
-    app.data.transactions.filter((t) => t.date <= today),
-    today.slice(0, 7),
-  );
+  const currentMonth = today.slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const posted = app.data.transactions.filter((transaction) => transaction.date <= today);
+  const flow = monthlyFlow(posted, month);
+  const months = Array.from({ length: 6 }, (_, index) => {
+    const key = shiftMonths(`${currentMonth}-01`, index - 5).slice(0, 7);
+    return { month: key, ...monthlyFlow(posted, key) };
+  });
+  const chartMaximum = Math.max(1, ...months.flatMap((item) => [item.income, item.expenses]));
+  const categoryAmounts = new Map<string, number>();
+  for (const transaction of posted) {
+    if (transaction.status === 'paid' && transaction.type === 'expense' && transaction.date.startsWith(month))
+      categoryAmounts.set(
+        transaction.category,
+        (categoryAmounts.get(transaction.category) ?? 0) + transaction.amount,
+      );
+  }
+  const allSpending = [...categoryAmounts.entries()].sort((first, second) => second[1] - first[1]);
+  const spending = allSpending.slice(0, 4);
+  if (allSpending.length > 4)
+    spending.push([
+      'Outras categorias',
+      allSpending.slice(4).reduce((total, [, amount]) => total + amount, 0),
+    ]);
   const recent = app.data.transactions
     .filter((t) => t.date <= today)
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 3);
+    .slice(0, 5);
   return (
     <>
-      <header className="simple-heading">
-        <p className="muted">Seu dinheiro, sem complicação</p>
-        <h1>Olá, {app.data.profile.name.split(' ')[0]}.</h1>
-        <p>Vamos acompanhar suas anotações?</p>
-      </header>
-      <section className="whatsapp-home">
-        <MessageCircle size={36} />
+      <header className="simple-heading dashboard-heading">
         <div>
-          <h2>É só falar. O Nexo anota.</h2>
-          <p>Envie uma mensagem ou um áudio contando o que gastou ou recebeu.</p>
-          {connection.data?.connected ? (
-            <a
-              className="button button-primary"
-              href={connection.data.chat_url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Abrir meu WhatsApp <ArrowUpRight size={20} />
-            </a>
-          ) : (
-            <Link className="button button-primary" to="/integracoes">
-              {app.demo ? 'Conhecer o WhatsApp' : 'Conectar meu WhatsApp'} <ChevronRight size={20} />
-            </Link>
-          )}
+          <p className="muted">Visão geral</p>
+          <h1>Olá, {app.data.profile.name.split(' ')[0]}.</h1>
+          <p>Seu dinheiro com mais clareza.</p>
         </div>
-      </section>
-      <Card className="simple-summary">
+        <div className="dashboard-period" role="group" aria-label="Navegar entre meses">
+          <Button
+            variant="ghost"
+            aria-label="Mês anterior do resumo"
+            title="Mês anterior"
+            onClick={() => setMonth(shiftMonths(`${month}-01`, -1).slice(0, 7))}
+          >
+            <ChevronLeft size={20} />
+          </Button>
+          <label>
+            <span className="sr-only">Mês do resumo</span>
+            <input
+              type="month"
+              value={month}
+              max={currentMonth}
+              onChange={(event) => {
+                if (event.target.value && event.target.value <= currentMonth) setMonth(event.target.value);
+              }}
+            />
+          </label>
+          <Button
+            variant="ghost"
+            aria-label="Próximo mês do resumo"
+            title="Próximo mês"
+            disabled={month >= currentMonth}
+            onClick={() => setMonth(shiftMonths(`${month}-01`, 1).slice(0, 7))}
+          >
+            <ChevronRight size={20} />
+          </Button>
+        </div>
+      </header>
+      <section className="simple-summary" aria-labelledby="monthly-summary-title">
         <div className="simple-section-title">
-          <h2>Seu mês até agora</h2>
-          <span>{monthLabel(today.slice(0, 7))}</span>
+          <h2 id="monthly-summary-title">Seu mês até agora</h2>
+          <span>
+            {flow.count} {flow.count === 1 ? 'anotação' : 'anotações'} · {monthLabel(month)}
+          </span>
         </div>
-        <div className="simple-totals">
+        <div className="simple-totals" data-month={month}>
           <div>
-            <span>Entrou</span>
+            <span>
+              <ArrowDownLeft size={18} /> Entrou
+            </span>
             <strong className="positive">{formatMoney(flow.income)}</strong>
+            <small>Recebimentos do mês</small>
           </div>
           <div>
-            <span>Saiu</span>
+            <span>
+              <ArrowUpRight size={18} /> Saiu
+            </span>
             <strong>{formatMoney(flow.expenses)}</strong>
+            <small>Pagamentos do mês</small>
           </div>
           <div className="simple-net">
-            <span>{flow.net < 0 ? 'Faltou no mês' : 'Sobrou no mês'}</span>
+            <span>
+              <Wallet size={18} /> {flow.net < 0 ? 'Faltou no mês' : 'Sobrou no mês'}
+            </span>
             <strong>{formatMoney(Math.abs(flow.net))}</strong>
+            <small>Entrou menos saiu</small>
           </div>
         </div>
         <p className="muted">Pelas anotações deste mês. Esse valor não é o saldo da sua conta bancária.</p>
         {flow.count === 0 && <p>Comece anotando algo que recebeu ou gastou.</p>}
-      </Card>
-      <section>
-        <h2 className="manual-title">Prefere anotar por aqui?</h2>
-        <div className="money-actions">
-          <button className="money-action expense-action" onClick={() => setAdding('expense')}>
-            <span>
-              <ArrowUpRight size={28} />
-            </span>
-            <strong>Anotar gasto</strong>
-            <small>Algo que você pagou</small>
-          </button>
-          <button className="money-action income-action" onClick={() => setAdding('income')}>
-            <span>
-              <ArrowDownLeft size={28} />
-            </span>
-            <strong>Anotar entrada</strong>
-            <small>Dinheiro que recebeu</small>
-          </button>
-        </div>
       </section>
-      <Card>
-        <div className="simple-section-title">
-          <h2>Últimas anotações</h2>
-          <Link className="text-link" to="/movimentos">
-            Ver todas <ChevronRight size={18} />
-          </Link>
+      <div className="money-dashboard">
+        <section className="money-evolution" aria-labelledby="evolution-title">
+          <div className="simple-section-title">
+            <div>
+              <h2 id="evolution-title">Entradas e saídas</h2>
+              <p className="muted">Últimos seis meses</p>
+            </div>
+            <div className="flow-legend">
+              <span>
+                <i className="income-swatch" /> Entrou
+              </span>
+              <span>
+                <i className="expense-swatch" /> Saiu
+              </span>
+            </div>
+          </div>
+          <div className="flow-chart" aria-label="Evolução das anotações por mês">
+            {months.map((item) => (
+              <button
+                key={item.month}
+                data-month={item.month}
+                className={`flow-month${month === item.month ? ' selected' : ''}`}
+                aria-pressed={month === item.month}
+                aria-label={`Ver ${monthLabel(item.month)}: entrou ${formatMoney(item.income)}, saiu ${formatMoney(item.expenses)}`}
+                title={`${monthLabel(item.month)}: entrou ${formatMoney(item.income)} · saiu ${formatMoney(item.expenses)}`}
+                onClick={() => setMonth(item.month)}
+              >
+                <span className="flow-bars" aria-hidden="true">
+                  <span className="income-bar" style={{ height: `${(item.income / chartMaximum) * 100}%` }} />
+                  <span
+                    className="expense-bar"
+                    style={{ height: `${(item.expenses / chartMaximum) * 100}%` }}
+                  />
+                </span>
+                <span>
+                  {new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
+                    .format(new Date(`${item.month}-01T12:00:00Z`))
+                    .replace('.', '')}
+                </span>
+              </button>
+            ))}
+          </div>
+          {!months.some((item) => item.count > 0) && (
+            <p className="muted">A evolução aparece quando você anota suas entradas e gastos.</p>
+          )}
+        </section>
+        <section className="money-breakdown" aria-labelledby="spending-title">
+          <div className="simple-section-title">
+            <h2 id="spending-title">Onde você gastou</h2>
+            <ChartNoAxesColumnIncreasing size={20} aria-hidden="true" />
+          </div>
+          {spending.length ? (
+            <ul className="category-list">
+              {spending.map(([category, amount]) => (
+                <li key={category}>
+                  <div>
+                    <span>{category}</span>
+                    <strong>{formatMoney(amount)}</strong>
+                  </div>
+                  <div className="category-track" aria-hidden="true">
+                    <span style={{ width: `${(amount / flow.expenses) * 100}%` }} />
+                  </div>
+                  <small className="muted">{Math.round((amount / flow.expenses) * 100)}% dos gastos</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="simple-empty">
+              <p>Nenhum gasto pago em {monthLabel(month)}.</p>
+              <Button variant="secondary" onClick={() => setAdding('expense')}>
+                <ArrowUpRight size={18} /> Anotar gasto
+              </Button>
+            </div>
+          )}
+        </section>
+        <section className="money-recent" aria-labelledby="recent-title">
+          <div className="simple-section-title">
+            <h2 id="recent-title">Últimas anotações</h2>
+            <Link className="text-link" to="/movimentos">
+              Ver todas <ChevronRight size={18} />
+            </Link>
+          </div>
+          {recent.length ? (
+            <MoneyRows rows={recent} />
+          ) : (
+            <p className="muted">Ainda não há anotações. Use os botões acima para começar.</p>
+          )}
+        </section>
+        <section className="money-shortcuts" aria-labelledby="quick-actions-title">
+          <h2 id="quick-actions-title" className="manual-title">
+            Anotar agora
+          </h2>
+          <div className="money-actions">
+            <button className="money-action expense-action" onClick={() => setAdding('expense')}>
+              <span>
+                <ArrowUpRight size={24} />
+              </span>
+              <strong>Anotar gasto</strong>
+              <small>Algo que você pagou</small>
+            </button>
+            <button className="money-action income-action" onClick={() => setAdding('income')}>
+              <span>
+                <ArrowDownLeft size={24} />
+              </span>
+              <strong>Anotar entrada</strong>
+              <small>Dinheiro que recebeu</small>
+            </button>
+          </div>
+        </section>
+      </div>
+      <section className="whatsapp-home">
+        <MessageCircle size={32} />
+        <div>
+          <h2>É só falar. O Nexo anota.</h2>
+          <p>Envie uma mensagem ou um áudio contando o que gastou ou recebeu.</p>
         </div>
-        {recent.length ? (
-          <MoneyRows rows={recent} />
+        {connection.data?.connected ? (
+          <a
+            className="button button-primary"
+            href={connection.data.chat_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abrir meu WhatsApp <ArrowUpRight size={20} />
+          </a>
         ) : (
-          <p className="muted">Ainda não há anotações. Use os botões acima para começar.</p>
+          <Link className="button button-primary" to="/integracoes">
+            {app.demo ? 'Conhecer o WhatsApp' : 'Conectar meu WhatsApp'} <ChevronRight size={20} />
+          </Link>
         )}
-      </Card>
+      </section>
       {adding && <MoneyForm type={adding} onClose={() => setAdding(null)} />}
     </>
   );
