@@ -91,6 +91,9 @@ label {
 .simple-nav a {
   display: flex;
   flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  text-align: center;
   align-items: center;
   justify-content: center;
   gap: 10px;
@@ -98,6 +101,11 @@ label {
   padding: 12px;
   border-radius: 12px;
   font-weight: 600;
+}
+.simple-nav a span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .simple-nav a.active {
   color: var(--moss);

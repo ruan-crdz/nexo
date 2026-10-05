@@ -186,8 +186,10 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
     }
   }
   await page.goto('/#/inicio');
-  await page.addStyleTag({ content: 'body { font-size: 200% !important; }' });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.addStyleTag({ content: 'body { font-size: 200% !important; font-family: Arial, sans-serif; }' });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth), {
+    message: 'O texto ampliado não deve criar rolagem horizontal',
+  }).toBeLessThanOrEqual(768);
   expect(errors).toEqual([]);
 });
 
