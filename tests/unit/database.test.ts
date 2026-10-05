@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { vector } from '@electric-sql/pglite-pgvector';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { readFileSync } from 'node:fs';
+import { v5 as uuid } from 'uuid';
 const alice = '00000000-0000-4000-8000-00000000000a',
   bob = '00000000-0000-4000-8000-00000000000b';
 let db: PGlite, org: string;
@@ -29,6 +30,8 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610040003_operations.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610040004_mfa.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050001_whatsapp_delivery.sql', 'utf8'));
+  await db.exec('alter default privileges in schema public grant all on tables to anon,authenticated; alter default privileges in schema public grant execute on functions to anon,authenticated;');
+  await db.exec(readFileSync('supabase/migrations/202610050002_planning_family.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -201,5 +204,135 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
     );
     await db.query("select delete_organization($1,'Empresa A')", [org]);
     expect((await db.query('select * from organizations')).rows).toHaveLength(0);
+  });
+  it('família exige pedido, aprovação do dono, escopo e revogação', async () => {
+    await asUser(alice);
+    const invite = (
+      await db.query<{ invite: { id: string; code: string } }>(
+        "select create_family_invite('summary') as invite",
+      )
+    ).rows[0].invite;
+    await asUser(bob);
+    await expect(db.query('select family_snapshot($1)', [invite.id])).rejects.toThrow(/not approved/);
+    await db.query('select request_family_access($1)', [invite.code]);
+    await expect(db.query('select family_snapshot($1)', [invite.id])).rejects.toThrow(/not approved/);
+    await expect(db.query('select approve_family_access($1)', [invite.id])).rejects.toThrow(/owner approval/);
+    await expect(
+      db.query("update family_invites set state='active' where id=$1", [invite.id]),
+    ).rejects.toThrow(/permission denied/);
+    await asUser(alice);
+    await db.query('select approve_family_access($1)', [invite.id]);
+    await asUser(bob);
+    const shared = (
+      await db.query<{ snapshot: { scope: string; transactions: unknown[] } }>(
+        'select family_snapshot($1) as snapshot',
+        [invite.id],
+      )
+    ).rows[0].snapshot;
+    expect(shared).toMatchObject({ scope: 'summary', transactions: [] });
+    expect((await db.query('select * from transactions where user_id=$1', [alice])).rows).toHaveLength(0);
+    await asUser(alice);
+    await db.query('select revoke_family_access($1)', [invite.id]);
+    await asUser(bob);
+    await expect(db.query('select family_snapshot($1)', [invite.id])).rejects.toThrow(/not approved/);
+  });
+  it('recorrências não duplicam, não ressuscitam exclusões e não misturam usuários', async () => {
+    await asUser(alice);
+    const rule = (
+      await db.query<{ id: string }>(
+        "insert into recurring_rules(user_id,description,amount,category,start_date) values($1,'Conta mensal',1234,'Moradia',current_date) returning id",
+        [alice],
+      )
+    ).rows[0].id;
+    expect(
+      (await db.query<{ count: number }>('select sync_recurring_rules() as count')).rows[0].count,
+    ).toBeGreaterThan(0);
+    const occurrences = await db.query<{ due_date: string; transaction_id: string }>(
+      'select due_date::text,transaction_id from recurring_occurrences where rule_id=$1',
+      [rule],
+    );
+    for (const occurrence of occurrences.rows)
+      expect(occurrence.transaction_id).toBe(
+        uuid(`${rule}:${occurrence.due_date}`, '9667e0ce-412e-47d9-a212-91d1d616f74b'),
+      );
+    expect((await db.query<{ count: number }>('select sync_recurring_rules() as count')).rows[0].count).toBe(
+      0,
+    );
+    await db.query('delete from transactions where external_id like $1', [`recurring:${rule}:%`]);
+    expect((await db.query<{ count: number }>('select sync_recurring_rules() as count')).rows[0].count).toBe(
+      0,
+    );
+    await asUser(bob);
+    await expect(db.query('select sync_recurring_rules_for($1)', [alice])).rejects.toThrow(
+      /permission denied/,
+    );
+    expect((await db.query('select * from recurring_rules where id=$1', [rule])).rows).toHaveLength(0);
+  });
+  it('importação é idempotente e rollback inclui o lote inteiro', async () => {
+    await asUser(alice);
+    const row = {
+      id: crypto.randomUUID(),
+      account_id: null,
+      description: 'Extrato importado',
+      amount: 1234,
+      type: 'expense',
+      category: 'Outros',
+      date: '2026-10-04',
+      status: 'paid',
+    };
+    expect(
+      (
+        await db.query<{ result: { saved: number; skipped: number } }>(
+          'select import_transactions($1::jsonb) as result',
+          [JSON.stringify([row])],
+        )
+      ).rows[0].result,
+    ).toEqual({ saved: 1, skipped: 0 });
+    expect(
+      (
+        await db.query<{ result: { saved: number; skipped: number } }>(
+          'select import_transactions($1::jsonb) as result',
+          [JSON.stringify([row])],
+        )
+      ).rows[0].result,
+    ).toEqual({ saved: 0, skipped: 1 });
+    const valid = { ...row, id: crypto.randomUUID() };
+    await expect(
+      db.query('select import_transactions($1::jsonb)', [
+        JSON.stringify([valid, { ...row, id: crypto.randomUUID(), amount: -1 }]),
+      ]),
+    ).rejects.toThrow();
+    expect((await db.query('select id from transactions where id=$1', [valid.id])).rows).toHaveLength(0);
+    await asUser(bob);
+    await expect(db.query('select import_transactions($1::jsonb)', [JSON.stringify([row])])).rejects.toThrow(
+      /invalid batch/,
+    );
+  });
+  it('consentimento de avisos fica registrado e pode ser retirado', async () => {
+    await asUser(alice);
+    await db.query('update profiles set whatsapp_notifications=true where id=$1', [alice]);
+    expect(
+      (
+        await db.query<{ consent: boolean }>(
+          'select notification_consent_at is not null as consent from profiles where id=$1',
+          [alice],
+        )
+      ).rows[0].consent,
+    ).toBe(true);
+    await db.query('update profiles set whatsapp_notifications=false where id=$1', [alice]);
+    expect(
+      (
+        await db.query<{ consent: boolean }>(
+          'select notification_consent_at is null as consent from profiles where id=$1',
+          [alice],
+        )
+      ).rows[0].consent,
+    ).toBe(true);
+    await asUser(bob);
+    await expect(
+      db.query("insert into financial_notifications(user_id,dedupe_key,kind) values($1,'attack','bill')", [
+        bob,
+      ]),
+    ).rejects.toThrow(/permission denied/);
   });
 });

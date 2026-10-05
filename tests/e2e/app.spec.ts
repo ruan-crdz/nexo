@@ -159,7 +159,18 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
   for (const theme of ['light', 'dark']) {
     await page.goto('/#/perfil');
     await page.getByLabel('Escolha o fundo').selectOption(theme);
-    for (const route of ['inicio', 'movimentos', 'integracoes', 'perfil', 'ajuda', 'privacidade']) {
+    for (const route of [
+      'inicio',
+      'movimentos',
+      'integracoes',
+      'perfil',
+      'ajuda',
+      'privacidade',
+      'planejar',
+      'perguntas',
+      'importar',
+      'familia',
+    ]) {
       await page.goto(`/#/${route}`);
       await expect(page.locator('main h1').first()).toBeVisible();
       const result = await new AxeBuilder({ page })
@@ -176,7 +187,18 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
   page.on('pageerror', (error) => errors.push(error.message));
   for (const width of [320, 360, 390, 430, 768, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 844 });
-    for (const route of ['inicio', 'movimentos', 'integracoes', 'perfil', 'ajuda', 'privacidade']) {
+    for (const route of [
+      'inicio',
+      'movimentos',
+      'integracoes',
+      'perfil',
+      'ajuda',
+      'privacidade',
+      'planejar',
+      'perguntas',
+      'importar',
+      'familia',
+    ]) {
       await page.goto(`/#/${route}`);
       await expect(page.locator('main h1').first()).toBeVisible();
       await expect
@@ -297,4 +319,92 @@ test('entrada e cadastro têm instruções simples e permitem conferir a senha',
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze();
   expect(result.violations).toEqual([]);
+});
+
+test('recorrência persiste como pendente sem duplicar ao recarregar', async ({ page }) => {
+  await page.goto('/#/planejar');
+  await page.getByRole('button', { name: 'Nova conta recorrente' }).click();
+  await page.getByLabel('Nome', { exact: true }).fill('Conta recorrente e2e');
+  await page.getByLabel('Valor (R$)', { exact: true }).fill('99,50');
+  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
+  await expect(page.getByRole('heading', { name: 'Conta recorrente e2e' })).toBeVisible();
+  const before = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
+      (row: { description: string }) => row.description === 'Conta recorrente e2e',
+    ),
+  );
+  expect(before.length).toBeGreaterThan(0);
+  expect(before.every((row: { status: string }) => row.status === 'planned')).toBe(true);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Seu planejamento' })).toBeVisible();
+  const after = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
+      (row: { description: string }) => row.description === 'Conta recorrente e2e',
+    ),
+  );
+  expect(after).toEqual(before);
+});
+
+test('limite e meta têm cálculo verificável e avisos exigem consentimento', async ({ page }) => {
+  await expect(page.locator('.attention-band')).toHaveCount(0);
+  await page.goto('/#/planejar');
+  await page.getByRole('button', { name: 'Limites', exact: true }).click();
+  await page.getByRole('button', { name: 'Novo limite' }).click();
+  await page.getByLabel('Valor (R$)', { exact: true }).fill('1,00');
+  await page.getByRole('combobox', { name: 'Categoria', exact: true }).selectOption('Alimentação');
+  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
+  await expect(page.locator('.plan-list')).toContainText('Acima do limite');
+  await page.getByRole('button', { name: 'Metas', exact: true }).click();
+  await page.getByRole('button', { name: 'Nova meta' }).click();
+  await page.getByLabel('Nome', { exact: true }).fill('Viagem e2e');
+  await page.getByLabel('Quanto quer alcançar? (R$)').fill('1000,00');
+  await page.getByLabel('Quanto já guardou? (R$)').fill('200,00');
+  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
+  await expect(page.getByRole('heading', { name: 'Viagem e2e' })).toBeVisible();
+  await page.goto('/#/perguntas');
+  await page.getByRole('button', { name: 'Quanto falta para minha meta?' }).click();
+  await expect(page.locator('.verified-answer')).toContainText('Viagem e2e');
+  await expect(page.locator('.verified-answer')).toContainText('800,00');
+  await page.goto('/#/perfil');
+  await page.getByRole('checkbox', { name: 'Quero avisos de vencimentos e limites no app.' }).check();
+  await expect(
+    page.getByRole('checkbox', { name: 'Quero avisos de vencimentos e limites no app.' }),
+  ).toBeEnabled();
+  await page.goto('/#/inicio');
+  await expect(page.getByRole('heading', { name: 'Vale conferir' })).toBeVisible();
+  await expect(page.locator('.attention-band')).toContainText('Alimentação');
+});
+
+test('extrato só é salvo após revisão e o mesmo lote não entra duas vezes', async ({ page }) => {
+  const file = {
+    name: 'extrato.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Data;Descrição;Valor\n04/10/2026;Importação e2e;-12,34'),
+  };
+  await page.goto('/#/importar');
+  await page.getByLabel('Extrato CSV ou OFX').setInputFiles(file);
+  await page.getByRole('button', { name: 'Revisar registros' }).click();
+  await expect(page.locator('.import-preview')).toContainText('Importação e2e');
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
+          (row: { description: string }) => row.description === 'Importação e2e',
+        ).length,
+    ),
+  ).toBe(0);
+  await page.getByRole('button', { name: 'Salvar 1 registros selecionados' }).click();
+  await expect(page.getByRole('status')).toContainText('1 registros salvos');
+  await page.getByLabel('Extrato CSV ou OFX').setInputFiles(file);
+  await page.getByRole('button', { name: 'Revisar registros' }).click();
+  await expect(page.locator('.import-preview')).toContainText('Já importado');
+  await expect(page.getByRole('button', { name: 'Salvar 0 registros selecionados' })).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
+          (row: { description: string }) => row.description === 'Importação e2e',
+        ).length,
+    ),
+  ).toBe(1);
 });

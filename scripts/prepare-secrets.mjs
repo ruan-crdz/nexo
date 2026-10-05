@@ -12,6 +12,8 @@ const names = [
   'WHATSAPP_PHONE_NUMBER_ID',
   'WHATSAPP_BUSINESS_PHONE',
   'WHATSAPP_GRAPH_VERSION',
+  'WHATSAPP_FINANCIAL_TEMPLATE',
+  'FINANCIAL_JOB_SECRET',
 ];
 const lines = names
   .filter((name) => process.env[name])

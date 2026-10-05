@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { goalSchema } from '../../../shared/domain.ts';
+import { isVerifiedQuestion, verifiedReply } from '../../../shared/planning.ts';
 import { admin, env, HttpError, json } from '../_shared/http.ts';
 import { downloadAudio, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
@@ -138,6 +140,38 @@ async function processMessage(message: Message) {
       if (rows.error || rows.data.length >= 5000)
         throw new HttpError(503, 'Não foi possível conferir todas as anotações.');
       await finish(whatsappMonthSummary(transactionSchema.array().parse(rows.data), today), userId);
+      return;
+    }
+    if (isVerifiedQuestion(text)) {
+      const [rows, goals] = await Promise.all([
+        db.from('transactions').select('*').eq('user_id', userId).limit(5000),
+        db.from('goals').select('*').eq('user_id', userId).limit(1001),
+      ]);
+      if (rows.error || goals.error || rows.data.length >= 5000 || goals.data.length > 1000)
+        throw new HttpError(503, 'Leitura incompleta da resposta.');
+      const reply = verifiedReply(
+        {
+          transactions: transactionSchema.array().parse(rows.data),
+          goals: goalSchema.array().parse(goals.data),
+        },
+        text,
+        civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
+      );
+      if (!reply) throw new HttpError(422, 'Pergunta não reconhecida.');
+      const lines = [
+        reply.answer,
+        'Cálculo:',
+        ...reply.calculation.slice(0, 12),
+        'Registros usados:',
+        ...reply.records
+          .slice(0, 8)
+          .map((record) => `${record.description} · ${record.date} · ${formatMoney(record.amount)}`),
+      ];
+      if (reply.records.length > 8 || reply.calculation.length > 12)
+        lines.push(
+          'Há mais detalhes. Veja o cálculo completo e todos os registros em Perguntar ao Nexo no app.',
+        );
+      await finish(lines.join('\n'), userId);
       return;
     }
     if (/^desfazer$/i.test(text)) {
@@ -290,6 +324,16 @@ Deno.serve(async (request) => {
               .eq('reply_message_id', status.id)
               .in('delivery_status', allowed);
             if (updated.error) throw new HttpError(503, 'Não foi possível atualizar a entrega.');
+            const notification = await admin()
+              .from('financial_notifications')
+              .update({
+                state: status.status === 'sent' ? 'accepted' : status.status,
+                error_code: status.status === 'failed' ? (status.errors?.[0]?.code ?? null) : null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('reply_message_id', status.id)
+              .in('state', allowed);
+            if (notification.error) throw new HttpError(503, 'Não foi possível atualizar o aviso.');
           }
         }
       }

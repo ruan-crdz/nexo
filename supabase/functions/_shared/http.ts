@@ -13,6 +13,17 @@ export function env(name: string) {
   if (!value) throw new HttpError(503, `Integração não configurada: ${name}`);
   return value;
 }
+export function authorizeJob(request: Request) {
+  const secret = env('FINANCIAL_JOB_SECRET');
+  if (secret.length < 32)
+    throw new HttpError(503, 'Configure uma credencial de job com pelo menos 32 caracteres.');
+  const expected = `Bearer ${secret}`;
+  const received = request.headers.get('authorization') ?? '';
+  let difference = received.length ^ expected.length;
+  for (let index = 0; index < expected.length; index++)
+    difference |= expected.charCodeAt(index) ^ (received.charCodeAt(index) || 0);
+  if (difference !== 0) throw new HttpError(401, 'Job não autorizado.');
+}
 export function admin() {
   return createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), {
     auth: { persistSession: false, autoRefreshToken: false },

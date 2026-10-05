@@ -1,5 +1,12 @@
 import { strict as assert } from 'node:assert';
-import { verifySignature, hashToken, sendText, WhatsAppDeliveryError } from '../_shared/whatsapp.ts';
+import {
+  verifySignature,
+  hashToken,
+  sendText,
+  sendFinancialTemplate,
+  WhatsAppDeliveryError,
+} from '../_shared/whatsapp.ts';
+import { authorizeJob } from '../_shared/http.ts';
 import {
   linkingMessage,
   parseLinkingCode,
@@ -8,6 +15,59 @@ import {
 } from '../../../shared/whatsapp-link.ts';
 import { extractionDecision } from '../../../shared/extraction.ts';
 import { structured, transcribe } from '../_shared/openai.ts';
+
+Deno.test('job financeiro exige credencial forte e nunca aceita autorização ausente', () => {
+  const previous = Deno.env.get('FINANCIAL_JOB_SECRET');
+  try {
+    Deno.env.set('FINANCIAL_JOB_SECRET', 'test-only-financial-job-secret-32-characters');
+    assert.throws(() => authorizeJob(new Request('https://example.test')), /não autorizado/);
+    assert.throws(
+      () => authorizeJob(new Request('https://example.test', { headers: { Authorization: 'Bearer wrong' } })),
+      /não autorizado/,
+    );
+    authorizeJob(
+      new Request('https://example.test', {
+        headers: { Authorization: 'Bearer test-only-financial-job-secret-32-characters' },
+      }),
+    );
+    Deno.env.set('FINANCIAL_JOB_SECRET', 'short');
+    assert.throws(() => authorizeJob(new Request('https://example.test')), /32 caracteres/);
+  } finally {
+    if (previous === undefined) Deno.env.delete('FINANCIAL_JOB_SECRET');
+    else Deno.env.set('FINANCIAL_JOB_SECRET', previous);
+  }
+});
+Deno.test('aviso usa template com parâmetro e retorna aceite sem fingir entrega', async () => {
+  const names = [
+    'WHATSAPP_GRAPH_VERSION',
+    'WHATSAPP_PHONE_NUMBER_ID',
+    'WHATSAPP_ACCESS_TOKEN',
+    'WHATSAPP_FINANCIAL_TEMPLATE',
+  ];
+  const previous = names.map((name) => Deno.env.get(name));
+  const originalFetch = globalThis.fetch;
+  try {
+    ['v23.0', '123456', 'test-only-token', 'nexo_financial_notice'].forEach((value, index) =>
+      Deno.env.set(names[index], value),
+    );
+    globalThis.fetch = async (_url, init) => {
+      const request = JSON.parse(String(init?.body));
+      assert.equal(request.type, 'template');
+      assert.equal(request.template.name, 'nexo_financial_notice');
+      assert.equal(request.template.language.code, 'pt_BR');
+      assert.equal(request.template.components[0].parameters[0].text, 'Aviso de teste');
+      return new Response(JSON.stringify({ messages: [{ id: 'test-message-id' }] }), { status: 200 });
+    };
+    assert.equal(await sendFinancialTemplate('5511999999999', 'Aviso de teste'), 'test-message-id');
+  } finally {
+    globalThis.fetch = originalFetch;
+    names.forEach((name, index) => {
+      const value = previous[index];
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    });
+  }
+});
 
 Deno.test('mensagem pronta vincula sem aceitar códigos incompletos ou texto arbitrário', () => {
   const code = 'abcdef0123456789abcdef0123456789';

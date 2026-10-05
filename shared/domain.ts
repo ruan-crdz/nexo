@@ -95,7 +95,19 @@ export const profileSchema = z.object({
   }),
   onboarded: z.boolean(),
   business_enabled: z.boolean(),
+  reminders_enabled: z.boolean().default(false),
+  weekly_digest: z.boolean().default(false),
+  whatsapp_notifications: z.boolean().default(false),
 });
+export const recurringRuleSchema = z.object({
+  id: z.string().uuid(),
+  description: z.string().trim().min(2).max(180),
+  amount: centsSchema.positive(),
+  category: z.string().min(1).max(60),
+  start_date: dateSchema,
+  active: z.boolean(),
+});
+export type RecurringRule = z.infer<typeof recurringRuleSchema>;
 export const businessProfileSchema = z.object({
   name: z.string().trim().min(2).max(100),
   segment: z.string().max(100),
@@ -145,6 +157,8 @@ export interface Dataset {
   business_budgets: Budget[];
   business: BusinessProfile;
   organizations: Workspace[];
+  recurring_rules: RecurringRule[];
+  recurring_occurrences: string[];
 }
 export const emptyProfile: Profile = {
   name: 'Você',
@@ -157,6 +171,9 @@ export const emptyProfile: Profile = {
   timezone: 'America/Sao_Paulo',
   onboarded: false,
   business_enabled: false,
+  reminders_enabled: false,
+  weekly_digest: false,
+  whatsapp_notifications: false,
 };
 export const emptyBusiness: BusinessProfile = {
   name: 'Minha empresa',
@@ -193,5 +210,7 @@ export function emptyDataset(): Dataset {
     employees: [],
     business_budgets: [],
     organizations: [],
+    recurring_rules: [],
+    recurring_occurrences: [],
   };
 }

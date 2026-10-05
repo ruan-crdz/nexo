@@ -8,6 +8,8 @@ export function createDemo(): Dataset {
     account = id(),
     reserve = id();
   return {
+    recurring_rules: [],
+    recurring_occurrences: [],
     profile: {
       name: 'Ruan',
       objective: 'Criar reserva',
@@ -19,6 +21,9 @@ export function createDemo(): Dataset {
       timezone: 'America/Sao_Paulo',
       onboarded: true,
       business_enabled: true,
+      reminders_enabled: false,
+      weekly_digest: false,
+      whatsapp_notifications: false,
     },
     financial_accounts: [
       {

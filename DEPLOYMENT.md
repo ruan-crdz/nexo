@@ -94,6 +94,12 @@ A documentação Meta bloqueou leitura automática nesta sessão. A implementaç
 
 ## 8. Agende retenção e operação
 
+Antes de publicar a nova interface de planejamento/família, aplique `202610050002_planning_family.sql` com `npx supabase db push` e publique as Functions. A interface carrega metas, limites e recorrências; não ative o frontend novo sobre o banco antigo.
+
+Avisos proativos requerem configuração separada descrita em [WHATSAPP.md](WHATSAPP.md): template aprovado com um parâmetro de corpo, `WHATSAPP_FINANCIAL_TEMPLATE`, `FINANCIAL_JOB_SECRET`, Vault e agendamento. Consentimento de WhatsApp é desativado por padrão. Não execute o seed, o worker ou a preparação completa de secrets contra produção sem revisar valores locais: um token antigo no arquivo local pode sobrescrever o token atualizado no painel.
+
+Open Finance não foi conectado. Antes de implementar um provedor, defina contrato/custos, consentimento e revogação, reconciliação com CSV/OFX e revisão de segurança/LGPD. Nunca peça senha do banco no Nexo.
+
 No Supabase Cron/pg_cron, agende diariamente:
 
 ```sql

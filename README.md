@@ -27,8 +27,13 @@ Abra `http://localhost:5173` e escolha **Experimentar sem cadastro**. Dados fict
 - Privacidade: exportação, exclusão de conta e desconexão do WhatsApp.
 - Demonstração local e persistência real em Supabase, com atualização após mensagens recebidas.
 - CI de qualidade e publicação manual no GitHub Pages.
+- Planejamento: contas mensais pendentes, limites por categoria e metas; avisos e resumo semanal no app com consentimento desativado por padrão.
+- Perguntas verificáveis no app e WhatsApp: comparação entre períodos, falta para metas e contas pendentes, com cálculo e registros de origem.
+- CSV/OFX: seleção de conta, mapeamento de colunas, revisão, identificação de duplicatas e importação atômica. Não é Open Finance.
+- Família: convite com expiração, pedido de acesso, aprovação do dono, escopo de resumo ou últimas 100 anotações, somente consulta e revogação.
+- Worker de avisos WhatsApp preparado, mas exige publicação, credencial de job, template Meta aprovado e agendamento. Não é ativado automaticamente.
 
-**Escopo simplificado em outubro de 2026.** Empresa, score, simuladores e análises avançadas saíram da navegação e das rotas públicas. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp usa o status real das entregas para informar falhas, sem avisos fixos de bloqueio.
+**Escopo simplificado em outubro de 2026.** Empresa, score e simuladores saíram da navegação e das rotas públicas. Planejamento, perguntas e importação ficam em áreas secundárias, preservando os quatro destinos principais. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp usa o status real das entregas para informar falhas, sem avisos fixos de bloqueio.
 
 ## Produto e arquitetura
 

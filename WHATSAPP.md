@@ -22,7 +22,19 @@ Usuário autenticado toca em “Conectar meu WhatsApp”. `whatsapp-link` gera c
 - “Resumo”, “saldo” ou “quanto gastei este mês?” retornam entradas, gastos e diferença do mês, calculados em centavos, sem chamada de IA. Consulta usa usuário vinculado e seu fuso, desconsiderando previsões e datas futuras. Não representa saldo bancário.
 - “Ajuda” e “oi” retornam instruções curtas. Outras perguntas recebem orientação sobre as funções disponíveis; não encaminham a simuladores removidos.
 
-Não suportado ainda: empréstimos entre pessoas, alteração de cartão/metas por mensagem, criação de lembretes, agendamento de mensagens proativas, recibos/imagens, visão e Open Finance. O parser devolve `unsupported` e orienta o usuário; não inventa execução.
+Perguntas “por que gastei mais?”, “quanto falta para minha meta?” e “quais contas ainda vencem?” usam cálculos determinísticos, com períodos e registros de origem. O app mostra a evidência completa; o WhatsApp limita a lista e aponta para a consulta completa quando necessário. Nenhuma anotação é criada ao consultar.
+
+Não suportado ainda: empréstimos entre pessoas, alteração de cartão/metas ou criação de lembretes por mensagem, recibos/imagens, visão e Open Finance. O parser devolve `unsupported` e orienta o usuário; não inventa execução.
+
+## Avisos proativos
+
+`financial-notifications` é um worker preparado, não um agendamento já ativado. Exige a migração de planejamento, consentimento externo explícito (desativado por padrão), número vinculado, `FINANCIAL_JOB_SECRET` de pelo menos 32 caracteres e `WHATSAPP_FINANCIAL_TEMPLATE` aprovado na Meta em `pt_BR`, com um parâmetro de corpo contendo o aviso. Nunca use o token Meta como credencial do job.
+
+Os tipos de aviso são vencimentos, excesso de limite e resumo da última semana completa, conforme as preferências. Chaves estáveis impedem reenvio diário do mesmo evento. A função confere consentimento e vínculo novamente antes de enviar. Envia somente entre 09h e 20h no fuso do perfil e limita cada execução a 20 tentativas. O limite operacional atual é 200 assinantes; acima disso a função recusa execução até implementar paginação.
+
+`accepted` significa aceite da API, não entrega. Webhook atualiza `delivered`, `read` ou `failed`. Falhas e processamento interrompido não são repetidos automaticamente: reconciliar o resultado antes de reenviar evita duplicar notificações quando a confirmação externa se perde. O histórico fica em Ajustes. Nenhum conteúdo financeiro é escrito em logs do worker.
+
+Após configurar template e secrets, crie no Vault `nexo_financial_job_url` (URL da função) e `nexo_financial_job_secret` (mesma credencial do job). Execute `supabase/operations/financial-notifications.sql` para agendar a cada 15 minutos. O script não contém credenciais. Desative o job no Cron para interromper a operação global; cada usuário pode retirar seu consentimento em Ajustes.
 
 ## Falhas e idempotência
 

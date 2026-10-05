@@ -7,6 +7,10 @@ import { SimpleSettings, SimpleHelp } from './features/SimpleSettings';
 import { SimplePrivacy } from './features/SimplePrivacy';
 import { IntegrationsPage } from './features/Integrations';
 import { MfaPage } from './features/Mfa';
+import { PlanningHub } from './features/PlanningHub';
+import { FinancialQuestions } from './features/FinancialQuestions';
+import { StatementImport } from './features/StatementImport';
+import { FamilyPage } from './features/Family';
 
 export default function App() {
   return (
@@ -26,6 +30,10 @@ export default function App() {
           <Route path="/perfil" element={<SimpleSettings />} />
           <Route path="/ajuda" element={<SimpleHelp />} />
           <Route path="/privacidade" element={<SimplePrivacy />} />
+          <Route path="/planejar" element={<PlanningHub />} />
+          <Route path="/perguntas" element={<FinancialQuestions />} />
+          <Route path="/importar" element={<StatementImport />} />
+          <Route path="/familia" element={<FamilyPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/inicio" replace />} />
       </Routes>

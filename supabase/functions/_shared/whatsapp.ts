@@ -2,9 +2,12 @@ import { admin, env, HttpError, safeFetch } from './http.ts';
 
 export class WhatsAppDeliveryError extends HttpError {
   constructor(public code: number | null) {
-    super(502, code === 131030
-      ? 'Seu celular precisa ser autorizado como destinatário de teste na Meta.'
-      : 'Não foi possível entregar a resposta no WhatsApp.');
+    super(
+      502,
+      code === 131030
+        ? 'Seu celular precisa ser autorizado como destinatário de teste na Meta.'
+        : 'Não foi possível entregar a resposta no WhatsApp.',
+    );
   }
 }
 
@@ -51,19 +54,54 @@ export async function sendText(phone: string, text: string) {
   return result.messages[0].id as string;
 }
 
+export async function sendFinancialTemplate(phone: string, text: string) {
+  if (!/^\d{8,15}$/.test(phone) || text.length > 1024)
+    throw new HttpError(400, 'Template financeiro inválido.');
+  const name = env('WHATSAPP_FINANCIAL_TEMPLATE');
+  if (!/^[a-z0-9_]+$/.test(name)) throw new HttpError(503, 'Configure um template financeiro aprovado.');
+  const response = await fetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/messages`), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env('WHATSAPP_ACCESS_TOKEN')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: phone,
+      type: 'template',
+      template: {
+        name,
+        language: { code: 'pt_BR' },
+        components: [{ type: 'body', parameters: [{ type: 'text', text }] }],
+      },
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.messages?.[0]?.id)
+    throw new WhatsAppDeliveryError(Number.isInteger(result.error?.code) ? result.error.code : null);
+  return String(result.messages[0].id);
+}
+
 export async function deliverReply(messageId: string, phone: string, text: string) {
   const db = admin();
   try {
     const replyId = await sendText(phone, text);
-    const saved = await db.from('whatsapp_messages_metadata').update({
-      sent_at: new Date().toISOString(), reply_message_id: replyId,
-      delivery_status: 'accepted', reply_error_code: null,
-    }).eq('message_id', messageId);
+    const saved = await db
+      .from('whatsapp_messages_metadata')
+      .update({
+        sent_at: new Date().toISOString(),
+        reply_message_id: replyId,
+        delivery_status: 'accepted',
+        reply_error_code: null,
+      })
+      .eq('message_id', messageId);
     if (saved.error) throw new HttpError(503, 'Não foi possível registrar o envio.');
   } catch (error) {
-    await db.from('whatsapp_messages_metadata').update({
-      delivery_status: 'failed', reply_error_code: error instanceof WhatsAppDeliveryError ? error.code : null,
-    }).eq('message_id', messageId);
+    await db
+      .from('whatsapp_messages_metadata')
+      .update({
+        delivery_status: 'failed',
+        reply_error_code: error instanceof WhatsAppDeliveryError ? error.code : null,
+      })
+      .eq('message_id', messageId);
     throw error;
   }
 }

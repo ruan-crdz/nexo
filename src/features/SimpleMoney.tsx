@@ -10,6 +10,10 @@ import {
   MessageCircle,
   ChartNoAxesColumnIncreasing,
   Wallet,
+  CalendarClock,
+  MessagesSquare,
+  FileUp,
+  Users,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -18,8 +22,9 @@ import { invoke } from '../data/client';
 import { Button, Card, Dialog } from '../design-system/components';
 import { categories, transactionSchema } from '../../shared/domain';
 import type { Transaction } from '../../shared/domain';
-import { civilDate, formatMoney, parseMoney, shiftMonths } from '../../shared/financial-engine';
+import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
 import { monthlyFlow } from '../../shared/insights';
+import { budgetUsage, weeklySummary } from '../../shared/planning';
 
 function monthLabel(month: string) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
@@ -226,6 +231,16 @@ export function SimpleHome() {
   const [month, setMonth] = useState(currentMonth);
   const posted = app.data.transactions.filter((transaction) => transaction.date <= today);
   const flow = monthlyFlow(posted, month);
+  const weekly = weeklySummary(app.data.transactions, today);
+  const due = app.data.transactions.filter(
+    (transaction) =>
+      transaction.status === 'planned' &&
+      transaction.type === 'expense' &&
+      transaction.date <= shiftDays(today, 3),
+  );
+  const limits = budgetUsage(app.data.budgets, app.data.transactions, today).filter(
+    (budget) => budget.remaining < 0,
+  );
   const months = Array.from({ length: 6 }, (_, index) => {
     const key = shiftMonths(`${currentMonth}-01`, index - 5).slice(0, 7);
     return { month: key, ...monthlyFlow(posted, key) };
@@ -289,6 +304,57 @@ export function SimpleHome() {
           </Button>
         </div>
       </header>
+      <div className="feature-links" aria-label="Mais controle">
+        <Link to="/planejar" className="button button-secondary">
+          <CalendarClock size={20} />
+          <span>Planejamento</span>
+        </Link>
+        <Link to="/perguntas" className="button button-secondary">
+          <MessagesSquare size={20} />
+          <span>Perguntar ao Nexo</span>
+        </Link>
+        <Link to="/importar" className="button button-secondary">
+          <FileUp size={20} />
+          <span>Importar extrato</span>
+        </Link>
+        <Link to="/familia" className="button button-secondary">
+          <Users size={20} />
+          <span>Família</span>
+        </Link>
+      </div>
+      {app.data.profile.reminders_enabled && (due.length > 0 || limits.length > 0) && (
+        <section className="attention-band" aria-label="Avisos consentidos">
+          <h2>Vale conferir</h2>
+          {due.length > 0 && <p>{due.length} contas pendentes, atrasadas ou vencendo em até três dias.</p>}
+          {limits.map((budget) => (
+            <p key={budget.id}>
+              {budget.category}: {formatMoney(-budget.remaining)} acima do limite.
+            </p>
+          ))}
+          <Link className="text-link" to="/perguntas">
+            Conferir registros
+          </Link>
+        </section>
+      )}
+      {app.data.profile.weekly_digest && (
+        <section className="attention-band">
+          <h2>Sua última semana completa</h2>
+          <p>
+            {weekly.start} a {weekly.end} · entrou {formatMoney(weekly.income)}, saiu{' '}
+            {formatMoney(weekly.expenses)}; diferença {formatMoney(weekly.net)}.
+          </p>
+          <details>
+            <summary>Registros usados</summary>
+            <ul className="evidence-list">
+              {weekly.records.map((record) => (
+                <li key={record.id}>
+                  {record.description} · {record.date} · {formatMoney(record.amount)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
       <section className="simple-summary" aria-labelledby="monthly-summary-title">
         <div className="simple-section-title">
           <h2 id="monthly-summary-title">Seu mês até agora</h2>

@@ -1,5 +1,23 @@
-import type { Dataset, Entity, EntityMap, Profile, BusinessProfile, Workspace } from '../../shared/domain';
-import { emptyDataset, entitySchemas, profileSchema, businessProfileSchema } from '../../shared/domain';
+import type {
+  Dataset,
+  Entity,
+  EntityMap,
+  Profile,
+  BusinessProfile,
+  Workspace,
+  RecurringRule,
+  Transaction,
+} from '../../shared/domain';
+import {
+  emptyDataset,
+  entitySchemas,
+  profileSchema,
+  businessProfileSchema,
+  recurringRuleSchema,
+  transactionSchema,
+} from '../../shared/domain';
+import { civilDate } from '../../shared/financial-engine';
+import { recurringTransactions } from '../../shared/planning';
 import { createDemo } from './demo';
 import { supabase } from './client';
 
@@ -11,6 +29,9 @@ export interface Repository {
   profile(value: Profile): Promise<void>;
   business(value: BusinessProfile, organizationId: string): Promise<void>;
   createOrganization(name: string): Promise<string>;
+  saveRecurring(value: RecurringRule): Promise<void>;
+  removeRecurring(id: string): Promise<void>;
+  importTransactions(rows: Transaction[]): Promise<{ saved: number; skipped: number }>;
 }
 const businessEntities = new Set<Entity>(['employees', 'business_transactions', 'business_budgets']);
 export function readDemo(): Dataset {
@@ -18,7 +39,9 @@ export function readDemo(): Dataset {
   if (raw) {
     try {
       const data = JSON.parse(raw) as Dataset;
-      profileSchema.parse(data.profile);
+      data.profile = profileSchema.parse(data.profile);
+      data.recurring_rules = recurringRuleSchema.array().parse(data.recurring_rules ?? []);
+      data.recurring_occurrences ??= [];
       businessProfileSchema.parse(data.business);
       for (const key of Object.keys(entitySchemas) as Entity[]) entitySchemas[key].array().parse(data[key]);
       return data;
@@ -33,7 +56,46 @@ export function readDemo(): Dataset {
 const writeDemo = (data: Dataset) => localStorage.setItem(DEMO_KEY, JSON.stringify(data));
 export const demoRepository: Repository = {
   async load() {
-    return readDemo();
+    const data = readDemo();
+    const generated = recurringTransactions(
+      data.recurring_rules,
+      data.transactions,
+      civilDate(new Date(), data.profile.timezone),
+      data.recurring_occurrences,
+    );
+    if (generated.length) {
+      data.transactions.push(...generated);
+      data.recurring_occurrences.push(...generated.map((row) => row.id));
+      writeDemo(data);
+    }
+    return data;
+  },
+  async saveRecurring(value) {
+    const rule = recurringRuleSchema.parse(value);
+    const data = readDemo();
+    data.recurring_rules = [...data.recurring_rules.filter((row) => row.id !== rule.id), rule];
+    writeDemo(data);
+  },
+  async removeRecurring(id) {
+    const data = readDemo();
+    data.recurring_rules = data.recurring_rules.filter((rule) => rule.id !== id);
+    writeDemo(data);
+  },
+  async importTransactions(rows) {
+    const parsed = transactionSchema.array().max(1000).parse(rows);
+    const data = readDemo();
+    const known = new Set(data.transactions.map((row) => row.id));
+    let saved = 0;
+    for (const row of parsed) {
+      if (known.has(row.id)) continue;
+      if (row.account_id && !data.financial_accounts.some((account) => account.id === row.account_id))
+        throw new Error('Conta inválida.');
+      data.transactions.push({ ...row, source: 'import' });
+      known.add(row.id);
+      saved++;
+    }
+    writeDemo(data);
+    return { saved, skipped: parsed.length - saved };
   },
   async save<K extends Entity>(entity: K, value: EntityMap[K]) {
     entitySchemas[entity].parse(value);
@@ -89,6 +151,15 @@ export function cloudRepository(userId: string): Repository {
       if (profile.error) throw profile.error;
       if (organizations.error) throw organizations.error;
       if (profile.data) data.profile = profileSchema.parse(profile.data);
+      const synced = await db.rpc('sync_recurring_rules');
+      if (synced.error)
+        throw new Error(
+          'Não foi possível carregar o planejamento. Confira se a migração de planejamento foi aplicada.',
+        );
+      const rules = await db.from('recurring_rules').select('*').eq('user_id', userId).limit(201);
+      if (rules.error || (rules.data?.length ?? 0) > 200)
+        throw new Error('Não foi possível carregar todas as recorrências.');
+      data.recurring_rules = recurringRuleSchema.array().parse(rules.data ?? []);
       data.organizations = (organizations.data ?? []).map((item) => ({
         id: item.organization_id,
         role: item.role,
@@ -99,7 +170,7 @@ export function cloudRepository(userId: string): Repository {
       await Promise.all(
         (organizationId
           ? (Object.keys(entitySchemas) as Entity[])
-          : (['transactions', 'financial_accounts'] as Entity[])
+          : (['transactions', 'financial_accounts', 'goals', 'budgets'] as Entity[])
         ).map(async (entity) => {
           if (businessEntities.has(entity) && !organizationId) return;
           const { data: rows, error } = await db
@@ -138,6 +209,22 @@ export function cloudRepository(userId: string): Repository {
         .from(entity)
         .upsert({ ...parsed, ...(business ? { organization_id: organizationId } : { user_id: userId }) });
       if (error) throw new Error('Não foi possível salvar. Verifique seus dados e sua permissão de acesso.');
+    },
+    async saveRecurring(value) {
+      const { error } = await db
+        .from('recurring_rules')
+        .upsert({ ...recurringRuleSchema.parse(value), user_id: userId });
+      if (error) throw new Error('Não foi possível salvar a conta recorrente.');
+    },
+    async removeRecurring(id) {
+      const { error } = await db.from('recurring_rules').delete().eq('id', id).eq('user_id', userId);
+      if (error) throw new Error('Não foi possível remover a recorrência.');
+    },
+    async importTransactions(rows) {
+      const payload = transactionSchema.array().max(1000).parse(rows);
+      const { data, error } = await db.rpc('import_transactions', { payload });
+      if (error) throw new Error('O lote não foi salvo. Confira os registros, a conta e sua conexão.');
+      return data as { saved: number; skipped: number };
     },
     async remove(entity, id, organizationId) {
       const business = businessEntities.has(entity);

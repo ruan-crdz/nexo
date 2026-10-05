@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { MessageCircle, ShieldCheck, ChevronRight, LogOut } from 'lucide-react';
 import { useApp } from '../data/context';
+import { supabase } from '../data/client';
 import { useTheme } from '../design-system/theme';
 import { Button, Card, Dialog } from '../design-system/components';
 
@@ -14,6 +16,49 @@ export function SimpleSettings() {
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    reminders_enabled: app.data.profile.reminders_enabled,
+    weekly_digest: app.data.profile.weekly_digest,
+    whatsapp_notifications: app.data.profile.whatsapp_notifications,
+  });
+  async function updateNotificationPreference(key: keyof typeof notificationPreferences, enabled: boolean) {
+    if (pending) return;
+    const previous = notificationPreferences;
+    const next = { ...previous, [key]: enabled };
+    setNotificationPreferences(next);
+    setPending(true);
+    setError('');
+    let stored = false;
+    try {
+      await app.repository.profile({ ...app.data.profile, ...next });
+      stored = true;
+      await app.refresh();
+    } catch {
+      if (!stored) setNotificationPreferences(previous);
+      setError(
+        stored
+          ? 'Sua preferência foi salva, mas não conseguimos atualizar a tela. Recarregue para conferir.'
+          : 'Não foi possível atualizar seu consentimento. Sua preferência anterior foi mantida.',
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+  const notificationHistory = useQuery({
+    queryKey: ['financial-notifications', app.user?.id],
+    enabled: !app.demo && !!app.user && app.data.profile.whatsapp_notifications,
+    retry: false,
+    queryFn: async () => {
+      const result = await supabase!
+        .from('financial_notifications')
+        .select('id,kind,state,error_code,created_at')
+        .eq('user_id', app.user!.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (result.error) throw new Error('Não foi possível conferir o histórico.');
+      return result.data;
+    },
+  });
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
@@ -85,6 +130,22 @@ export function SimpleSettings() {
         </div>
       </Card>
       <Card className="simple-settings-links">
+        <Link to="/planejar">
+          <span>Contas, limites e metas</span>
+          <ChevronRight />
+        </Link>
+        <Link to="/perguntas">
+          <span>Perguntas com cálculos</span>
+          <ChevronRight />
+        </Link>
+        <Link to="/importar">
+          <span>Importar CSV ou OFX</span>
+          <ChevronRight />
+        </Link>
+        <Link to="/familia">
+          <span>Permissões da família</span>
+          <ChevronRight />
+        </Link>
         <Link to="/integracoes">
           <MessageCircle />
           <span>Meu WhatsApp</span>
@@ -103,6 +164,82 @@ export function SimpleSettings() {
           <LogOut size={20} /> Sair da minha conta
         </Button>
       </Card>
+      <section className="simple-form">
+        <h2>Avisos no app</h2>
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={notificationPreferences.reminders_enabled}
+            disabled={pending}
+            onChange={(event) => void updateNotificationPreference('reminders_enabled', event.target.checked)}
+          />
+          Quero avisos de vencimentos e limites no app.
+        </label>
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={notificationPreferences.weekly_digest}
+            disabled={pending}
+            onChange={(event) => void updateNotificationPreference('weekly_digest', event.target.checked)}
+          />
+          Quero ver o resumo semanal no app.
+        </label>
+      </section>
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={notificationPreferences.whatsapp_notifications}
+          disabled={pending || app.demo}
+          onChange={(event) =>
+            void updateNotificationPreference('whatsapp_notifications', event.target.checked)
+          }
+        />
+        Também autorizo o envio destes avisos para meu WhatsApp vinculado.
+      </label>
+      {!app.demo && app.data.profile.whatsapp_notifications && (
+        <section className="simple-form">
+          <h2>Últimos avisos no WhatsApp</h2>
+          {notificationHistory.isError ? (
+            <p role="alert" className="error-message">
+              Não foi possível conferir o histórico de avisos.
+            </p>
+          ) : notificationHistory.isPending ? (
+            <p role="status">Conferindo avisos…</p>
+          ) : notificationHistory.data?.length ? (
+            <ul className="evidence-list">
+              {notificationHistory.data.map((item) => (
+                <li key={item.id}>
+                  <span>
+                    {item.kind === 'weekly'
+                      ? 'Resumo semanal'
+                      : item.kind === 'budget'
+                        ? 'Limite por categoria'
+                        : 'Vencimento'}
+                  </span>
+                  <span>
+                    {(
+                      {
+                        pending: 'Aguardando envio',
+                        processing: 'Envio em processamento',
+                        accepted: 'Aceito pela Meta; entrega não confirmada',
+                        delivered: 'Entregue',
+                        read: 'Lido',
+                        failed: 'Falha registrada na tentativa',
+                        cancelled: 'Cancelado',
+                      } as Record<string, string>
+                    )[item.state] ?? item.state}
+                    {item.error_code ? ` · código ${item.error_code}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">
+              Nenhum envio registrado. O envio depende do agendamento e de template aprovado.
+            </p>
+          )}
+        </section>
+      )}
       {error && (
         <p className="error-message" role="alert">
           {error}

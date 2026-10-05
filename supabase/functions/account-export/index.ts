@@ -9,6 +9,8 @@ serve(async (request) => {
     'debts',
     'assets',
     'budgets',
+    'recurring_rules',
+    'financial_notifications',
     'ai_messages',
     'whatsapp_connections',
     'whatsapp_messages_metadata',
@@ -32,6 +34,9 @@ serve(async (request) => {
     }
     result[table] = rows;
   }
+  const family = await db.rpc('list_family_invites');
+  if (family.error) throw new HttpError(503, 'Exportação familiar incompleta.');
+  result.family_permissions = family.data;
   const membership = await db
     .from('organization_members')
     .select('organization_id,role')

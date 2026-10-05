@@ -66,3 +66,7 @@ verify_jwt = false
 [functions.account-delete]
 import_map = "./functions/deno.json"
 verify_jwt = false
+
+[functions.financial-notifications]
+import_map = "./functions/deno.json"
+verify_jwt = false
