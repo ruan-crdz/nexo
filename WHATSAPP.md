@@ -34,6 +34,6 @@ O endpoint `whatsapp-send` só envia texto de teste ao número vinculado do pró
 
 ## Credenciais e validação
 
-Veja [DEPLOYMENT.md](DEPLOYMENT.md). App Secret e verify token são diferentes. `WHATSAPP_BUSINESS_PHONE` é o número completo em dígitos para o link, diferente do `WHATSAPP_PHONE_NUMBER_ID`. Graph API version é configurável. A conta atual aguarda liberação da Meta; a interface preserva o aviso. Código 131030 indica destinatário de teste não autorizado; 131031 indica bloqueio da conta. A entrega real precisa ser revalidada depois da liberação, sem presumir sucesso pela vinculação.
+Veja [DEPLOYMENT.md](DEPLOYMENT.md). App Secret e verify token são diferentes. `WHATSAPP_BUSINESS_PHONE` é o número completo em dígitos para o link, diferente do `WHATSAPP_PHONE_NUMBER_ID`. Graph API version é configurável. Os avisos fixos de bloqueio foram retirados após o responsável confirmar a correção da configuração. Código 131030 indica destinatário de teste não autorizado; 131031 indica restrição da conta na tentativa registrada. Falhas são exibidas como resultado da última tentativa, sem presumir que uma restrição antiga continua ativa. Enviar “ajuda” permite verificar uma nova resposta sem repetir lançamentos.
 
 Teste: gasto único, gasto duplo, data/virada de fuso, parcela, valor ausente, baixa confiança, assinatura inválida, evento duplicado, retransmissão após falha, áudio inválido, revogação, confirmação expirada e desfazer de outra conta. Testes locais cobrem contratos, HMAC e SQL; a entrega externa continua pendente de credenciais.

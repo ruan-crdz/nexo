@@ -77,10 +77,6 @@ export function IntegrationsPage() {
         title="Seu Nexo no WhatsApp"
         description="Conecte uma vez. Depois, é só mandar uma mensagem ou um áudio."
       />
-      <p className="notice" role="status">
-        O WhatsApp está aguardando liberação da Meta para responder. Por enquanto, anote pelo app. Se já
-        mandou uma mensagem, confira “Anotações” antes de anotar de novo.
-      </p>
       <div className="grid grid-2 whatsapp-grid">
         <Card>
           <SectionTitle
@@ -115,9 +111,9 @@ export function IntegrationsPage() {
               {connection.data?.delivery_status === 'failed' && (
                 <div className="error-message" role="alert">
                   {connection.data.reply_error_code === 131030
-                    ? 'O vínculo funcionou, mas o número de teste ainda não pode responder ao seu celular. Na Meta, vá a WhatsApp → Etapa 1 → Destinatário/Até e adicione e confirme este mesmo celular. Depois envie “ajuda” na conversa.'
+                    ? 'Na última tentativa, a Meta informou que seu celular não estava autorizado como destinatário de teste. Se você já confirmou o número, envie “ajuda” na conversa e atualize o status.'
                     : connection.data.reply_error_code === 131031
-                      ? 'A Meta bloqueou a conta WhatsApp Business do Nexo. As respostas dependem da liberação dessa conta; autorizar seu celular ou reenviar a mensagem não remove o bloqueio.'
+                      ? 'A última resposta falhou por uma restrição da Meta. Se isso já foi resolvido, envie “ajuda” na conversa e atualize o status.'
                       : 'Não conseguimos entregar a última resposta no WhatsApp. Confira seus movimentos no app antes de reenviar um lançamento. Para testar a conversa, envie “ajuda”.'}
                 </div>
               )}
@@ -128,6 +124,14 @@ export function IntegrationsPage() {
                 rel="noopener noreferrer"
               >
                 <MessageCircle size={18} /> Abrir conversa com o Nexo <ExternalLink size={15} />
+              </a>
+              <a
+                className="button button-secondary"
+                href={`${connection.data?.chat_url}?text=ajuda`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Receber dicas no WhatsApp
               </a>
               <Button variant="ghost" onClick={() => setRevoking(true)}>
                 Desconectar WhatsApp
@@ -145,8 +149,8 @@ export function IntegrationsPage() {
                   <span>Isso conecta seu número ao Nexo.</span>
                 </li>
                 <li>
-                  <strong>Confira o vínculo no app</strong>
-                  <span>As boas-vindas no WhatsApp dependem da liberação da Meta.</span>
+                  <strong>Receba as boas-vindas</strong>
+                  <span>O Nexo explica como anotar por mensagem ou áudio.</span>
                 </li>
               </ol>
               {waiting ? (

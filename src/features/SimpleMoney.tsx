@@ -256,12 +256,6 @@ export function SimpleHome() {
           )}
         </div>
       </section>
-      {!app.demo && (
-        <p className="notice">
-          O WhatsApp aguarda liberação da Meta para responder. Por enquanto, use “Anotar gasto” ou “Anotar
-          entrada” aqui no app. Confira suas anotações antes de repetir uma mensagem.
-        </p>
-      )}
       <Card className="simple-summary">
         <div className="simple-section-title">
           <h2>Seu mês até agora</h2>

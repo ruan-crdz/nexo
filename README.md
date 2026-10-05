@@ -28,7 +28,7 @@ Abra `http://localhost:5173` e escolha **Experimentar sem cadastro**. Dados fict
 - Demonstração local e persistência real em Supabase, com atualização após mensagens recebidas.
 - CI de qualidade e publicação manual no GitHub Pages.
 
-**Escopo simplificado em outubro de 2026.** Empresa, score, simuladores e análises avançadas saíram da navegação e das rotas públicas. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp aguarda liberação da conta pela Meta; a interface informa essa limitação, sem simular entregas bem-sucedidas.
+**Escopo simplificado em outubro de 2026.** Empresa, score, simuladores e análises avançadas saíram da navegação e das rotas públicas. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp usa o status real das entregas para informar falhas, sem avisos fixos de bloqueio.
 
 ## Produto e arquitetura
 

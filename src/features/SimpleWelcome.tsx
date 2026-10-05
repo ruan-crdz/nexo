@@ -60,9 +60,7 @@ export function SimpleLanding() {
           <p className="muted">Você pode conferir e corrigir as anotações no app.</p>
         </Card>
       </main>
-      <footer>
-        O WhatsApp aguarda liberação da Meta para responder. Você já pode anotar e consultar pelo app.
-      </footer>
+      <footer>Simples de anotar. Fácil de acompanhar.</footer>
     </div>
   );
 }
