@@ -1,4 +1,5 @@
-import { admin, authorizeJob, env, HttpError, json } from '../_shared/http.ts';
+import { admin, authorizeJob, body, env, HttpError, json } from '../_shared/http.ts';
+import { prepareFinancialTemplate } from '../_shared/financial-template.ts';
 import { sendFinancialTemplate, WhatsAppDeliveryError } from '../_shared/whatsapp.ts';
 import {
   budgetSchema,
@@ -16,6 +17,19 @@ Deno.serve(async (request) => {
   try {
     if (request.method !== 'POST') throw new HttpError(405, 'Método não permitido.');
     authorizeJob(request);
+    const input = (await body(request, 2000)) as {
+      action?: string;
+      business_account_id?: string;
+      create?: boolean;
+    };
+    if (input.action === 'prepare_template') {
+      const template = await prepareFinancialTemplate(
+        String(input.business_account_id ?? ''),
+        input.create === true,
+      );
+      return json({ ...template, configured: Deno.env.get('WHATSAPP_FINANCIAL_TEMPLATE') === template.name });
+    }
+    if (input.action) throw new HttpError(400, 'Ação desconhecida.');
     if (!/^[a-z0-9_]+$/.test(env('WHATSAPP_FINANCIAL_TEMPLATE')))
       throw new HttpError(503, 'Configure um template financeiro aprovado.');
     const db = admin();
@@ -27,6 +41,15 @@ Deno.serve(async (request) => {
     let accepted = 0,
       failed = 0,
       cancelled = 0;
+    async function finish(more = false) {
+      if (!failed) {
+        const result = await db
+          .from('notification_runtime')
+          .upsert({ id: true, last_success: new Date().toISOString() });
+        if (result.error) throw new HttpError(503, 'Não foi possível registrar a execução dos avisos.');
+      }
+      return json({ accepted, failed, cancelled, more });
+    }
     for (const raw of profiles) {
       try {
         const profile = profileSchema.parse(raw);
@@ -83,7 +106,7 @@ Deno.serve(async (request) => {
         );
         for (const candidate of candidates) {
           if (candidate.kind === 'journey' && hour !== profile.reminder_hour) continue;
-          if (accepted + failed + cancelled >= 20) return json({ accepted, failed, cancelled, more: true });
+          if (accepted + failed + cancelled >= 20) return await finish(true);
           const queued = await db
             .from('financial_notifications')
             .upsert(
@@ -183,7 +206,7 @@ Deno.serve(async (request) => {
         console.error(JSON.stringify({ event: 'notification_profile_failed', subject: raw.id }));
       }
     }
-    return json({ accepted, failed, cancelled });
+    return await finish();
   } catch (error) {
     return json(
       { error: error instanceof HttpError ? error.message : 'Não foi possível executar o job.' },

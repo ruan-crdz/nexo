@@ -1,3 +1,5 @@
+> Atualização de 05/10/2026: veja [Simplificação e confiabilidade](SIMPLICITY-RELEASE.md). Os registros abaixo são históricos e não representam o estado atual de publicação ou do WhatsApp.
+
 # Matriz de entrega e limites
 
 Registro inicial: 04/10/2026. O pedido descreve um produto extenso. Esta entrega implementa uma versão inicial executável com os fluxos centrais e backend integrável, mas não cumpre ainda toda a definição de pronto de produção.

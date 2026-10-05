@@ -1,5 +1,6 @@
 import type { Dataset } from './domain.ts';
-import { formatMoney, shiftDays, shiftMonths, sum } from './financial-engine.ts';
+import { formatMoney, sum } from './financial-engine.ts';
+import { questionPeriod } from './question-period.ts';
 import { merchantKey } from './financial-decisions.ts';
 import { isVerifiedQuestion, verifiedReply } from './planning.ts';
 export function isFinancialQuestion(text: string) {
@@ -33,23 +34,23 @@ export function answerFinancialQuestion(
       goals: [],
     };
   if (/meta/.test(normalized)) return verifiedReply(data, 'Quanto falta para minha meta?', today);
-  if (isVerifiedQuestion(text) && !/paguei|pagas|pagos|recebi/.test(normalized))
+  const period = questionPeriod(normalized, today);
+  if ('error' in period) return { answer: period.error, calculation: [], records: [], goals: [] };
+  if (isVerifiedQuestion(text) && !/paguei|pagas|pagos|recebi/.test(normalized) && !period.explicit)
     return verifiedReply(data, text, today);
-  let start = `${today.slice(0, 7)}-01`,
-    end = today;
-  if (/ontem/.test(normalized)) start = end = shiftDays(today, -1);
-  else if (/hoje/.test(normalized)) start = today;
-  else if (/mes passado|ultimo mes/.test(normalized)) {
-    start = `${shiftMonths(today, -1).slice(0, 7)}-01`;
-    end = shiftDays(`${today.slice(0, 7)}-01`, -1);
-  } else {
-    const last = normalized.match(/ultimos?\s+(\d{1,3})\s+dias/);
-    if (last) {
-      const count = Number(last[1]);
-      if (count < 1 || count > 366) return null;
-      start = shiftDays(today, 1 - count);
-    }
-  }
+  const { start, end } = period;
+  if (
+    period.explicit &&
+    /vencem|vencer|contas|por que|porque/.test(normalized) &&
+    !/paguei|pagas|pagos|recebi/.test(normalized)
+  )
+    return {
+      answer:
+        'Para esse período, pergunte quanto gastou ou recebeu. Para contas pendentes, pergunte “Quais contas vencem?”. Para comparar os meses atuais, pergunte “Por que gastei mais?”.',
+      calculation: [],
+      records: [],
+      goals: [],
+    };
   const aliases: Record<string, string> = {
     comida: 'Alimentação',
     alimentacao: 'Alimentação',
@@ -86,18 +87,11 @@ export function answerFinancialQuestion(
       records: [],
       goals: [],
     };
-  if (/ano passado|ultimo ano|desde|entre/.test(normalized))
-    return {
-      answer: 'Esse período precisa de definição explícita. Use hoje, ontem, mês passado ou últimos N dias.',
-      calculation: [],
-      records: [],
-      goals: [],
-    };
   const merchant = normalized.match(
-    /\b(?:na|no|com)\s+([^?]+?)(?=\s+(?:hoje|ontem|nos ultimos|no mes|este mes|mes passado)|[?]|$)/,
+    /\b(?:na|no|com)\s+([^?]+?)(?=\s+(?:hoje|ontem|nos ultimos|no mes|este mes|mes passado|em |ano passado)|[?]|$)/,
   )?.[1];
   const merchantFilter =
-    !category && !accounts.length && merchant && !/mes|conta|ultimos|dias/.test(merchant)
+    !category && !accounts.length && merchant && !/\b(mes|ano|hoje|ontem|conta|ultimos|dias)\b/.test(merchant)
       ? merchantKey(merchant)
       : null;
   if (/por que|porque|pq/.test(normalized) && /gastei.*mais/.test(normalized))

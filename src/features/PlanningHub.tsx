@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CalendarClock, Check, Plus, Target, Trash2, Pencil, Wallet } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button, Dialog, Progress } from '../design-system/components';
@@ -287,6 +288,9 @@ export function PlanningHub() {
       <header className="simple-heading">
         <h1>Seu planejamento</h1>
         <p>Contas, limites e metas sem misturar previsão com dinheiro já pago.</p>
+        <Link className="text-link" to="/metas">
+          Acompanhar minha meta e conquistas
+        </Link>
       </header>
       <div className="feature-tabs" role="group" aria-label="Área do planejamento">
         {(

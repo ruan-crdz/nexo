@@ -1130,6 +1130,20 @@ label {
   gap: 36px;
   align-items: start;
 }
+.home-details > summary {
+  min-height: 48px;
+  padding-block: 12px;
+  font-size: 18px;
+}
+.home-details[open] > summary {
+  margin-bottom: 20px;
+}
+.receipt-review-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 24px;
+}
 .money-dashboard > section {
   min-width: 0;
   padding-top: 28px;

@@ -26,7 +26,6 @@ import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths } from '../.
 import { monthlyFlow } from '../../shared/insights';
 import { budgetUsage, weeklySummary } from '../../shared/planning';
 import { merchantKey } from '../../shared/financial-decisions';
-import { GoalJourney } from './GoalJourney';
 
 function monthLabel(month: string) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
@@ -325,58 +324,6 @@ export function SimpleHome() {
           </Button>
         </div>
       </header>
-      <GoalJourney />
-      <div className="feature-links" aria-label="Mais controle">
-        <Link to="/planejar" className="button button-secondary">
-          <CalendarClock size={20} />
-          <span>Planejamento</span>
-        </Link>
-        <Link to="/perguntas" className="button button-secondary">
-          <MessagesSquare size={20} />
-          <span>Perguntar ao Nexo</span>
-        </Link>
-        <Link to="/importar" className="button button-secondary">
-          <FileUp size={20} />
-          <span>Importar extrato</span>
-        </Link>
-        <Link to="/familia" className="button button-secondary">
-          <Users size={20} />
-          <span>Família</span>
-        </Link>
-      </div>
-      {app.data.profile.reminders_enabled && (due.length > 0 || limits.length > 0) && (
-        <section className="attention-band" aria-label="Avisos consentidos">
-          <h2>Vale conferir</h2>
-          {due.length > 0 && <p>{due.length} contas pendentes, atrasadas ou vencendo em até três dias.</p>}
-          {limits.map((budget) => (
-            <p key={budget.id}>
-              {budget.category}: {formatMoney(-budget.remaining)} acima do limite.
-            </p>
-          ))}
-          <Link className="text-link" to="/perguntas">
-            Conferir registros
-          </Link>
-        </section>
-      )}
-      {app.data.profile.weekly_digest && (
-        <section className="attention-band">
-          <h2>Sua última semana completa</h2>
-          <p>
-            {weekly.start} a {weekly.end} · entrou {formatMoney(weekly.income)}, saiu{' '}
-            {formatMoney(weekly.expenses)}; diferença {formatMoney(weekly.net)}.
-          </p>
-          <details>
-            <summary>Registros usados</summary>
-            <ul className="evidence-list">
-              {weekly.records.map((record) => (
-                <li key={record.id}>
-                  {record.description} · {record.date} · {formatMoney(record.amount)}
-                </li>
-              ))}
-            </ul>
-          </details>
-        </section>
-      )}
       <section className="simple-summary" aria-labelledby="monthly-summary-title">
         <div className="simple-section-title">
           <h2 id="monthly-summary-title">Seu mês até agora</h2>
@@ -410,81 +357,28 @@ export function SimpleHome() {
         <p className="muted">Pelas anotações deste mês. Esse valor não é o saldo da sua conta bancária.</p>
         {flow.count === 0 && <p>Comece anotando algo que recebeu ou gastou.</p>}
       </section>
+      <section className="whatsapp-home">
+        <MessageCircle size={32} />
+        <div>
+          <h2>É só falar. O Nexo anota.</h2>
+          <p>Envie uma mensagem ou um áudio contando o que gastou ou recebeu.</p>
+        </div>
+        {connection.data?.connected ? (
+          <a
+            className="button button-primary"
+            href={connection.data.chat_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abrir meu WhatsApp <ArrowUpRight size={20} />
+          </a>
+        ) : (
+          <Link className="button button-primary" to="/integracoes">
+            {app.demo ? 'Conhecer o WhatsApp' : 'Conectar meu WhatsApp'} <ChevronRight size={20} />
+          </Link>
+        )}
+      </section>
       <div className="money-dashboard">
-        <section className="money-evolution" aria-labelledby="evolution-title">
-          <div className="simple-section-title">
-            <div>
-              <h2 id="evolution-title">Entradas e saídas</h2>
-              <p className="muted">Últimos seis meses</p>
-            </div>
-            <div className="flow-legend">
-              <span>
-                <i className="income-swatch" /> Entrou
-              </span>
-              <span>
-                <i className="expense-swatch" /> Saiu
-              </span>
-            </div>
-          </div>
-          <div className="flow-chart" aria-label="Evolução das anotações por mês">
-            {months.map((item) => (
-              <button
-                key={item.month}
-                data-month={item.month}
-                className={`flow-month${month === item.month ? ' selected' : ''}`}
-                aria-pressed={month === item.month}
-                aria-label={`Ver ${monthLabel(item.month)}: entrou ${formatMoney(item.income)}, saiu ${formatMoney(item.expenses)}`}
-                title={`${monthLabel(item.month)}: entrou ${formatMoney(item.income)} · saiu ${formatMoney(item.expenses)}`}
-                onClick={() => setMonth(item.month)}
-              >
-                <span className="flow-bars" aria-hidden="true">
-                  <span className="income-bar" style={{ height: `${(item.income / chartMaximum) * 100}%` }} />
-                  <span
-                    className="expense-bar"
-                    style={{ height: `${(item.expenses / chartMaximum) * 100}%` }}
-                  />
-                </span>
-                <span>
-                  {new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
-                    .format(new Date(`${item.month}-01T12:00:00Z`))
-                    .replace('.', '')}
-                </span>
-              </button>
-            ))}
-          </div>
-          {!months.some((item) => item.count > 0) && (
-            <p className="muted">A evolução aparece quando você anota suas entradas e gastos.</p>
-          )}
-        </section>
-        <section className="money-breakdown" aria-labelledby="spending-title">
-          <div className="simple-section-title">
-            <h2 id="spending-title">Onde você gastou</h2>
-            <ChartNoAxesColumnIncreasing size={20} aria-hidden="true" />
-          </div>
-          {spending.length ? (
-            <ul className="category-list">
-              {spending.map(([category, amount]) => (
-                <li key={category}>
-                  <div>
-                    <span>{category}</span>
-                    <strong>{formatMoney(amount)}</strong>
-                  </div>
-                  <div className="category-track" aria-hidden="true">
-                    <span style={{ width: `${(amount / flow.expenses) * 100}%` }} />
-                  </div>
-                  <small className="muted">{Math.round((amount / flow.expenses) * 100)}% dos gastos</small>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="simple-empty">
-              <p>Nenhum gasto pago em {monthLabel(month)}.</p>
-              <Button variant="secondary" onClick={() => setAdding('expense')}>
-                <ArrowUpRight size={18} /> Anotar gasto
-              </Button>
-            </div>
-          )}
-        </section>
         <section className="money-recent" aria-labelledby="recent-title">
           <div className="simple-section-title">
             <h2 id="recent-title">Últimas anotações</h2>
@@ -520,27 +414,142 @@ export function SimpleHome() {
           </div>
         </section>
       </div>
-      <section className="whatsapp-home">
-        <MessageCircle size={32} />
-        <div>
-          <h2>É só falar. O Nexo anota.</h2>
-          <p>Envie uma mensagem ou um áudio contando o que gastou ou recebeu.</p>
+      <details className="simple-details home-details">
+        <summary>Ver gráficos e categorias</summary>
+        <div className="money-dashboard">
+          <section className="money-evolution" aria-labelledby="evolution-title">
+            <div className="simple-section-title">
+              <div>
+                <h2 id="evolution-title">Entradas e saídas</h2>
+                <p className="muted">Últimos seis meses</p>
+              </div>
+              <div className="flow-legend">
+                <span>
+                  <i className="income-swatch" /> Entrou
+                </span>
+                <span>
+                  <i className="expense-swatch" /> Saiu
+                </span>
+              </div>
+            </div>
+            <div className="flow-chart" aria-label="Evolução das anotações por mês">
+              {months.map((item) => (
+                <button
+                  key={item.month}
+                  data-month={item.month}
+                  className={`flow-month${month === item.month ? ' selected' : ''}`}
+                  aria-pressed={month === item.month}
+                  aria-label={`Ver ${monthLabel(item.month)}: entrou ${formatMoney(item.income)}, saiu ${formatMoney(item.expenses)}`}
+                  title={`${monthLabel(item.month)}: entrou ${formatMoney(item.income)} · saiu ${formatMoney(item.expenses)}`}
+                  onClick={() => setMonth(item.month)}
+                >
+                  <span className="flow-bars" aria-hidden="true">
+                    <span
+                      className="income-bar"
+                      style={{ height: `${(item.income / chartMaximum) * 100}%` }}
+                    />
+                    <span
+                      className="expense-bar"
+                      style={{ height: `${(item.expenses / chartMaximum) * 100}%` }}
+                    />
+                  </span>
+                  <span>
+                    {new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
+                      .format(new Date(`${item.month}-01T12:00:00Z`))
+                      .replace('.', '')}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {!months.some((item) => item.count > 0) && (
+              <p className="muted">A evolução aparece quando você anota suas entradas e gastos.</p>
+            )}
+          </section>
+          <section className="money-breakdown" aria-labelledby="spending-title">
+            <div className="simple-section-title">
+              <h2 id="spending-title">Onde você gastou</h2>
+              <ChartNoAxesColumnIncreasing size={20} aria-hidden="true" />
+            </div>
+            {spending.length ? (
+              <ul className="category-list">
+                {spending.map(([category, amount]) => (
+                  <li key={category}>
+                    <div>
+                      <span>{category}</span>
+                      <strong>{formatMoney(amount)}</strong>
+                    </div>
+                    <div className="category-track" aria-hidden="true">
+                      <span style={{ width: `${(amount / flow.expenses) * 100}%` }} />
+                    </div>
+                    <small className="muted">{Math.round((amount / flow.expenses) * 100)}% dos gastos</small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="simple-empty">
+                <p>Nenhum gasto pago em {monthLabel(month)}.</p>
+                <Button variant="secondary" onClick={() => setAdding('expense')}>
+                  <ArrowUpRight size={18} /> Anotar gasto
+                </Button>
+              </div>
+            )}
+          </section>
         </div>
-        {connection.data?.connected ? (
-          <a
-            className="button button-primary"
-            href={connection.data.chat_url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Abrir meu WhatsApp <ArrowUpRight size={20} />
-          </a>
-        ) : (
-          <Link className="button button-primary" to="/integracoes">
-            {app.demo ? 'Conhecer o WhatsApp' : 'Conectar meu WhatsApp'} <ChevronRight size={20} />
+      </details>
+      <div className="feature-links" aria-label="Mais controle">
+        <Link to="/planejar" className="button button-secondary">
+          <CalendarClock size={20} />
+          <span>Contas e limites</span>
+        </Link>
+        <Link to="/perguntas" className="button button-secondary">
+          <MessagesSquare size={20} />
+          <span>Perguntar ao Nexo</span>
+        </Link>
+        <Link to="/importar" className="button button-secondary">
+          <FileUp size={20} />
+          <span>Importar extrato</span>
+        </Link>
+        <Link to="/familia" className="button button-secondary">
+          <Users size={20} />
+          <span>Família</span>
+        </Link>
+        <Link to="/metas" className="button button-secondary">
+          Minhas metas
+        </Link>
+      </div>
+      {app.data.profile.reminders_enabled && (due.length > 0 || limits.length > 0) && (
+        <section className="attention-band" aria-label="Avisos consentidos">
+          <h2>Vale conferir</h2>
+          {due.length > 0 && <p>{due.length} contas pendentes, atrasadas ou vencendo em até três dias.</p>}
+          {limits.map((budget) => (
+            <p key={budget.id}>
+              {budget.category}: {formatMoney(-budget.remaining)} acima do limite.
+            </p>
+          ))}
+          <Link className="text-link" to="/perguntas">
+            Conferir registros
           </Link>
-        )}
-      </section>
+        </section>
+      )}
+      {app.data.profile.weekly_digest && (
+        <section className="attention-band">
+          <h2>Sua última semana completa</h2>
+          <p>
+            {weekly.start} a {weekly.end} · entrou {formatMoney(weekly.income)}, saiu{' '}
+            {formatMoney(weekly.expenses)}; diferença {formatMoney(weekly.net)}.
+          </p>
+          <details>
+            <summary>Registros usados</summary>
+            <ul className="evidence-list">
+              {weekly.records.map((record) => (
+                <li key={record.id}>
+                  {record.description} · {record.date} · {formatMoney(record.amount)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
       {adding && <MoneyForm type={adding} onClose={() => setAdding(null)} />}
     </>
   );

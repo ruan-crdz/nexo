@@ -37,6 +37,7 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610050002_planning_family.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050003_operations_upgrade.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050004_goal_journey.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610050005_notification_operations.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -48,6 +49,19 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('usuário não lê estado interno nem configura o agendamento de avisos', async () => {
+    await asUser(alice);
+    await expect(db.query('select * from notification_runtime')).rejects.toThrow(/permission denied/);
+    await expect(db.query('select financial_schedule_status()')).rejects.toThrow(/permission denied/);
+    await expect(
+      db.query("select configure_financial_schedule('secret','https://example.test',false)"),
+    ).rejects.toThrow(/permission denied/);
+    await db.exec('reset role');
+    expect(
+      (await db.query<{ available: boolean }>('select financial_schedule_status() as available')).rows[0]
+        .available,
+    ).toBe(false);
+  });
   it('todas as tabelas públicas têm RLS habilitado', async () => {
     const result = await db.query<{ relname: string }>(
       "select relname from pg_class join pg_namespace n on n.oid=relnamespace where n.nspname='public' and relkind='r' and not relrowsecurity",
@@ -528,12 +542,34 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
       0,
     );
   });
-  it('WhatsApp dá pontos limitados e retransmissão não pontua duas vezes',async()=>{
+  it('WhatsApp dá pontos limitados e retransmissão não pontua duas vezes', async () => {
     await db.exec('reset role; set role service_role');
-    for(let index=0;index<7;index++){const points=(await db.query<{points:number}>('select award_habit_for($1,$2,$3) as points',[bob,'message',`wa:test-${index}`])).rows[0].points;expect(points).toBe(index<5?2:0);}
-    expect((await db.query<{points:number}>('select award_habit_for($1,$2,$3) as points',[bob,'message','wa:test-0'])).rows[0].points).toBe(0);
-    await asUser(bob);await expect(db.query('select award_habit_for($1,$2,$3)',[alice,'message','attack'])).rejects.toThrow(/permission denied/);
-    await expect(db.query("update profiles set journey_style='ocean' where id=$1",[bob])).rejects.toThrow(/not unlocked/);
+    for (let index = 0; index < 7; index++) {
+      const points = (
+        await db.query<{ points: number }>('select award_habit_for($1,$2,$3) as points', [
+          bob,
+          'message',
+          `wa:test-${index}`,
+        ])
+      ).rows[0].points;
+      expect(points).toBe(index < 5 ? 2 : 0);
+    }
+    expect(
+      (
+        await db.query<{ points: number }>('select award_habit_for($1,$2,$3) as points', [
+          bob,
+          'message',
+          'wa:test-0',
+        ])
+      ).rows[0].points,
+    ).toBe(0);
+    await asUser(bob);
+    await expect(db.query('select award_habit_for($1,$2,$3)', [alice, 'message', 'attack'])).rejects.toThrow(
+      /permission denied/,
+    );
+    await expect(db.query("update profiles set journey_style='ocean' where id=$1", [bob])).rejects.toThrow(
+      /not unlocked/,
+    );
   });
   it('jornada mantém conquistas após urgência e protege pontos de hábitos', async () => {
     await asUser(alice);

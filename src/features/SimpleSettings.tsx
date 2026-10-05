@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { MessageCircle, ShieldCheck, ChevronRight, LogOut } from 'lucide-react';
 import { useApp } from '../data/context';
-import { supabase } from '../data/client';
+import { invoke, supabase } from '../data/client';
 import { useTheme } from '../design-system/theme';
 import { Button, Card, Dialog } from '../design-system/components';
 import { offlineEnabled, setOffline, cacheDataset } from '../data/offline';
@@ -61,6 +61,13 @@ export function SimpleSettings() {
       if (result.error) throw new Error('Não foi possível conferir o histórico.');
       return result.data;
     },
+  });
+  const notificationService = useQuery({
+    queryKey: ['notification-status', app.user?.id],
+    enabled: !app.demo && !!app.user,
+    queryFn: () => invoke<{ available: boolean; message: string }>('notification-status', {}),
+    retry: false,
+    staleTime: 60_000,
   });
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -232,6 +239,15 @@ export function SimpleSettings() {
         />
         Também autorizo o envio destes avisos para meu WhatsApp vinculado.
       </label>
+      {!app.demo && (
+        <p role="status">
+          {notificationService.isPending
+            ? 'Conferindo o serviço de avisos…'
+            : notificationService.isError
+              ? 'Não foi possível conferir se os avisos automáticos estão disponíveis. Sua preferência fica salva; consulte os avisos no app.'
+              : notificationService.data.message}
+        </p>
+      )}
       {!app.demo && app.data.profile.whatsapp_notifications && (
         <section className="simple-form">
           <h2>Últimos avisos no WhatsApp</h2>

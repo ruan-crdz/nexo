@@ -167,6 +167,7 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
       'ajuda',
       'privacidade',
       'planejar',
+      'metas',
       'perguntas',
       'importar',
       'familia',
@@ -197,6 +198,7 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
       'ajuda',
       'privacidade',
       'planejar',
+      'metas',
       'perguntas',
       'importar',
       'familia',
@@ -235,6 +237,7 @@ test('formulário tem foco, Escape cancela e campos são acessíveis', async ({ 
 });
 
 test('resumo seleciona o mês e categorias conservam os gastos pagos', async ({ page }) => {
+  await page.locator('.home-details > summary').click();
   const selected = page.locator('.flow-month').first();
   const month = await selected.getAttribute('data-month');
   await selected.click();
@@ -261,6 +264,7 @@ test('resumo seleciona o mês e categorias conservam os gastos pagos', async ({ 
 
 test('PC distribui os blocos e celular mantém ações visíveis', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.locator('.home-details > summary').click();
   const evolution = await page.locator('.money-evolution').boundingBox();
   const breakdown = await page.locator('.money-breakdown').boundingBox();
   expect(evolution).not.toBeNull();
@@ -269,6 +273,44 @@ test('PC distribui os blocos e celular mantém ações visíveis', async ({ page
   await page.setViewportSize({ width: 320, height: 740 });
   await expect(page.getByRole('button', { name: 'Anotar gasto' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Anotar entrada' })).toBeVisible();
+});
+
+test('início prioriza dinheiro e WhatsApp e deixa metas em uma tela opcional', async ({ page }) => {
+  const summary = await page.locator('.simple-summary').boundingBox();
+  const whatsapp = await page.locator('.whatsapp-home').boundingBox();
+  const recent = await page.locator('.money-recent').boundingBox();
+  expect(summary!.y).toBeLessThan(whatsapp!.y);
+  expect(whatsapp!.y).toBeLessThan(recent!.y);
+  await expect(page.locator('.goal-journey')).toHaveCount(0);
+  await expect(page.locator('.home-details')).not.toHaveAttribute('open');
+  await page.getByRole('link', { name: 'Minhas metas', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Minhas metas', exact: true })).toBeVisible();
+  await expect(page.locator('.goal-journey')).toBeVisible();
+});
+
+test('recibo permite corrigir antes de confirmar e não aceita valor inválido', async ({ page }) => {
+  await page.goto('/#/recibo');
+  await page.getByRole('button', { name: 'Experimentar com recibo fictício' }).click();
+  await page.getByLabel('Descrição do recibo', { exact: true }).fill('Farmácia revisada');
+  await page.getByLabel('Valor do recibo (R$)', { exact: true }).fill('-5,00');
+  const consent = page.getByRole('checkbox', { name: 'Conferi e corrigi' });
+  await consent.check();
+  await page.getByRole('button', { name: 'Salvar dados conferidos' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByLabel('Valor do recibo (R$)', { exact: true }).fill('27,90');
+  await expect(consent).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Salvar dados conferidos' })).toBeDisabled();
+  await page.getByRole('combobox', { name: 'Categoria do recibo', exact: true }).selectOption('Saúde');
+  await page.getByRole('combobox', { name: 'Situação do recibo', exact: true }).selectOption('paid');
+  await consent.check();
+  await page.getByRole('button', { name: 'Salvar dados conferidos' }).click();
+  await expect(page.getByRole('button', { name: 'Salvar dados conferidos' })).not.toBeVisible();
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.find(
+      (row: { description: string }) => row.description === 'Farmácia revisada',
+    ),
+  );
+  expect(saved).toMatchObject({ amount: 2790, category: 'Saúde', status: 'paid' });
 });
 
 test('modal não rola horizontalmente e trava o fundo em celular e PC', async ({ page }) => {
@@ -460,7 +502,7 @@ test('CSV lista linha inválida sem impedir revisão das válidas', async ({ pag
   await expect(page.locator('.import-preview')).toContainText('Válida');
   await expect(page.getByRole('button', { name: 'Salvar 1 registros selecionados' })).toBeEnabled();
 });
-test('meta na home mostra próximo passo e urgência não apaga conquistas', async ({ page }) => {
+test('meta na tela opcional mostra próximo passo e urgência não apaga conquistas', async ({ page }) => {
   await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
     data.goals = [];
@@ -469,6 +511,7 @@ test('meta na home mostra próximo passo e urgência não apaga conquistas', asy
     data.habit_events = [];
     localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
   });
+  await page.goto('/#/metas');
   await page.reload();
   await page.getByRole('button', { name: 'Criar minha meta' }).click();
   const dialog = page.getByRole('dialog');
@@ -491,10 +534,12 @@ test('meta na home mostra próximo passo e urgência não apaga conquistas', asy
   await expect(page.locator('.journey-coaching')).toContainText('não foi apagado');
   await expect(page.locator('.journey-foot')).toContainText('30,00');
   await expect(page.locator('.journey-level')).toContainText('10 pontos');
+  await page.goto('/#/metas');
   await page.reload();
   await expect(page.locator('.journey-coaching')).toContainText('não foi apagado');
 });
 test('check-in único mantém pontos e pausa lembretes sem perder nível', async ({ page }) => {
+  await page.goto('/#/metas');
   await page.getByRole('button', { name: 'Fazer meu check-in' }).click();
   await page.getByRole('button', { name: 'Estou retomando aos poucos' }).click();
   await expect(page.locator('.journey-level')).toContainText('5 pontos');
@@ -516,6 +561,7 @@ test('recompensas desbloqueiam personalização real e cartão local sem dados b
     }));
     localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
   });
+  await page.goto('/#/metas');
   await page.reload();
   await page.getByRole('button', { name: 'Minhas conquistas' }).click();
   await expect(page.getByRole('dialog')).toContainText('Conquistado');

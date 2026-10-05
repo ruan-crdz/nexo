@@ -1,3 +1,5 @@
+> Atualização de 05/10/2026: veja [Simplificação e confiabilidade](SIMPLICITY-RELEASE.md). Os registros abaixo são históricos e não representam o estado atual de publicação ou do WhatsApp.
+
 # Validação da entrega
 
 Executado em 04/10/2026, Windows/PowerShell, Node 24.12.0. Scripts foram executados com `npm.cmd` por causa da política local do PowerShell. A rodada inicial abaixo foi local; as integrações hospedadas posteriores estão registradas ao final.

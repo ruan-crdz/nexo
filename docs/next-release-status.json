@@ -1,11 +1,11 @@
 {
-  "version": "operations-upgrade",
+  "version": "simplicity-reliability-upgrade",
   "states_are_not_a_claim_of_live_external_homologation": true,
   "items": [
     {
       "id": 1,
       "state": "blocked",
-      "reason": "Sem template aprovado, FINANCIAL_JOB_SECRET ou agendamento configurado; nenhum envio real alegado."
+      "reason": "Job e Vault configurados; agenda pausada. Template nexo_aviso_financeiro cadastrado na Meta, status PENDING. Aguardando aprovacao para ativar; nenhum envio real alegado."
     },
     {
       "id": 2,
@@ -20,7 +20,7 @@
     {
       "id": 4,
       "state": "blocked",
-      "reason": "Pluggy avaliada; contrato, credenciais e homologação sandbox ausentes. Ver open-finance-evaluation.json."
+      "reason": "Responsavel confirmou que ainda nao possui conta na Pluggy. Integracao bancaria nao implementada/homologada; conta, contrato e credenciais continuam necessarios."
     },
     {
       "id": 5,
