@@ -15,8 +15,6 @@ const names = [
   'WHATSAPP_FINANCIAL_TEMPLATE',
   'FINANCIAL_JOB_SECRET',
   'OPENAI_VISION_MODEL',
-  'PLUGGY_CLIENT_ID',
-  'PLUGGY_CLIENT_SECRET',
 ];
 const lines = names
   .filter((name) => process.env[name])

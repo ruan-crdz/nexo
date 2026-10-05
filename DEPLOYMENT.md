@@ -35,9 +35,9 @@ O comando aplica todas as migrations em ordem. Esse fluxo remoto não precisa de
 
 ## 4. Configure Auth
 
-Em Authentication → URL Configuration, Site URL local: `http://localhost:5173`; produção: `https://ruan-crdz.github.io/nexo/`. Acrescente em Redirect URLs os endereços usados e `https://ruan-crdz.github.io/nexo/**`.
+Em Authentication → URL Configuration, Site URL local: `http://localhost:5173`; produção: `https://ruan-crdz.github.io/nexo/`. Acrescente em Redirect URLs os endereços usados e `https://ruan-crdz.github.io/nexo/**`. A confirmação de e-mail está desativada para permitir entrada direta após o cadastro; reavalie essa configuração antes de abrir o app ao público.
 
-Mantenha confirmação de e-mail, configure SMTP próprio antes de uso público e senha mínima de doze caracteres. TOTP é ativado no Centro de Privacidade. Após habilitar um fator, RLS exige JWT aal2. Os nomes de menu do painel podem mudar.
+Configure SMTP próprio antes de uso público e mantenha senha mínima de doze caracteres. TOTP é ativado no Centro de Privacidade. Após habilitar um fator, RLS exige JWT aal2. Os nomes de menu do painel podem mudar.
 
 ## 5. Preencha os segredos
 
@@ -100,7 +100,7 @@ Antes de publicar a nova interface de planejamento/família, aplique `2026100500
 
 A atualização de operações exige também `202610050003_operations_upgrade.sql`: recorrências ampliadas, histórico, preferências, conciliação, filtros/propostas familiares, leases e métricas. Publique banco e Functions antes do frontend. Configure somente `OPENAI_VISION_MODEL=gpt-4o-mini` para o modelo de recibos validado por amostra sintética; não sobrescreva os demais secrets. A versão PWA tem atualização controlada: usuários concluem suas anotações antes de atualizar. O cache do app é estático; dados privados são opt-in, cifrados em IndexedDB e separados por usuário, sem proteção prometida contra XSS ou aparelho comprometido.
 
-Open Finance: Pluggy foi avaliada como candidata, não contratada nem homologada. Ver `docs/open-finance-evaluation.json`. Comparação com Pierre depende da execução do protocolo em `docs/usability-study.json`; nenhum resultado com participantes foi criado. `docs/next-release-status.json` registra os estados e bloqueios.
+Open Finance não está implementado nem homologado. Comparações entre provedores dependem da execução do protocolo em `docs/usability-study.json`; nenhum resultado com participantes foi criado. `docs/next-release-status.json` registra os estados e bloqueios.
 
 Avisos proativos requerem configuração separada descrita em [WHATSAPP.md](WHATSAPP.md): template aprovado com um parâmetro de corpo, `WHATSAPP_FINANCIAL_TEMPLATE`, `FINANCIAL_JOB_SECRET`, Vault e agendamento. Consentimento de WhatsApp é desativado por padrão. Não execute o seed, o worker ou a preparação completa de secrets contra produção sem revisar valores locais: um token antigo no arquivo local pode sobrescrever o token atualizado no painel.
 

@@ -20,7 +20,7 @@
     {
       "id": 4,
       "state": "blocked",
-      "reason": "Responsavel confirmou que ainda nao possui conta na Pluggy. Integracao bancaria nao implementada/homologada; conta, contrato e credenciais continuam necessarios."
+      "reason": "Nenhum provedor foi selecionado ou contratado. Integracao bancaria nao implementada/homologada; contrato, custos e credenciais continuam necessarios."
     },
     {
       "id": 5,

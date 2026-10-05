@@ -33,7 +33,7 @@ O envio considera apenas pessoas com consentimento e WhatsApp vinculado; a aprov
 
 ## Dependências externas ainda abertas
 
-- **Open Finance:** o responsável confirmou não possuir conta na Pluggy. Não há conexão bancária implementada/homologada. É necessário criar a conta e definir o contrato, configurar `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` apenas no servidor e homologar consentimento, conexão, sincronização, revogação e conciliação. Não foi criada uma conexão simulada nem um botão que prometa conexão disponível. Referências oficiais: [autenticação](https://docs.pluggy.ai/en/reference/authentication), [widget e sandbox](https://docs.pluggy.ai/en/docs/connect-widget/environments).
+- **Open Finance:** não há conexão bancária implementada ou homologada. A implementação depende da seleção e contratação de um provedor, além de homologar consentimento, conexão, sincronização, revogação e conciliação. Não foi criada uma conexão simulada nem um botão que prometa conexão disponível.
 - **Usabilidade com pessoas de 70 anos:** testes automatizados não substituem observação. Use o roteiro abaixo; nenhum resultado com pessoas foi alegado.
 - **Precisão de recibos:** é necessário um conjunto autorizado de fotos reais variadas, com resultados conferidos, para medir erros de leitura.
 

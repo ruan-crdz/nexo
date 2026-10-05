@@ -42,12 +42,18 @@ export function AuthPage({ mode = 'login' }: { mode?: 'login' | 'signup' | 'reco
         location.reload();
       }
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: redirect },
         });
         if (error) throw error;
+        if (data.session) {
+          sessionStorage.removeItem('nexo.mode');
+          location.hash = '/inicio';
+          location.reload();
+          return;
+        }
         setMessage('Confira seu e-mail para confirmar o cadastro. Depois, entre na sua conta.');
       }
       if (mode === 'recovery') {
