@@ -1,0 +1,68 @@
+project_id = "nexo"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 5000
+
+[db]
+port = 54322
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "https://ruan-crdz.github.io/nexo/"
+additional_redirect_urls = ["http://localhost:5173/**", "http://127.0.0.1:5173/**", "http://localhost:4173/**", "http://127.0.0.1:4173/**", "https://ruan-crdz.github.io/nexo/**"]
+jwt_expiry = 3600
+enable_signup = true
+minimum_password_length = 12
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[functions.whatsapp-webhook]
+import_map = "./functions/deno.json"
+verify_jwt = false
+
+# Authentication is checked with auth.getUser() inside every user-facing function,
+# supporting publishable keys as well as legacy anon keys.
+[functions.ai-chat]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.ai-financial-analysis]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.ai-transaction-parser]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.ai-transcribe]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.rag-search]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.whatsapp-send]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.whatsapp-link]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.generate-weekly-plan]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.business-analysis]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.account-export]
+import_map = "./functions/deno.json"
+verify_jwt = false
+[functions.account-delete]
+import_map = "./functions/deno.json"
+verify_jwt = false

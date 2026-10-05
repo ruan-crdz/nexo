@@ -1,0 +1,202 @@
+[
+  {
+    "title": "Uma reserva para imprevistos",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/",
+    "topic": "reserva",
+    "content": "Uma reserva separada ajuda a lidar com gastos inesperados e perda de renda, reduzindo a necessidade de contrair novas dívidas.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Reserva proporcional ao contexto",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/",
+    "topic": "reserva-adaptativa",
+    "content": "O tamanho adequado da reserva depende da situação pessoal. Experiências anteriores com imprevistos ajudam a dimensionar uma meta inicial.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Pequenos aportes são um começo",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/",
+    "topic": "aportes",
+    "content": "Mesmo aportes pequenos podem melhorar a proteção financeira. Uma meta específica e acompanhamento regular ajudam a construir o hábito.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Automatizar sem comprometer as contas",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/",
+    "topic": "automacao",
+    "content": "Transferências recorrentes podem facilitar a poupança. Revise saldo e calendário para evitar insuficiência de fundos na data do aporte.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Reserva precisa estar acessível",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/",
+    "topic": "liquidez",
+    "content": "A reserva deve combinar segurança e acesso quando necessário. Defina o que considera emergência e reponha os recursos depois do uso.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Datas também fazem parte do orçamento",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/",
+    "topic": "fluxo-caixa",
+    "content": "A ordem de recebimentos e pagamentos afeta a disponibilidade de dinheiro. Acompanhar datas pode revelar ajustes possíveis nos vencimentos.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Priorizar a taxa mais alta",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/archive/blog/how-reduce-your-debt/",
+    "topic": "avalanche",
+    "content": "A estratégia de maior taxa direciona o excedente à dívida mais cara, mantendo os pagamentos mínimos das demais. Pode reduzir juros totais.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Priorizar o menor saldo",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/archive/blog/how-reduce-your-debt/",
+    "topic": "bola-neve",
+    "content": "A bola de neve direciona o excedente ao menor saldo. Quitar contas menores pode ajudar a manter motivação, embora possa custar mais juros.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Conhecer as dívidas antes de decidir",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/archive/blog/how-reduce-your-debt/",
+    "topic": "inventario-dividas",
+    "content": "Liste o que deve e avalie quanto consegue destinar ao pagamento. Escolha uma estratégia compatível com seus compromissos e capacidade mensal.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Bem-estar vai além do saldo",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/consumer-tools/educator-tools/financial-well-being-resources/",
+    "topic": "bem-estar",
+    "content": "Bem-estar financeiro envolve segurança e liberdade de escolha. Indicadores de saldo, sozinhos, não descrevem toda a experiência financeira de uma pessoa.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Uma escala validada não é um score inventado",
+    "organization": "CFPB",
+    "source_url": "https://www.consumerfinance.gov/consumer-tools/educator-tools/financial-well-being-resources/",
+    "topic": "medicao",
+    "content": "O CFPB disponibiliza uma escala própria de bem-estar financeiro. O Nexo Score é outra ferramenta, uma heurística independente sem validação equivalente.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Custos importam em fundos",
+    "organization": "SEC / Investor.gov",
+    "source_url": "https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-funds-etfs/mutual-funds",
+    "topic": "custos-investimentos",
+    "content": "Taxas e despesas afetam o resultado líquido dos fundos. Compare custos e características, sem interpretar retornos passados como garantia de desempenho futuro.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Risco não desaparece por investir em fundo",
+    "organization": "SEC / Investor.gov",
+    "source_url": "https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-funds-etfs/mutual-funds",
+    "topic": "risco",
+    "content": "Fundos podem perder valor. A adequação depende dos ativos, riscos, custos e horizonte do objetivo. Uma simulação não elimina incerteza.",
+    "evidence_level": "A",
+    "jurisdiction": "US",
+    "verified": true
+  },
+  {
+    "title": "Orçamento pessoal no Brasil",
+    "organization": "Banco Central do Brasil",
+    "source_url": "https://www.bcb.gov.br/cidadaniafinanceira",
+    "topic": "orcamento-br",
+    "content": "Referência candidata para curadoria de educação financeira brasileira. Conteúdo deve ser revisado e resumido antes da ativação no RAG.",
+    "evidence_level": "A",
+    "jurisdiction": "BR",
+    "verified": false
+  },
+  {
+    "title": "Educação do investidor brasileiro",
+    "organization": "CVM",
+    "source_url": "https://www.gov.br/investidor/pt-br",
+    "topic": "investimentos-br",
+    "content": "Referência candidata para materiais educacionais da CVM. Revisão de conteúdo, data e aplicabilidade pendente.",
+    "evidence_level": "A",
+    "jurisdiction": "BR",
+    "verified": false
+  },
+  {
+    "title": "Títulos públicos e seus riscos",
+    "organization": "Tesouro Nacional",
+    "source_url": "https://www.tesourodireto.com.br/",
+    "topic": "titulos-publicos",
+    "content": "Fonte candidata. Não usar taxas atuais ou regras operacionais sem consulta e revisão específicas.",
+    "evidence_level": "A",
+    "jurisdiction": "BR",
+    "verified": false
+  },
+  {
+    "title": "Inflação e poder de compra",
+    "organization": "IBGE",
+    "source_url": "https://www.ibge.gov.br/explica/inflacao.php",
+    "topic": "inflacao-br",
+    "content": "Fonte candidata para explicar inflação. O aplicativo usa apenas inflação parametrizada pelo usuário, não índice oficial atualizado.",
+    "evidence_level": "A",
+    "jurisdiction": "BR",
+    "verified": false
+  },
+  {
+    "title": "Alfabetização financeira",
+    "organization": "OECD",
+    "source_url": "https://www.oecd.org/en/topics/financial-education.html",
+    "topic": "literacia",
+    "content": "Catálogo institucional para ampliar curadoria de pesquisas e instrumentos de alfabetização financeira. Seleção de estudos pendente.",
+    "evidence_level": "A",
+    "jurisdiction": "GLOBAL",
+    "verified": false
+  },
+  {
+    "title": "Finanças domiciliares e inclusão",
+    "organization": "World Bank",
+    "source_url": "https://www.worldbank.org/en/publication/globalfindex",
+    "topic": "inclusao",
+    "content": "Candidato para revisão de evidências sobre uso de serviços financeiros. Nenhuma estatística foi importada automaticamente.",
+    "evidence_level": "A",
+    "jurisdiction": "GLOBAL",
+    "verified": false
+  },
+  {
+    "title": "Educação econômica e inflação",
+    "organization": "IMF",
+    "source_url": "https://www.imf.org/en/Publications/fandd/issues/Series/Back-to-Basics",
+    "topic": "macroeconomia",
+    "content": "Catálogo candidato para princípios macroeconômicos. Não usado como evidência até revisão editorial.",
+    "evidence_level": "A",
+    "jurisdiction": "GLOBAL",
+    "verified": false
+  }
+]
