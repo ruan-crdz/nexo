@@ -3,8 +3,9 @@ import { admin, env, HttpError, json } from '../_shared/http.ts';
 import { downloadAudio, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
 import { parseTransaction, transcribe } from '../_shared/openai.ts';
-import { advise } from '../_shared/advice.ts';
-import { formatMoney } from '../../../shared/financial-engine.ts';
+import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
+import { transactionSchema } from '../../../shared/domain.ts';
+import { isSummaryRequest, whatsappMonthSummary } from '../../../shared/whatsapp-summary.ts';
 
 const messageSchema = z.object({
   id: z.string().min(1).max(300),
@@ -25,11 +26,16 @@ const webhookSchema = z.object({
               value: z.object({
                 metadata: z.object({ phone_number_id: z.string() }).optional(),
                 messages: z.array(messageSchema).max(20).optional(),
-                statuses: z.array(z.object({
-                  id: z.string().max(300),
-                  status: z.enum(['sent', 'delivered', 'read', 'failed']),
-                  errors: z.array(z.object({ code: z.number().int() })).optional(),
-                })).max(100).optional(),
+                statuses: z
+                  .array(
+                    z.object({
+                      id: z.string().max(300),
+                      status: z.enum(['sent', 'delivered', 'read', 'failed']),
+                      errors: z.array(z.object({ code: z.number().int() })).optional(),
+                    }),
+                  )
+                  .max(100)
+                  .optional(),
               }),
             }),
           )
@@ -120,6 +126,20 @@ async function processMessage(message: Message) {
       await finish(whatsappWelcome, userId);
       return;
     }
+    if (isSummaryRequest(text)) {
+      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
+      const rows = await db
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', `${today.slice(0, 7)}-01`)
+        .lte('date', today)
+        .limit(5000);
+      if (rows.error || rows.data.length >= 5000)
+        throw new HttpError(503, 'Não foi possível conferir todas as anotações.');
+      await finish(whatsappMonthSummary(transactionSchema.array().parse(rows.data), today), userId);
+      return;
+    }
     if (/^desfazer$/i.test(text)) {
       const undone = await db.rpc('undo_whatsapp', { owner: userId });
       if (undone.error) throw new Error('undo');
@@ -152,7 +172,10 @@ async function processMessage(message: Message) {
         payload: pending.data.pending_payload,
       });
       if (saved.error) throw new Error('commit');
-      await finish('Confirmado e registrado. Envie “desfazer” para cancelar o último registro.', userId);
+      await finish(
+        'Tudo certo, anotação salva! Você pode conferir em “Anotações” no app. Para cancelar, envie “desfazer”.',
+        userId,
+      );
       return;
     }
     const parsed = await parseTransaction(
@@ -161,12 +184,15 @@ async function processMessage(message: Message) {
       new Date(Number(message.timestamp) * 1000),
     );
     if (parsed.parsed.intent === 'question') {
-      const advice = await advise(db, userId, text);
-      const sourceText = advice.sources.map((s) => `${s.title}: ${s.url}`).join('\n');
       await finish(
-        `${advice.answer}\n\n${Object.entries(advice.metrics)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join('\n')}${sourceText ? `\n\nFontes:\n${sourceText}` : ''}`,
+        'Posso anotar o que você gastou ou recebeu e mostrar seu resumo do mês.\n\nEnvie “resumo” para ver o que entrou, saiu e sobrou. Para conferir uma anotação específica, abra “Anotações” no app.\n\nNão salvei nenhuma anotação com esta pergunta.',
+        userId,
+      );
+      return;
+    }
+    if (parsed.parsed.intent === 'unsupported') {
+      await finish(
+        'Ainda não faço esse tipo de pedido. Posso anotar gastos e entradas. Por exemplo: “Gastei 25 reais no almoço hoje”.\n\nPara ver o mês, envie “resumo”. Não salvei nenhuma anotação com esta mensagem.',
         userId,
       );
       return;
@@ -174,13 +200,16 @@ async function processMessage(message: Message) {
     if (parsed.action === 'clarify') {
       await finish(
         parsed.parsed.clarification ??
-          'Envie descrição, valor e data do movimento. Para metas, cartões e lembretes, use o app.',
+          'Me conte o valor, com o que foi e quando aconteceu. Por exemplo: “Gastei 25 reais no almoço hoje”.',
         userId,
       );
       return;
     }
     const details = parsed.transactions
-      .map((t) => `${formatMoney(t.amount)} · ${t.description} · ${t.date}`)
+      .map(
+        (t) =>
+          `${t.type === 'income' ? 'Entrada' : 'Gasto'}: ${formatMoney(t.amount)} · ${t.description} · ${t.date.split('-').reverse().join('/')}${t.status === 'planned' ? ' (ainda não aconteceu)' : ''}`,
+      )
       .join('\n');
     if (parsed.action === 'confirm') {
       const reply = `Entendi assim:\n${details}\nEnvie “confirmar” em até dez minutos ou reenvie os dados corrigidos.`;
@@ -201,7 +230,7 @@ async function processMessage(message: Message) {
     if (saved.error) throw new Error('commit');
     committed = true;
     await finish(
-      `Registrado:\n${details}\n${parsed.action === 'save-correctable' ? 'Confira a interpretação. ' : ''}Envie “desfazer” para cancelar o último registro ou edite no app.`,
+      `Anotado!\n${details}\n\n${parsed.action === 'save-correctable' ? 'Confira se entendi direitinho. ' : ''}Você pode corrigir em “Anotações” no app. Para cancelar, envie “desfazer”.`,
       userId,
     );
   } catch {
@@ -246,12 +275,20 @@ Deno.serve(async (request) => {
         if (change.value.metadata?.phone_number_id === env('WHATSAPP_PHONE_NUMBER_ID')) {
           for (const status of change.value.statuses ?? []) {
             // A late receipt must not downgrade a message already delivered/read.
-            const allowed = status.status === 'read' ? ['accepted', 'delivered', 'failed']
-              : status.status === 'delivered' ? ['accepted', 'failed'] : ['accepted'];
-            const updated = await admin().from('whatsapp_messages_metadata').update({
-              delivery_status: status.status === 'sent' ? 'accepted' : status.status,
-              reply_error_code: status.status === 'failed' ? status.errors?.[0]?.code ?? null : null,
-            }).eq('reply_message_id', status.id).in('delivery_status', allowed);
+            const allowed =
+              status.status === 'read'
+                ? ['accepted', 'delivered', 'failed']
+                : status.status === 'delivered'
+                  ? ['accepted', 'failed']
+                  : ['accepted'];
+            const updated = await admin()
+              .from('whatsapp_messages_metadata')
+              .update({
+                delivery_status: status.status === 'sent' ? 'accepted' : status.status,
+                reply_error_code: status.status === 'failed' ? (status.errors?.[0]?.code ?? null) : null,
+              })
+              .eq('reply_message_id', status.id)
+              .in('delivery_status', allowed);
             if (updated.error) throw new HttpError(503, 'Não foi possível atualizar a entrega.');
           }
         }

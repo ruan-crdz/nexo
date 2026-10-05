@@ -159,6 +159,7 @@ export function Dialog({
   useEffect(() => {
     const el = ref.current;
     el?.showModal();
+    el?.querySelector<HTMLElement>('[data-dialog-autofocus]')?.focus();
     return () => el?.close();
   }, []);
   return (
@@ -166,7 +167,10 @@ export function Dialog({
       className="dialog"
       ref={ref}
       aria-labelledby={titleId}
-      onCancel={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

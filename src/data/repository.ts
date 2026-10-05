@@ -79,10 +79,12 @@ export function cloudRepository(userId: string): Repository {
       const data = emptyDataset();
       const [profile, organizations] = await Promise.all([
         db.from('profiles').select('*').eq('id', userId).maybeSingle(),
-        db
-          .from('organization_members')
-          .select('organization_id, role, organizations(name)')
-          .eq('user_id', userId),
+        organizationId
+          ? db
+              .from('organization_members')
+              .select('organization_id, role, organizations(name)')
+              .eq('user_id', userId)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (profile.error) throw profile.error;
       if (organizations.error) throw organizations.error;
@@ -95,7 +97,10 @@ export function cloudRepository(userId: string): Repository {
       if (organizationId && !data.organizations.some((o) => o.id === organizationId))
         throw new Error('Sem acesso a esta empresa.');
       await Promise.all(
-        (Object.keys(entitySchemas) as Entity[]).map(async (entity) => {
+        (organizationId
+          ? (Object.keys(entitySchemas) as Entity[])
+          : (['transactions', 'financial_accounts'] as Entity[])
+        ).map(async (entity) => {
           if (businessEntities.has(entity) && !organizationId) return;
           const { data: rows, error } = await db
             .from(entity)

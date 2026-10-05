@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppProvider } from './data/context';
 import App from './App';
 import './design-system/styles.css';
+import './design-system/simple.css';
 import { ThemeProvider } from './design-system/theme';
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
   state = { error: false };

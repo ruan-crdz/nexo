@@ -1,8 +1,8 @@
 # Nexo
 
-**Seu dinheiro precisa levar você a algum lugar.**
+**Seu dinheiro, sem complicação.**
 
-Plataforma de planejamento financeiro pessoal e empresarial: entender o momento, encontrar o próximo marco e decidir com números explicáveis.
+Aplicativo de finanças pessoais pensado para pessoas com pouca familiaridade com tecnologia, incluindo idosos. WhatsApp para anotar por texto ou áudio; app para conferir o mês e corrigir anotações.
 
 ![Nexo Pessoal — demonstração desktop](docs/screenshots/home-desktop.png)
 
@@ -15,24 +15,20 @@ npm install
 npm run dev
 ```
 
-Abra `http://localhost:5173` e escolha **Explorar demonstração**. Dados fictícios e alterações ficam neste navegador. No PowerShell com restrição a scripts, use `npm.cmd` e `npx.cmd`, sem mudar a política de execução do Windows.
+Abra `http://localhost:5173` e escolha **Experimentar sem cadastro**. Dados fictícios e alterações ficam neste navegador. No PowerShell com restrição a scripts, use `npm.cmd` e `npx.cmd`, sem mudar a política de execução do Windows.
 
 ## Implementado
 
-- Interface responsiva em português, tokens, teclado, foco, dialogs e reduced motion.
-- Demonstração pessoal/empresarial; repositórios separados para localStorage e Supabase.
-- Cadastro/login, recuperação, onboarding e MFA TOTP exigido também em RLS.
-- Movimentos, contas/cartões, bens, dívidas, orçamentos, metas e equipe com persistência.
-- Jornada contextual, score explicável, reserva adaptativa, plano semanal e relatórios.
-- Simuladores de compra, juros, inflação, quitação de dívidas e contratação.
-- Empresas isoladas, workspaces, papéis, DRE gerencial estimada e auditoria.
-- Backend OpenAI com Responses, Structured Outputs, validação e transcrição.
-- RAG com pgvector, fontes verificadas e resposta explícita quando faltam evidências.
-- WhatsApp com HMAC, vínculo temporário, texto/áudio, confirmação, parcelas e desfazer; gravação idempotente.
-- Privacidade: exportação, exclusão de histórico/conta, revogação de vínculo e sessões.
+- Quatro destinos: Início, Anotações, WhatsApp e Ajustes; textos grandes, ações escritas e modo noturno.
+- Resumo mensal de entradas, gastos e diferença; não representa saldo bancário. Previsões e datas futuras não entram no resumo até acontecerem.
+- Anotação manual com valor, descrição e data; detalhes opcionais. Correção preserva origem, categoria e conta de registros anteriores.
+- WhatsApp com mensagem pronta para conexão, confirmação, texto/áudio, “resumo”, “ajuda” e “desfazer”; gravação idempotente.
+- Cadastro inicial pede só nome. Login/recuperação, MFA existente e isolamento RLS preservados.
+- Privacidade: exportação, exclusão de conta e desconexão do WhatsApp.
+- Demonstração local e persistência real em Supabase, com atualização após mensagens recebidas.
 - CI de qualidade e publicação manual no GitHub Pages.
 
-**Versão inicial executável; não é uma homologação de produção de todos os 77 itens.** A [matriz de entrega](docs/STATUS.md) distingue implementação, testes, dependências e funcionalidades pendentes. Integrações externas precisam de credenciais e validação ponta a ponta. A demonstração não finge chamadas reais nem mostra fontes inventadas.
+**Escopo simplificado em outubro de 2026.** Empresa, score, simuladores e análises avançadas saíram da navegação e das rotas públicas. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp aguarda liberação da conta pela Meta; a interface informa essa limitação, sem simular entregas bem-sucedidas.
 
 ## Produto e arquitetura
 
@@ -89,4 +85,4 @@ Fontes técnicas: [Structured Outputs](https://developers.openai.com/api/docs/gu
 7. Cadastre as duas variáveis públicas no GitHub, selecione Pages → GitHub Actions e execute **Publish GitHub Pages**.
 8. Homologue cadastro, e-mail, isolamento, MFA, IA, fontes, WhatsApp e exclusão antes de usar dados reais.
 
-O [guia de publicação](DEPLOYMENT.md) contém os comandos exatos e onde obter cada chave. Nada foi publicado automaticamente.
+O [guia de publicação](DEPLOYMENT.md) contém os comandos de instalação em outro ambiente. Instância do projeto: https://ruan-crdz.github.io/nexo/.

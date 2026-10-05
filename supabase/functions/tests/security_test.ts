@@ -24,7 +24,7 @@ Deno.test('mensagem pronta vincula sem aceitar códigos incompletos ou texto arb
   assert.equal(url.hostname, 'wa.me');
   assert.equal(url.searchParams.get('text'), message);
   assert.throws(() => whatsappUrl('+55 11 99999-9999', message));
-  for (const instruction of ['áudio', 'conta pessoal', 'desfazer', 'ajuda']) {
+  for (const instruction of ['áudio', 'Anotações', 'desfazer', '24 horas', 'ajuda']) {
     assert.ok(whatsappWelcome.includes(instruction));
   }
 });

@@ -4,7 +4,10 @@ export function linkingMessage(code: string) {
 }
 
 export function parseLinkingCode(text: string): string | null {
-  const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
   const match = normalized.match(
     /^(?:vincular|(?:ola\s+nexo[,!]?\s+)?meu\s+codigo\s+de\s+vinculacao\s+(?:e|:))\s*([a-f0-9]{32})[.!]?$/i,
   );
@@ -18,10 +21,11 @@ export function whatsappUrl(phone: string, message?: string) {
 
 export const whatsappWelcome =
   'Tudo certo, seu WhatsApp está conectado ao Nexo! 🌿\n\n' +
-  'Seu dinheiro, do seu jeito: envie uma mensagem ou um áudio contando o que entrou ou saiu.\n\n' +
+  'Pode escrever ou mandar um áudio contando o que gastou ou recebeu. Por exemplo:\n\n' +
   '💬 “Gastei 25 reais no almoço hoje.”\n' +
-  '🎙️ “Recebi 150 reais de um trabalho ontem.”\n\n' +
-  'Eu organizo os lançamentos na sua conta pessoal e te respondo com um resumo. Se faltar informação, eu pergunto antes.\n\n' +
-  '↩️ Algo ficou errado? Envie “desfazer” para cancelar o último lote registrado nas últimas 24 horas, ou edite no app.\n' +
-  '💡 Envie “ajuda” para ver estas dicas de novo.\n\n' +
-  'Vamos começar? Me conte seu primeiro movimento.';
+  '🎙️ “Recebi 150 reais ontem.”\n\n' +
+  'Eu anoto no seu Nexo e te aviso quando estiver salvo. Se faltar informação, eu pergunto.\n\n' +
+  'Para conferir ou corrigir, abra “Anotações” no app.\n' +
+  'Quer saber como está o mês? Envie “resumo”.\n' +
+  'Se quiser cancelar as anotações da sua última mensagem, envie “desfazer” em até 24 horas.\n\n' +
+  'Envie “ajuda” sempre que precisar destas dicas. Vamos começar?';
