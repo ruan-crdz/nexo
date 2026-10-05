@@ -1,6 +1,7 @@
 import { v5 as uuid } from 'uuid';
 import type { Budget, Dataset, Goal, RecurringRule, Transaction } from './domain.ts';
 import { applyRate, formatMoney, shiftDays, shiftMonths, sum } from './financial-engine.ts';
+import { goalJourney } from './journey.ts';
 
 const namespace = '9667e0ce-412e-47d9-a212-91d1d616f74b';
 export function recurringTransactions(
@@ -94,11 +95,20 @@ export function weeklySummary(transactions: Transaction[], today: string) {
 
 export type VerifiedReply = { answer: string; calculation: string[]; records: Transaction[]; goals: Goal[] };
 export function notificationCandidates(
-  data: Pick<Dataset, 'profile' | 'transactions' | 'budgets'>,
+  data: Pick<Dataset, 'profile' | 'transactions' | 'budgets'> &
+    Partial<Pick<Dataset, 'goals' | 'habit_events'>>,
   today: string,
 ) {
-  const candidates: { key: string; kind: 'bill' | 'budget' | 'weekly'; text: string }[] = [];
+  const candidates: { key: string; kind: 'bill' | 'budget' | 'weekly' | 'journey'; text: string }[] = [];
   if (!data.profile.whatsapp_notifications) return candidates;
+  const focus =
+    data.goals?.find((goal) => goal.id === data.profile.active_goal_id) ??
+    data.goals?.find((goal) => goal.saved < goal.target) ??
+    data.goals?.[0];
+  const journey = focus
+    ? goalJourney(focus, focus.weekly_amount, Math.max(focus.high_water, focus.saved))
+    : null;
+  const paused = !!data.profile.journey_pause_until && data.profile.journey_pause_until >= today;
   if (data.profile.reminders_enabled) {
     for (const record of data.transactions.filter(
       (transaction) =>
@@ -122,11 +132,27 @@ export function notificationCandidates(
   }
   if (data.profile.weekly_digest) {
     const weekly = weeklySummary(data.transactions, today);
-    if (weekly.records.length)
+    if (weekly.records.length || focus)
       candidates.push({
         key: `weekly:${weekly.start}`,
         kind: 'weekly',
-        text: `Resumo de ${weekly.start} a ${weekly.end}: entrou ${formatMoney(weekly.income)}, saiu ${formatMoney(weekly.expenses)}, diferença ${formatMoney(weekly.net)}. Valores das anotações, não saldo bancário.`,
+        text: `Resumo de ${weekly.start} a ${weekly.end}: entrou ${formatMoney(weekly.income)}, saiu ${formatMoney(weekly.expenses)}, diferença ${formatMoney(weekly.net)}. Valores das anotações, não saldo bancário.${focus && journey ? ` Meta ${focus.name}: ${formatMoney(focus.saved)} de ${formatMoney(focus.target)}. ${paused ? 'Seu ritmo está pausado, sem perda de conquistas.' : journey.message}` : ''}`,
+      });
+  }
+  if (data.profile.journey_reminders && !paused && focus && journey && journey.remaining > 0) {
+    const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+    const start = shiftDays(today, -((weekday + 6) % 7));
+    const checked = (data.habit_events ?? []).some(
+      (event) =>
+        event.kind === 'checkin' &&
+        event.day >= (data.profile.checkin_frequency === 'weekly' ? start : today) &&
+        event.day <= today,
+    );
+    if (!checked)
+      candidates.push({
+        key: `journey:${focus.id}:${data.profile.checkin_frequency === 'weekly' ? start : today}`,
+        kind: 'journey',
+        text: `Um convite, não uma cobrança: como está seu momento para a meta ${focus.name}? Você já guardou ${formatMoney(focus.saved)}. ${journey.message} Abra o Nexo para um check-in; não precisa guardar dinheiro hoje para participar.`,
       });
   }
   return candidates;

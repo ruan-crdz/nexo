@@ -36,6 +36,7 @@ beforeAll(async () => {
   );
   await db.exec(readFileSync('supabase/migrations/202610050002_planning_family.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050003_operations_upgrade.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610050004_goal_journey.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -525,6 +526,86 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
     await db.query('delete from auth.users where id=$1', [owner]);
     expect((await db.query('select * from transaction_history where user_id=$1', [owner])).rows).toHaveLength(
       0,
+    );
+  });
+  it('WhatsApp dá pontos limitados e retransmissão não pontua duas vezes',async()=>{
+    await db.exec('reset role; set role service_role');
+    for(let index=0;index<7;index++){const points=(await db.query<{points:number}>('select award_habit_for($1,$2,$3) as points',[bob,'message',`wa:test-${index}`])).rows[0].points;expect(points).toBe(index<5?2:0);}
+    expect((await db.query<{points:number}>('select award_habit_for($1,$2,$3) as points',[bob,'message','wa:test-0'])).rows[0].points).toBe(0);
+    await asUser(bob);await expect(db.query('select award_habit_for($1,$2,$3)',[alice,'message','attack'])).rejects.toThrow(/permission denied/);
+    await expect(db.query("update profiles set journey_style='ocean' where id=$1",[bob])).rejects.toThrow(/not unlocked/);
+  });
+  it('jornada mantém conquistas após urgência e protege pontos de hábitos', async () => {
+    await asUser(alice);
+    const goal = crypto.randomUUID();
+    const payload = {
+      id: goal,
+      name: 'Minha reserva',
+      target: 50000,
+      saved: 0,
+      weekly_amount: 500,
+      deadline: '2027-01-01',
+      priority: 'medium',
+    };
+    await db.query('select save_journey_goal($1::jsonb)', [JSON.stringify(payload)]);
+    const request = crypto.randomUUID();
+    const saved = (
+      await db.query<{ result: { saved: number; points: number } }>(
+        "select update_goal_progress($1,30000,'saving',$2) as result",
+        [goal, request],
+      )
+    ).rows[0].result;
+    expect(saved).toMatchObject({ saved: 30000, points: 10 });
+    expect(
+      (
+        await db.query<{ result: { points: number } }>(
+          "select update_goal_progress($1,30000,'saving',$2) as result",
+          [goal, request],
+        )
+      ).rows[0].result.points,
+    ).toBe(0);
+    const pointsBefore = (
+      await db.query<{ points: number }>(
+        'select sum(points)::integer as points from habit_events where user_id=$1',
+        [alice],
+      )
+    ).rows[0].points;
+    await db.query("select update_goal_progress($1,-30000,'emergency',$2)", [goal, crypto.randomUUID()]);
+    expect(
+      (
+        await db.query<{ saved: number; high_water: number }>(
+          'select saved,high_water from goals where id=$1',
+          [goal],
+        )
+      ).rows[0],
+    ).toEqual({ saved: 0, high_water: 30000 });
+    expect(
+      (
+        await db.query<{ points: number }>(
+          'select sum(points)::integer as points from habit_events where user_id=$1',
+          [alice],
+        )
+      ).rows[0].points,
+    ).toBe(pointsBefore);
+    expect(
+      (await db.query<{ points: number }>("select journey_checkin('checkin','recovery') as points")).rows[0]
+        .points,
+    ).toBe(5);
+    expect(
+      (await db.query<{ points: number }>("select journey_checkin('checkin') as points")).rows[0].points,
+    ).toBe(0);
+    await expect(
+      db.query(
+        "insert into habit_events(user_id,kind,day,points,source_key) values($1,'checkin',current_date,10,'attack')",
+        [alice],
+      ),
+    ).rejects.toThrow(/permission denied/);
+    await asUser(bob);
+    await expect(
+      db.query("select update_goal_progress($1,100,'saving',$2)", [goal, crypto.randomUUID()]),
+    ).rejects.toThrow(/ownership/);
+    await expect(db.query('update profiles set active_goal_id=$1 where id=$2', [goal, bob])).rejects.toThrow(
+      /ownership/,
     );
   });
 });

@@ -1,6 +1,12 @@
 import { admin, authorizeJob, env, HttpError, json } from '../_shared/http.ts';
 import { sendFinancialTemplate, WhatsAppDeliveryError } from '../_shared/whatsapp.ts';
-import { budgetSchema, profileSchema, transactionSchema } from '../../../shared/domain.ts';
+import {
+  budgetSchema,
+  profileSchema,
+  transactionSchema,
+  goalSchema,
+  habitEventSchema,
+} from '../../../shared/domain.ts';
 import { civilDate } from '../../../shared/financial-engine.ts';
 import { notificationCandidates } from '../../../shared/planning.ts';
 import { readPages } from '../../../shared/pagination.ts';
@@ -36,7 +42,7 @@ Deno.serve(async (request) => {
         const today = civilDate(new Date(), profile.timezone);
         const synced = await db.rpc('sync_recurring_rules_for', { owner: raw.id });
         if (synced.error) throw new HttpError(503, 'Não foi possível gerar os vencimentos.');
-        const [rows, budgets, connection] = await Promise.all([
+        const [rows, budgets, connection, goals, habits] = await Promise.all([
           readPages((from, to) =>
             db.from('transactions').select('*').eq('user_id', raw.id).order('id').range(from, to),
           ),
@@ -50,6 +56,18 @@ Deno.serve(async (request) => {
               .range(from, to),
           ),
           db.from('whatsapp_connections').select('phone,consent_at').eq('user_id', raw.id).maybeSingle(),
+          readPages((from, to) =>
+            db.from('goals').select('*').eq('user_id', raw.id).order('id').range(from, to),
+          ),
+          readPages((from, to) =>
+            db
+              .from('habit_events')
+              .select('id,kind,day,points')
+              .eq('user_id', raw.id)
+              .gte('day', `${today.slice(0, 7)}-01`)
+              .order('id')
+              .range(from, to),
+          ),
         ]);
         if (connection.error) throw new HttpError(503, 'Leitura incompleta do job.');
         if (!connection.data?.phone || !connection.data.consent_at) continue;
@@ -58,10 +76,13 @@ Deno.serve(async (request) => {
             profile,
             transactions: transactionSchema.array().parse(rows),
             budgets: budgetSchema.array().parse(budgets),
+            goals: goalSchema.array().parse(goals),
+            habit_events: habitEventSchema.array().parse(habits),
           },
           today,
         );
         for (const candidate of candidates) {
+          if (candidate.kind === 'journey' && hour !== profile.reminder_hour) continue;
           if (accepted + failed + cancelled >= 20) return json({ accepted, failed, cancelled, more: true });
           const queued = await db
             .from('financial_notifications')
@@ -84,7 +105,9 @@ Deno.serve(async (request) => {
           if (!claim.data) continue;
           const latest = await db
             .from('profiles')
-            .select('whatsapp_notifications,notification_consent_at,reminders_enabled,weekly_digest')
+            .select(
+              'whatsapp_notifications,notification_consent_at,reminders_enabled,weekly_digest,journey_reminders,journey_pause_until',
+            )
             .eq('id', raw.id)
             .single();
           const currentConnection = await db
@@ -97,7 +120,12 @@ Deno.serve(async (request) => {
             currentConnection.error ||
             !latest.data.whatsapp_notifications ||
             !latest.data.notification_consent_at ||
-            !(candidate.kind === 'weekly' ? latest.data.weekly_digest : latest.data.reminders_enabled) ||
+            !(candidate.kind === 'weekly'
+              ? latest.data.weekly_digest
+              : candidate.kind === 'journey'
+                ? latest.data.journey_reminders &&
+                  (!latest.data.journey_pause_until || latest.data.journey_pause_until < today)
+                : latest.data.reminders_enabled) ||
             !currentConnection.data?.consent_at ||
             currentConnection.data.phone !== connection.data.phone
           ) {

@@ -7,6 +7,7 @@ import type {
   Workspace,
   RecurringRule,
   Transaction,
+  Goal,
 } from '../../shared/domain';
 import {
   emptyDataset,
@@ -15,10 +16,16 @@ import {
   businessProfileSchema,
   recurringRuleSchema,
   transactionSchema,
+  goalSchema,
+  habitEventSchema,
+  goalEventSchema,
 } from '../../shared/domain';
-import { civilDate } from '../../shared/financial-engine';
+import { civilDate, shiftDays } from '../../shared/financial-engine';
+import { v5 as uuid } from 'uuid';
 import { recurringTransactions } from '../../shared/planning';
 import { merchantKey } from '../../shared/financial-decisions';
+import { canAward, habitPoints } from '../../shared/journey';
+import type { HabitKind } from '../../shared/journey';
 import { readPages } from '../../shared/pagination';
 import { createDemo } from './demo';
 import { supabase } from './client';
@@ -46,6 +53,14 @@ export interface Repository {
     links?: { incoming_id: string; canonical_id: string }[],
   ): Promise<{ saved: number; skipped: number }>;
   categoryPreference(merchant: string, category: string | null): Promise<void>;
+  saveJourneyGoal(goal: Goal): Promise<void>;
+  goalProgress(
+    goalId: string,
+    delta: number,
+    reason: 'saving' | 'withdrawal' | 'emergency',
+    requestId: string,
+  ): Promise<{ saved: number; points: number; repeated: boolean }>;
+  checkin(kind: 'checkin' | 'reflection', mode?: 'steady' | 'recovery' | 'pause'): Promise<number>;
 }
 const businessEntities = new Set<Entity>(['employees', 'business_transactions', 'business_budgets']);
 export function readDemo(): Dataset {
@@ -58,8 +73,11 @@ export function readDemo(): Dataset {
       data.recurring_occurrences ??= [];
       data.import_aliases ??= [];
       data.category_preferences ??= [];
+      data.habit_events = habitEventSchema.array().parse(data.habit_events ?? []);
+      data.goal_events = goalEventSchema.array().parse(data.goal_events ?? []);
       businessProfileSchema.parse(data.business);
-      for (const key of Object.keys(entitySchemas) as Entity[]) entitySchemas[key].array().parse(data[key]);
+      for (const key of Object.keys(entitySchemas) as Entity[])
+        Object.assign(data, { [key]: entitySchemas[key].array().parse(data[key]) });
       return data;
     } catch {
       throw new Error('Os dados de demonstração estão inválidos. Redefina a demonstração em Perfil.');
@@ -70,6 +88,12 @@ export function readDemo(): Dataset {
   return data;
 }
 const writeDemo = (data: Dataset) => localStorage.setItem(DEMO_KEY, JSON.stringify(data));
+function awardDemo(data: Dataset, kind: HabitKind, key: string) {
+  const day = civilDate(new Date(), data.profile.timezone);
+  if (!canAward(data.habit_events, kind, day, key, data.profile.checkin_frequency)) return 0;
+  data.habit_events.push({ id: key, kind, day, points: habitPoints[kind] });
+  return habitPoints[kind];
+}
 export const demoRepository: Repository = {
   async load() {
     const data = readDemo();
@@ -96,6 +120,57 @@ export const demoRepository: Repository = {
     const data = readDemo();
     data.recurring_rules = data.recurring_rules.filter((rule) => rule.id !== id);
     writeDemo(data);
+  },
+  async saveJourneyGoal(value) {
+    const goal = goalSchema.parse(value);
+    const data = readDemo();
+    const existing = data.goals.find((row) => row.id === goal.id);
+    goal.high_water = Math.max(goal.saved, existing?.high_water ?? 0, existing?.saved ?? 0);
+    data.goals = [...data.goals.filter((row) => row.id !== goal.id), goal];
+    data.profile.active_goal_id = goal.id;
+    writeDemo(data);
+  },
+  async goalProgress(goalId, delta, reason, requestId) {
+    const data = readDemo();
+    const goal = data.goals.find((row) => row.id === goalId);
+    if (!goal) throw new Error('Meta não encontrada.');
+    const existing = data.goal_events.find((row) => row.id === requestId);
+    if (existing) {
+      if (existing.goal_id !== goalId || existing.delta !== delta || existing.reason !== reason)
+        throw new Error('Esse pedido já foi usado com outros dados.');
+      return { saved: existing.balance_after, points: 0, repeated: true };
+    }
+    if (!Number.isSafeInteger(delta) || delta === 0 || (reason === 'saving' ? delta < 0 : delta > 0))
+      throw new Error('Progresso inválido.');
+    const saved = goal.saved + delta;
+    goalSchema.parse({ ...goal, saved });
+    goal.high_water = Math.max(goal.high_water, goal.saved, saved);
+    goal.saved = saved;
+    data.goal_events.push({
+      id: requestId,
+      goal_id: goalId,
+      delta,
+      reason,
+      balance_after: saved,
+      created_at: new Date().toISOString(),
+    });
+    const points = delta > 0 ? awardDemo(data, 'saving', requestId) : 0;
+    writeDemo(data);
+    return { saved, points, repeated: false };
+  },
+  async checkin(kind, mode) {
+    const data = readDemo();
+    if (mode) {
+      data.profile.journey_mode = mode;
+      if (mode === 'pause')
+        data.profile.journey_pause_until = shiftDays(civilDate(new Date(), data.profile.timezone), 7);
+      else data.profile.journey_pause_until = null;
+    }
+    const day = civilDate(new Date(), data.profile.timezone);
+    const id = uuid(`${kind}:${day}`, 'da332e39-a082-402e-a14b-0b948242595b');
+    const points = awardDemo(data, kind, id);
+    writeDemo(data);
+    return points;
   },
   async importTransactions(rows, links = []) {
     const parsed = transactionSchema.array().max(10000).parse(rows);
@@ -141,8 +216,17 @@ export const demoRepository: Repository = {
     const data = readDemo();
     const rows = data[entity] as EntityMap[K][];
     const index = rows.findIndex((row) => row.id === value.id);
+    if (entity === 'goals') {
+      const goal = value as EntityMap['goals'];
+      const previous = rows[index] as EntityMap['goals'] | undefined;
+      goal.high_water = Math.max(goal.saved, previous?.high_water ?? 0, previous?.saved ?? 0);
+    }
     if (index >= 0) rows[index] = value;
     else rows.push(value);
+    if (entity === 'transactions' && index < 0) {
+      const row = value as Transaction;
+      if (row.status === 'paid' && row.source === 'manual') awardDemo(data, 'record', row.id);
+    }
     writeDemo(data);
   },
   async remove(entity, id) {
@@ -150,6 +234,10 @@ export const demoRepository: Repository = {
     if (entity === 'financial_accounts' && data.transactions.some((t) => t.account_id === id))
       throw new Error('Esta conta possui movimentos. Reatribua os movimentos antes de excluí-la.');
     Object.assign(data, { [entity]: data[entity].filter((row) => row.id !== id) });
+    if (entity === 'goals') {
+      data.goal_events = data.goal_events.filter((row) => row.goal_id !== id);
+      if (data.profile.active_goal_id === id) data.profile.active_goal_id = null;
+    }
     writeDemo(data);
   },
   async profile(value) {
@@ -234,6 +322,31 @@ export function cloudRepository(userId: string): Repository {
           .order('merchant')
           .range(from, to),
       );
+      data.habit_events = habitEventSchema
+        .array()
+        .parse(
+          await readPages((from, to) =>
+            db
+              .from('habit_events')
+              .select('id,kind,day,points')
+              .eq('user_id', userId)
+              .order('id')
+              .range(from, to),
+          ),
+        );
+      data.goal_events = goalEventSchema
+        .array()
+        .parse(
+          await readPages((from, to) =>
+            db
+              .from('goal_events')
+              .select('id,goal_id,delta,reason,balance_after,created_at')
+              .eq('user_id', userId)
+              .order('created_at', { ascending: false })
+              .order('id')
+              .range(from, to),
+          ),
+        );
       data.organizations = (organizations.data ?? []).map((item) => ({
         id: item.organization_id,
         role: item.role,
@@ -340,6 +453,26 @@ export function cloudRepository(userId: string): Repository {
         ? await db.from('category_preferences').upsert({ user_id: userId, merchant, category })
         : await db.from('category_preferences').delete().eq('user_id', userId).eq('merchant', merchant);
       if (result.error) throw new Error('Não foi possível atualizar a preferência.');
+    },
+    async saveJourneyGoal(value) {
+      const result = await db.rpc('save_journey_goal', { payload: goalSchema.parse(value) });
+      if (result.error) throw new Error('Não foi possível salvar a meta. Confira os valores e a conexão.');
+    },
+    async goalProgress(goalId, delta, reason, requestId) {
+      const result = await db.rpc('update_goal_progress', {
+        goal: goalId,
+        amount_delta: delta,
+        event_reason: reason,
+        request: requestId,
+      });
+      if (result.error)
+        throw new Error('Não foi possível atualizar. Confira o valor guardado e sua conexão.');
+      return result.data as { saved: number; points: number; repeated: boolean };
+    },
+    async checkin(kind, mode) {
+      const result = await db.rpc('journey_checkin', { event_kind: kind, journey_state: mode ?? null });
+      if (result.error) throw new Error('Não foi possível registrar seu check-in. Tente novamente.');
+      return Number(result.data);
     },
     async remove(entity, id, organizationId) {
       const business = businessEntities.has(entity);

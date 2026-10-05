@@ -32,6 +32,10 @@ Não suportado ainda: empréstimos entre pessoas, alteração de cartão/metas o
 
 ## Avisos proativos
 
+Jornada de hábitos exige `202610050004_goal_journey.sql`. Mensagens vinculadas recebem 2 pontos, até 5 mensagens por dia no fuso do perfil; retransmissão do mesmo ID não pontua outra vez. Check-in vale 5 pontos por dia/semana conforme preferência, revisão 10 por semana, anotações manuais 2 até 5 por dia, e progresso de reserva 10 até uma vez por dia, independentemente do valor. Pontos nunca caem por retirada, urgência ou pausa e não são score de crédito.
+
+O resumo semanal pode incluir a meta em foco e um passo pequeno, sem prometer rendimento. Lembretes de jornada são opt-in, no horário escolhido entre 09h e 19h, diários/semanais conforme preferência; pausa e check-in do período suprimem convites. Além dessa preferência, é necessário consentimento externo em Ajustes. A restrição atual da conta Meta e ausência de template/job continuam sendo bloqueios de entrega real; preparar o código não garante mensagem recebida.
+
 `financial-notifications` é um worker preparado, não um agendamento já ativado. Exige a migração de planejamento, consentimento externo explícito (desativado por padrão), número vinculado, `FINANCIAL_JOB_SECRET` de pelo menos 32 caracteres e `WHATSAPP_FINANCIAL_TEMPLATE` aprovado na Meta em `pt_BR`, com um parâmetro de corpo contendo o aviso. Nunca use o token Meta como credencial do job.
 
 Os tipos de aviso são vencimentos, excesso de limite e resumo da última semana completa, conforme as preferências. Chaves estáveis impedem reenvio diário do mesmo evento. A função confere consentimento e vínculo novamente antes de enviar. Envia somente entre 09h e 20h no fuso do perfil e limita cada execução a 20 tentativas; assinantes e dados são lidos em páginas, sem o antigo bloqueio de 200 assinantes.

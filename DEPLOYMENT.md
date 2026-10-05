@@ -94,6 +94,8 @@ A documentação Meta bloqueou leitura automática nesta sessão. A implementaç
 
 ## 8. Agende retenção e operação
 
+Jornada/gamificação: aplique `202610050004_goal_journey.sql` e publique Functions antes do frontend. A migração acrescenta hábitos limitados, eventos de meta, maior progresso preservado e preferências. Não publique a interface de jornada sobre o banco anterior, pois o carregamento passa a consultar as novas tabelas. Metas antigas são preservadas e inicializam maior progresso com o valor atualmente guardado; não inventamos conquistas históricas.
+
 Antes de publicar a nova interface de planejamento/família, aplique `202610050002_planning_family.sql` com `npx supabase db push` e publique as Functions. A interface carrega metas, limites e recorrências; não ative o frontend novo sobre o banco antigo.
 
 A atualização de operações exige também `202610050003_operations_upgrade.sql`: recorrências ampliadas, histórico, preferências, conciliação, filtros/propostas familiares, leases e métricas. Publique banco e Functions antes do frontend. Configure somente `OPENAI_VISION_MODEL=gpt-4o-mini` para o modelo de recibos validado por amostra sintética; não sobrescreva os demais secrets. A versão PWA tem atualização controlada: usuários concluem suas anotações antes de atualizar. O cache do app é estático; dados privados são opt-in, cifrados em IndexedDB e separados por usuário, sem proteção prometida contra XSS ou aparelho comprometido.

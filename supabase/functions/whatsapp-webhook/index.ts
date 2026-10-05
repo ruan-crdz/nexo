@@ -71,7 +71,11 @@ async function processMessage(message: Message) {
     return;
   }
   let committed = false;
+  let messagePoints = 0;
+  let showPoints = false;
   async function finish(reply: string, userId?: string) {
+    if (showPoints && messagePoints > 0)
+      reply += `\n\n+${messagePoints} pontos de hábito. Seu caminho continua; pontos não são dinheiro ou score de crédito.`;
     const result = await db
       .from('whatsapp_messages_metadata')
       .update({ state: 'complete', reply, user_id: userId ?? null, updated_at: new Date().toISOString() })
@@ -117,8 +121,22 @@ async function processMessage(message: Message) {
       await finish('Vamos com calma. Aguarde um minuto para enviar a próxima mensagem.', userId);
       return;
     }
-    const profile = await db.from('profiles').select('timezone').eq('id', userId).single();
+    const profile = await db
+      .from('profiles')
+      .select('timezone,show_journey_points')
+      .eq('id', userId)
+      .single();
     if (profile.error) throw new Error('profile');
+    if (['text', 'audio', 'image'].includes(message.type)) {
+      const award = await db.rpc('award_habit_for', {
+        owner: userId,
+        event_kind: 'message',
+        event_key: `wa:${message.id}`,
+      });
+      if (award.error) throw new HttpError(503, 'Não foi possível registrar o hábito.');
+      messagePoints = Number(award.data);
+      showPoints = profile.data.show_journey_points;
+    }
     if (message.type === 'audio' && message.audio)
       text = await transcribe(await downloadAudio(message.audio.id), userId);
     if (message.type === 'image' && message.image) {

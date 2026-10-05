@@ -6,6 +6,7 @@ import { categories, budgetSchema, goalSchema, recurringRuleSchema } from '../..
 import type { Budget, Goal, RecurringRule } from '../../shared/domain';
 import { civilDate, formatMoney, parseMoney } from '../../shared/financial-engine';
 import { budgetUsage } from '../../shared/planning';
+import { JourneyGoalForm } from './GoalJourney';
 
 type Kind = 'recurring' | 'budget' | 'goal';
 type Editing = { kind: Kind; value?: RecurringRule | Budget | Goal };
@@ -382,7 +383,12 @@ export function PlanningHub() {
             <p>Nenhuma meta cadastrada.</p>
           ))}
       </section>
-      {editing && <PlanningForm editing={editing} onClose={() => setEditing(null)} />}
+      {editing &&
+        (editing.kind === 'goal' ? (
+          <JourneyGoalForm existing={editing.value as Goal | undefined} onClose={() => setEditing(null)} />
+        ) : (
+          <PlanningForm editing={editing} onClose={() => setEditing(null)} />
+        ))}
       {removing && (
         <Dialog
           title="Excluir planejamento?"

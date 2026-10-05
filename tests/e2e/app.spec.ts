@@ -360,10 +360,10 @@ test('limite e meta têm cálculo verificável e avisos exigem consentimento', a
   await expect(page.locator('.plan-list')).toContainText('Acima do limite');
   await page.getByRole('button', { name: 'Metas', exact: true }).click();
   await page.getByRole('button', { name: 'Nova meta' }).click();
-  await page.getByLabel('Nome', { exact: true }).fill('Viagem e2e');
-  await page.getByLabel('Quanto quer alcançar? (R$)').fill('1000,00');
-  await page.getByLabel('Quanto já guardou? (R$)').fill('200,00');
-  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
+  await page.getByLabel('Nome da meta', { exact: true }).fill('Viagem e2e');
+  await page.getByLabel('Valor que quer alcançar (R$)').fill('1000,00');
+  await page.getByLabel('Quanto está guardado agora? (R$)').fill('200,00');
+  await page.getByRole('button', { name: 'Colocar meta em foco' }).click();
   await expect(page.getByRole('heading', { name: 'Viagem e2e' })).toBeVisible();
   await page.goto('/#/perguntas');
   await page.getByRole('button', { name: 'Quanto falta para minha meta?' }).click();
@@ -450,15 +450,81 @@ test('renda semanal é prevista e fatura não transforma limite em saldo', async
 });
 test('CSV lista linha inválida sem impedir revisão das válidas', async ({ page }) => {
   await page.goto('/#/importar');
-  await page
-    .getByLabel('Extrato CSV ou OFX')
-    .setInputFiles({
-      name: 'com-erros.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from('Data;Descrição;Valor\n04/10/2026;Válida;-12,34\n31/02/2026;Inválida;-1,00'),
-    });
+  await page.getByLabel('Extrato CSV ou OFX').setInputFiles({
+    name: 'com-erros.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Data;Descrição;Valor\n04/10/2026;Válida;-12,34\n31/02/2026;Inválida;-1,00'),
+  });
   await page.getByRole('button', { name: 'Revisar registros' }).click();
   await expect(page.getByRole('heading', { name: '1 linhas não serão salvas' })).toBeVisible();
   await expect(page.locator('.import-preview')).toContainText('Válida');
   await expect(page.getByRole('button', { name: 'Salvar 1 registros selecionados' })).toBeEnabled();
+});
+test('meta na home mostra próximo passo e urgência não apaga conquistas', async ({ page }) => {
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    data.goals = [];
+    data.profile.active_goal_id = null;
+    data.goal_events = [];
+    data.habit_events = [];
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Criar minha meta' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Nome da meta').fill('Minha reserva de 500');
+  await dialog.getByLabel('Passo semanal confortável (R$)').fill('5,00');
+  await dialog.getByRole('button', { name: 'Colocar meta em foco' }).click();
+  await expect(page.getByRole('heading', { name: 'Minha reserva de 500', exact: true })).toBeVisible();
+  await expect(page.locator('.journey-coaching')).toContainText('5,00');
+  await page.getByRole('button', { name: 'Guardei dinheiro', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('Valor (R$)', { exact: true }).fill('30,00');
+  await page.getByRole('dialog').getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Confirmar progresso' }).click();
+  await expect(page.locator('.journey-amount strong')).toContainText('30,00');
+  await expect(page.locator('.journey-level')).toContainText('10 pontos');
+  await page.getByRole('button', { name: 'Precisei usar numa urgência' }).click();
+  await page.getByRole('dialog').getByLabel('Valor (R$)', { exact: true }).fill('30,00');
+  await page.getByRole('dialog').getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Confirmar progresso' }).click();
+  await expect(page.locator('.journey-amount strong')).toContainText('0,00');
+  await expect(page.locator('.journey-coaching')).toContainText('não foi apagado');
+  await expect(page.locator('.journey-foot')).toContainText('30,00');
+  await expect(page.locator('.journey-level')).toContainText('10 pontos');
+  await page.reload();
+  await expect(page.locator('.journey-coaching')).toContainText('não foi apagado');
+});
+test('check-in único mantém pontos e pausa lembretes sem perder nível', async ({ page }) => {
+  await page.getByRole('button', { name: 'Fazer meu check-in' }).click();
+  await page.getByRole('button', { name: 'Estou retomando aos poucos' }).click();
+  await expect(page.locator('.journey-level')).toContainText('5 pontos');
+  await expect(page.getByRole('button', { name: 'Check-in desta semana feito' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Personalizar acompanhamento' }).click();
+  await page.getByRole('checkbox', { name: 'Mostrar pontos e níveis de hábitos' }).uncheck();
+  await expect(page.getByRole('checkbox', { name: 'Mostrar pontos e níveis de hábitos' })).toBeEnabled();
+  await page.getByRole('dialog').getByRole('button', { name: 'Concluir', exact: true }).click();
+  await expect(page.locator('.journey-level')).toHaveCount(0);
+});
+test('recompensas desbloqueiam personalização real e cartão local sem dados bancários', async ({ page }) => {
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    data.habit_events = Array.from({ length: 15 }, (_, index) => ({
+      id: crypto.randomUUID(),
+      kind: 'checkin',
+      day: `2026-09-${String(index + 1).padStart(2, '0')}`,
+      points: 5,
+    }));
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Minhas conquistas' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Conquistado');
+  await page.getByLabel('Cor da minha jornada').selectOption('ocean');
+  await expect(page.getByLabel('Cor da minha jornada')).toBeEnabled();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Baixar meu cartão de conquista' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('nexo-minha-conquista.png');
+  await page.getByRole('dialog').getByRole('button', { name: 'Concluir', exact: true }).click();
+  await expect(page.locator('.goal-journey')).toHaveAttribute('data-style', 'ocean');
 });

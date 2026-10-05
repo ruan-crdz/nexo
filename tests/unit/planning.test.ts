@@ -7,6 +7,7 @@ import {
   weeklySummary,
 } from '../../shared/planning';
 import { emptyProfile } from '../../shared/domain';
+import { goalSchema } from '../../shared/domain';
 import type { RecurringRule, Transaction } from '../../shared/domain';
 const transaction = (changes: Partial<Transaction> = {}): Transaction => ({
   id: crypto.randomUUID(),
@@ -73,6 +74,8 @@ it('meta ultrapassada não inventa uma subtração com resultado zero', () => {
     deadline: '2026-12-01',
     monthly_contribution: 0,
     priority: 'medium' as const,
+    weekly_amount: 0,
+    high_water: 2000,
   };
   const result = verifiedReply(
     { transactions: [], goals: [goal] },
@@ -107,4 +110,42 @@ it('avisos externos exigem consentimento e chaves impedem repetição diária', 
   expect(first[0].key).toBe(second[0].key);
   data.profile.reminders_enabled = false;
   expect(notificationCandidates(data, '2026-10-05')).toEqual([]);
+});
+it('lembrete de meta respeita pausa, check-in semanal e consentimento', () => {
+  const goal = goalSchema.parse({
+    id: crypto.randomUUID(),
+    name: 'Reserva',
+    target: 50000,
+    saved: 0,
+    weekly_amount: 500,
+    high_water: 30000,
+    monthly_contribution: 0,
+    deadline: '2027-01-01',
+    priority: 'medium',
+  });
+  const data = {
+    profile: {
+      ...emptyProfile,
+      whatsapp_notifications: true,
+      journey_reminders: true,
+      active_goal_id: goal.id,
+    },
+    transactions: [],
+    budgets: [],
+    goals: [goal],
+    habit_events: [],
+  };
+  expect(notificationCandidates(data, '2026-10-05')[0].text).toContain('não foi apagado');
+  expect(
+    notificationCandidates(
+      { ...data, profile: { ...data.profile, journey_pause_until: '2026-10-10' } },
+      '2026-10-05',
+    ),
+  ).toEqual([]);
+  expect(
+    notificationCandidates(
+      { ...data, profile: { ...data.profile, whatsapp_notifications: false } },
+      '2026-10-05',
+    ),
+  ).toEqual([]);
 });

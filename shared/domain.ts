@@ -44,6 +44,9 @@ export const goalSchema = z.object({
   monthly_contribution: centsSchema,
   deadline: dateSchema,
   priority: z.enum(['high', 'medium', 'low']),
+  weekly_amount: centsSchema.default(0),
+  high_water: centsSchema.default(0),
+  purpose: z.string().trim().max(180).optional(),
 });
 export const debtSchema = z.object({
   id: z.string().uuid(),
@@ -100,6 +103,14 @@ export const profileSchema = z.object({
   weekly_digest: z.boolean().default(false),
   whatsapp_notifications: z.boolean().default(false),
   metrics_enabled: z.boolean().default(false),
+  active_goal_id: z.string().uuid().nullable().default(null),
+  show_journey_points: z.boolean().default(true),
+  journey_style: z.enum(['forest', 'ocean', 'sun', 'berry']).default('forest'),
+  checkin_frequency: z.enum(['daily', 'weekly']).default('weekly'),
+  journey_reminders: z.boolean().default(false),
+  journey_pause_until: dateSchema.nullable().default(null),
+  reminder_hour: z.number().int().min(9).max(19).default(18),
+  journey_mode: z.enum(['steady', 'recovery', 'pause']).default('steady'),
 });
 export const recurringRuleSchema = z.object({
   id: z.string().uuid(),
@@ -114,6 +125,22 @@ export const recurringRuleSchema = z.object({
   annual_adjustment_bps: z.number().int().min(0).max(10000).default(0),
 });
 export type RecurringRule = z.infer<typeof recurringRuleSchema>;
+export const habitEventSchema = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(['checkin', 'reflection', 'message', 'record', 'saving']),
+  day: dateSchema,
+  points: z.number().int().min(0).max(10),
+});
+export type HabitEvent = z.infer<typeof habitEventSchema>;
+export const goalEventSchema = z.object({
+  id: z.string().uuid(),
+  goal_id: z.string().uuid(),
+  delta: z.number().int().min(-MAX_MONEY).max(MAX_MONEY),
+  reason: z.enum(['saving', 'withdrawal', 'emergency']),
+  balance_after: centsSchema,
+  created_at: z.string(),
+});
+export type GoalEvent = z.infer<typeof goalEventSchema>;
 export const businessProfileSchema = z.object({
   name: z.string().trim().min(2).max(100),
   segment: z.string().max(100),
@@ -167,6 +194,8 @@ export interface Dataset {
   recurring_occurrences: string[];
   import_aliases: string[];
   category_preferences: { merchant: string; category: string }[];
+  habit_events: HabitEvent[];
+  goal_events: GoalEvent[];
 }
 export const emptyProfile: Profile = {
   name: 'Você',
@@ -183,6 +212,14 @@ export const emptyProfile: Profile = {
   weekly_digest: false,
   whatsapp_notifications: false,
   metrics_enabled: false,
+  active_goal_id: null,
+  show_journey_points: true,
+  journey_style: 'forest',
+  checkin_frequency: 'weekly',
+  journey_reminders: false,
+  journey_pause_until: null,
+  reminder_hour: 18,
+  journey_mode: 'steady',
 };
 export const emptyBusiness: BusinessProfile = {
   name: 'Minha empresa',
@@ -223,5 +260,7 @@ export function emptyDataset(): Dataset {
     recurring_occurrences: [],
     import_aliases: [],
     category_preferences: [],
+    habit_events: [],
+    goal_events: [],
   };
 }

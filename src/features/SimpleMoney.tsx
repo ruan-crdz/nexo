@@ -26,6 +26,7 @@ import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths } from '../.
 import { monthlyFlow } from '../../shared/insights';
 import { budgetUsage, weeklySummary } from '../../shared/planning';
 import { merchantKey } from '../../shared/financial-decisions';
+import { GoalJourney } from './GoalJourney';
 
 function monthLabel(month: string) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
@@ -324,6 +325,7 @@ export function SimpleHome() {
           </Button>
         </div>
       </header>
+      <GoalJourney />
       <div className="feature-links" aria-label="Mais controle">
         <Link to="/planejar" className="button button-secondary">
           <CalendarClock size={20} />

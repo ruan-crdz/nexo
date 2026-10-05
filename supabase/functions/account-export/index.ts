@@ -15,6 +15,8 @@ serve(async (request) => {
     'transaction_sources',
     'category_preferences',
     'operation_metrics',
+    'habit_events',
+    'goal_events',
     'ai_messages',
     'whatsapp_connections',
     'whatsapp_messages_metadata',

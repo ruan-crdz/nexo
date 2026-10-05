@@ -39,6 +39,9 @@ Abra `http://localhost:5173` e escolha **Experimentar sem cadastro**. Dados fict
 - Offline opt-in neste aparelho: cache/fila cifrados por usuário e inserção idempotente ao reconectar. O service worker guarda só arquivos públicos do app; sair ou desativar remove dados locais.
 - Fotos de recibos geram prévia pendente, nunca confirmação automática de pagamento; requer `OPENAI_VISION_MODEL` e revisão do usuário.
 - Estado dos vinte itens, limitações e evidências em `docs/next-release-status.json`. Não há estudo comparativo realizado nem integração Open Finance homologada.
+- Jornada da meta na home: valores sugeridos de R$ 500 até R$ 1 bilhão, propósito pessoal, passo semanal ajustável, marcos locais e opção de anotar urgência sem apagar maior progresso ou pontos.
+- Hábitos opcionais: check-in diário/semanal, revisão semanal, mensagens vinculadas e anotações com pontos limitados. Níveis não são score de crédito, saldo ou medida do valor da pessoa. Pausas e urgências não descontam pontos.
+- Recompensas pessoais: cartão PNG local sem saldo bancário, cor da jornada, carta e quadro de conquistas. Funções financeiras e privacidade nunca exigem nível. Lembretes personalizados continuam dependentes da Meta e do agendamento consentido.
 
 **Escopo simplificado em outubro de 2026.** Empresa, score e simuladores saíram da navegação e das rotas públicas. Planejamento, perguntas e importação ficam em áreas secundárias, preservando os quatro destinos principais. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp usa o status real das entregas para informar falhas, sem avisos fixos de bloqueio.
 
