@@ -7,7 +7,9 @@
     <script>
       try {
         var preference = localStorage.getItem('nexo.theme');
-        var dark = preference === 'dark' || (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        var dark =
+          preference === 'dark' ||
+          (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
         document.querySelector('meta[name="theme-color"]').content = dark ? '#171c19' : '#f7f3e8';
       } catch (_) {}
@@ -16,8 +18,9 @@
       name="description"
       content="Nexo. Seu dinheiro precisa levar você a algum lugar. Planejamento pessoal e empresarial com clareza."
     />
-    <title>Nexo — Seu próximo passo</title>
-    <link rel="icon" type="image/svg+xml" href="/nexo.svg" />
+    <title>Nexo</title>
+    <link rel="icon" type="image/png" href="/logo_letra_n.png" />
+    <link rel="apple-touch-icon" href="/logo_letra_n.png" />
   </head>
   <body>
     <div id="root"></div>

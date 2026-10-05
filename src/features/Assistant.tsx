@@ -4,7 +4,7 @@ import { useApp } from '../data/context';
 import { invoke } from '../data/client';
 import { personalSummary, weeklyPlan } from '../../shared/insights';
 import { formatMoney } from '../../shared/financial-engine';
-import { Badge, Button, Card, PageHeader, Why } from '../design-system/components';
+import { Badge, Brand, Button, Card, PageHeader, Why } from '../design-system/components';
 
 type Reply = {
   answer: string;
@@ -114,7 +114,7 @@ export function AssistantPage() {
       <Card>
         {!messages.length && (
           <div className="chat-intro">
-            <span className="brand-mark">n</span>
+            <Brand compact />
             <h2>O que está na sua cabeça hoje?</h2>
             <p>Uma compra, uma meta ou só entender melhor seu momento. Podemos começar por aí.</p>
             <div className="suggestions">

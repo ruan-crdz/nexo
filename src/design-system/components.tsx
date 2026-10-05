@@ -3,6 +3,19 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { ArrowUpRight, X, Info, Plus } from 'lucide-react';
 import { formatMoney } from '../../shared/financial-engine';
 
+export function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <span className={`brand${compact ? ' brand-compact' : ''}`}>
+      <img
+        src={`${import.meta.env.BASE_URL}${compact ? 'logo_letra_n.png' : 'logo_nome_horizontal.png'}`}
+        alt="Nexo"
+        width={compact ? 56 : 180}
+        height={compact ? 56 : 61}
+      />
+    </span>
+  );
+}
+
 export function Button({
   children,
   variant = 'primary',

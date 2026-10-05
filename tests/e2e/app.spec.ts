@@ -98,3 +98,30 @@ test('modo noturno persiste e mantém integrações acessíveis', async ({ page 
   await page.getByRole('button', { name: 'Ativar modo claro' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
+test('telas principais e marca cabem em celulares estreitos e tablets', async ({ page }) => {
+  for (const width of [320, 360, 390, 430, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const route of ['inicio', 'assistente', 'integracoes', 'movimentos', 'perfil', 'empresa']) {
+      await page.goto(`/#/${route}`);
+      await expect(page.locator('main h1').first()).toBeVisible();
+      await expect(page.locator('.mobile-brand img')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Abrir todas as áreas' })).toBeVisible();
+      await expect
+        .poll(() =>
+          page.locator('.mobile-brand img').evaluate((image) => (image as HTMLImageElement).naturalWidth),
+        )
+        .toBeGreaterThan(0);
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth), {
+          message: `${route} em ${width}px`,
+        })
+        .toBeLessThanOrEqual(width);
+      expect(
+        await page
+          .locator('.topbar-actions')
+          .evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth),
+        `Cabeçalho em ${width}px`,
+      ).toBe(true);
+    }
+  }
+});

@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, FunctionsHttpError } from '@supabase/supabase-js';
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const supabase =
@@ -11,6 +11,13 @@ export const configured = Boolean(supabase);
 export async function invoke<T>(name: string, body: Record<string, unknown> | FormData): Promise<T> {
   if (!supabase) throw new Error('Conecte o Supabase para usar esta integração.');
   const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error instanceof FunctionsHttpError) {
+    const result = await error.context
+      .clone()
+      .json()
+      .catch(() => null);
+    if (typeof result?.error === 'string' && result.error.length <= 400) throw new Error(result.error);
+  }
   if (error)
     throw new Error(
       'Não foi possível concluir a solicitação. Confira a configuração da integração e tente novamente.',

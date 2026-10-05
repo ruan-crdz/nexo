@@ -22,17 +22,11 @@ import {
   Menu,
 } from 'lucide-react';
 import { useApp } from '../data/context';
-import { Button, Dialog } from '../design-system/components';
+import { Brand, Button, Dialog } from '../design-system/components';
 import { DEMO_KEY } from '../data/repository';
 import { ThemeToggle } from '../design-system/theme';
 
-export function Brand() {
-  return (
-    <span className="brand">
-      <span className="brand-mark">n</span>nexo<span className="brand-dot">.</span>
-    </span>
-  );
-}
+export { Brand } from '../design-system/components';
 const personalNav = [
   { to: '/inicio', label: 'Visão geral', icon: LayoutDashboard },
   { to: '/movimentos', label: 'Movimentos', icon: ArrowRightLeft },
