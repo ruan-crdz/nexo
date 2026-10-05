@@ -106,11 +106,12 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
   await expect(page.locator('.simple-totals')).toHaveText(totals, { useInnerText: true });
 });
 
-test('navegação contém apenas quatro destinos e caminhos antigos voltam ao início', async ({ page }) => {
+test('navegação contém os cinco destinos principais e caminhos antigos voltam ao início', async ({ page }) => {
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.getByRole('link')).toHaveCount(4);
+  await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Anotações');
+  await expect(nav).toContainText('Investir');
   await expect(nav).toContainText('WhatsApp');
   await expect(nav).toContainText('Ajustes');
   await expect(page.getByText('Nexo Score')).not.toBeVisible();
@@ -168,6 +169,7 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
       'privacidade',
       'planejar',
       'metas',
+      'investimentos',
       'perguntas',
       'importar',
       'familia',
@@ -199,6 +201,7 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
       'privacidade',
       'planejar',
       'metas',
+      'investimentos',
       'perguntas',
       'importar',
       'familia',
@@ -223,6 +226,43 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
     })
     .toBeLessThanOrEqual(768);
   expect(errors).toEqual([]);
+});
+
+test('plano de investimento salva aporte e mostra projeção sem rendimento', async ({ page }) => {
+  await page.goto('/#/investimentos');
+  await expect(page.getByRole('heading', { name: 'Investir sem complicar' })).toBeVisible();
+  const selectedGoalId = await page.getByLabel('Meta para este plano').inputValue();
+  await page.getByLabel('Aporte mensal (R$)').fill('100,00');
+  await page.getByRole('button', { name: 'Prefiro pouca oscilação' }).click();
+  await expect(page.getByText('Para chegar na data escolhida, sem contar rendimento')).toBeVisible();
+  await page.getByRole('button', { name: 'Salvar aporte nesta meta' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate((goalId) => {
+        const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+        return data.goals.find((goal: { id: string }) => goal.id === goalId).monthly_contribution;
+      }, selectedGoalId),
+    )
+    .toBe(10000);
+  await expect(page.getByRole('button', { name: 'Prefiro pouca oscilação' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});
+
+test('página de investimentos permite criar uma meta própria e apresenta fontes oficiais', async ({ page }) => {
+  await page.goto('/#/investimentos');
+  await page.getByRole('button', { name: 'Criar meta de investimento' }).click();
+  await page.getByLabel('Nome da meta').fill('Reformar a casa');
+  await page.getByLabel('Valor que quer alcançar (R$)').fill('12000,00');
+  await page.getByLabel('Quanto já está guardado? (R$)').fill('1000,00');
+  await page.getByLabel('Data desejada').fill('2027-10-05');
+  await page.getByRole('button', { name: 'Salvar meta' }).click();
+  await expect(page.getByLabel('Meta para este plano')).toContainText('Reformar a casa');
+  await expect(page.getByRole('link', { name: /Portal do Investidor da CVM/ })).toHaveAttribute(
+    'href',
+    'https://www.gov.br/investidor/pt-br/investir',
+  );
 });
 
 test('formulário tem foco, Escape cancela e campos são acessíveis', async ({ page }) => {
@@ -283,7 +323,10 @@ test('início prioriza dinheiro e WhatsApp e deixa metas em uma tela opcional', 
   expect(whatsapp!.y).toBeLessThan(recent!.y);
   await expect(page.locator('.goal-journey')).toHaveCount(0);
   await expect(page.locator('.home-details')).not.toHaveAttribute('open');
-  await page.getByRole('link', { name: 'Minhas metas', exact: true }).click();
+  const goalsLink = page.getByRole('link', { name: 'Minhas metas', exact: true });
+  await expect(goalsLink.locator('svg')).toHaveCount(1);
+  expect(await goalsLink.evaluate((element) => getComputedStyle(element).gridColumnEnd)).toBe('-1');
+  await goalsLink.click();
   await expect(page.getByRole('heading', { name: 'Minhas metas', exact: true })).toBeVisible();
   await expect(page.locator('.goal-journey')).toBeVisible();
 });

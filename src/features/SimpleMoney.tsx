@@ -16,6 +16,7 @@ import {
   Users,
   Pencil,
   Trash2,
+  Target,
 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke } from '../data/client';
@@ -513,7 +514,8 @@ export function SimpleHome() {
           <Users size={20} />
           <span>Família</span>
         </Link>
-        <Link to="/metas" className="button button-secondary">
+        <Link to="/metas" className="button button-secondary feature-link-goals">
+          <Target size={20} />
           Minhas metas
         </Link>
       </div>

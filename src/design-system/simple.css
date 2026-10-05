@@ -922,8 +922,11 @@ label {
 }
 .feature-links {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
+}
+.feature-links .feature-link-goals {
+  grid-column: 1 / -1;
 }
 .feature-links .button {
   min-width: 0;
@@ -945,6 +948,85 @@ label {
 .feature-links .button:hover {
   border-color: var(--moss);
   background: var(--lime-soft);
+}
+.investment-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  align-items: start;
+  gap: 18px;
+}
+.investment-grid > * {
+  min-width: 0;
+}
+.investment-risk-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.investment-risk-option {
+  display: flex;
+  min-height: 112px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 14px;
+  text-align: left;
+  white-space: normal;
+}
+.investment-risk-option[aria-pressed='true'] {
+  border-color: var(--moss);
+  background: var(--lime-soft);
+  box-shadow: inset 0 0 0 1px var(--moss);
+}
+.investment-risk-option span {
+  font-weight: 700;
+}
+.investment-risk-option small {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.investment-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-left: 4px solid var(--moss);
+  background: var(--lime-soft);
+}
+.investment-callout p {
+  margin: 0;
+}
+.investment-source-list {
+  display: grid;
+  gap: 10px;
+}
+.investment-source-list a {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.investment-plan-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.investment-plan-result > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.investment-plan-result .badge {
+  width: fit-content;
+  white-space: normal;
+}
+.investment-plan-result strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
 }
 .feature-tabs {
   display: grid;
@@ -1083,6 +1165,13 @@ label {
 @media (max-width: 700px) {
   .feature-links {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .investment-grid,
+  .investment-risk-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .investment-risk-option {
+    min-height: 0;
   }
   .import-mapping {
     grid-template-columns: 1fr;
@@ -1349,6 +1438,10 @@ label {
     bottom: 0;
     left: 0;
     right: 0;
+    width: 100vw;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     z-index: 30;
     max-width: none;
     background: var(--paper);
@@ -1359,12 +1452,12 @@ label {
     box-shadow: 0 -4px 24px #0000000c;
   }
   .simple-nav a {
-    flex: 1;
+    width: 100%;
     flex-direction: column;
     gap: 4px;
-    font-size: 14px;
+    font-size: 13px;
     min-height: 68px;
-    padding: 8px 4px;
+    padding: 8px 2px;
   }
   .simple-content {
     padding: 20px 16px 120px;

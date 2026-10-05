@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
-import { Home, NotebookPen, MessageCircle, Settings, CircleHelp } from 'lucide-react';
+import { Home, NotebookPen, MessageCircle, Settings, CircleHelp, TrendingUp } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
 import { Brand, Button } from '../design-system/components';
@@ -10,6 +10,7 @@ export { Brand } from '../design-system/components';
 const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Anotações', icon: NotebookPen },
+  { to: '/investimentos', label: 'Investir', icon: TrendingUp },
   { to: '/integracoes', label: 'WhatsApp', icon: MessageCircle },
   { to: '/perfil', label: 'Ajustes', icon: Settings },
 ];
