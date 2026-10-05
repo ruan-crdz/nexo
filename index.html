@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#F7F3E8" />
+    <script>
+      try {
+        var preference = localStorage.getItem('nexo.theme');
+        var dark = preference === 'dark' || (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#171c19' : '#f7f3e8';
+      } catch (_) {}
+    </script>
     <meta
       name="description"
       content="Nexo. Seu dinheiro precisa levar você a algum lugar. Planejamento pessoal e empresarial com clareza."

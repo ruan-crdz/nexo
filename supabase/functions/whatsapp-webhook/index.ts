@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { admin, env, HttpError, json } from '../_shared/http.ts';
-import { downloadAudio, hashToken, sendText, verifySignature } from '../_shared/whatsapp.ts';
+import { downloadAudio, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
+import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
 import { parseTransaction, transcribe } from '../_shared/openai.ts';
 import { advise } from '../_shared/advice.ts';
 import { formatMoney } from '../../../shared/financial-engine.ts';
@@ -24,6 +25,11 @@ const webhookSchema = z.object({
               value: z.object({
                 metadata: z.object({ phone_number_id: z.string() }).optional(),
                 messages: z.array(messageSchema).max(20).optional(),
+                statuses: z.array(z.object({
+                  id: z.string().max(300),
+                  status: z.enum(['sent', 'delivered', 'read', 'failed']),
+                  errors: z.array(z.object({ code: z.number().int() })).optional(),
+                })).max(100).optional(),
               }),
             }),
           )
@@ -48,11 +54,7 @@ async function processMessage(message: Message) {
       !previous.data.sent_at &&
       ['complete', 'pending'].includes(previous.data.state)
     ) {
-      await sendText(message.from, previous.data.reply);
-      await db
-        .from('whatsapp_messages_metadata')
-        .update({ sent_at: new Date().toISOString() })
-        .eq('message_id', message.id);
+      await deliverReply(message.id, message.from, previous.data.reply);
     }
     return;
   }
@@ -64,24 +66,21 @@ async function processMessage(message: Message) {
       .eq('message_id', message.id);
     if (result.error) throw new Error('metadata');
     committed = true;
-    await sendText(message.from, reply);
-    await db
-      .from('whatsapp_messages_metadata')
-      .update({ sent_at: new Date().toISOString() })
-      .eq('message_id', message.id);
+    await deliverReply(message.id, message.from, reply);
   }
   try {
     let text = message.text?.body?.trim() ?? '';
-    if (/^vincular [a-f0-9]{32}$/i.test(text)) {
+    const linkingCode = parseLinkingCode(text);
+    if (linkingCode) {
       const link = await db.rpc('link_whatsapp', {
-        hash: await hashToken(text.split(' ')[1].toLowerCase()),
+        hash: await hashToken(linkingCode),
         sender: message.from,
       });
       if (link.error) throw new Error('link');
       await finish(
         link.data
-          ? 'Conta vinculada. Envie “gastei 10 de coxinha”. Para desfazer o último registro, envie “desfazer”.'
-          : 'Código inválido ou expirado. Gere outro no app.',
+          ? whatsappWelcome
+          : 'Esse código já foi usado ou expirou. Abra o Nexo → WhatsApp e toque em “Conectar meu WhatsApp” para gerar uma nova mensagem.',
         link.data ?? undefined,
       );
       return;
@@ -115,6 +114,10 @@ async function processMessage(message: Message) {
         'Nesta versão, envie texto ou áudio. Recibos em imagem ainda não são interpretados.',
         userId,
       );
+      return;
+    }
+    if (/^(?:ajuda|menu|oi|ola|olá|tutorial)[!.\s]*$/i.test(text)) {
+      await finish(whatsappWelcome, userId);
       return;
     }
     if (/^desfazer$/i.test(text)) {
@@ -187,11 +190,7 @@ async function processMessage(message: Message) {
         .eq('message_id', message.id);
       if (pending.error) throw new Error('pending');
       committed = true;
-      await sendText(message.from, reply);
-      await db
-        .from('whatsapp_messages_metadata')
-        .update({ sent_at: new Date().toISOString() })
-        .eq('message_id', message.id);
+      await deliverReply(message.id, message.from, reply);
       return;
     }
     const saved = await db.rpc('commit_whatsapp', {
@@ -244,6 +243,18 @@ Deno.serve(async (request) => {
         )
           throw new HttpError(403, 'Número de destino inválido.');
         for (const message of change.value.messages ?? []) await processMessage(message);
+        if (change.value.metadata?.phone_number_id === env('WHATSAPP_PHONE_NUMBER_ID')) {
+          for (const status of change.value.statuses ?? []) {
+            // A late receipt must not downgrade a message already delivered/read.
+            const allowed = status.status === 'read' ? ['accepted', 'delivered', 'failed']
+              : status.status === 'delivered' ? ['accepted', 'failed'] : ['accepted'];
+            const updated = await admin().from('whatsapp_messages_metadata').update({
+              delivery_status: status.status === 'sent' ? 'accepted' : status.status,
+              reply_error_code: status.status === 'failed' ? status.errors?.[0]?.code ?? null : null,
+            }).eq('reply_message_id', status.id).in('delivery_status', allowed);
+            if (updated.error) throw new HttpError(503, 'Não foi possível atualizar a entrega.');
+          }
+        }
       }
     return json({ received: true });
   } catch (error) {

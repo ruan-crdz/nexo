@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --ink: #252521;
   --cream: #f7f3e8;
   --sand: #e8e0cd;
@@ -12,6 +13,9 @@
   --danger: #ad3d34;
   --muted: #625f55;
   --line: #e5e1d5;
+  --brand-bg: #252521;
+  --journey-line: #dce3c9;
+  --journey-track: #d9e0c7;
   --radius-sm: 8px;
   --radius: 16px;
   --radius-lg: 24px;
@@ -30,4 +34,25 @@
   --motion: 160ms;
   --sidebar: 238px;
   --content: 1240px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ink: #f0eee6;
+  --cream: #171c19;
+  --paper: #202722;
+  --sand: #303a31;
+  --muted: #b2b9ab;
+  --line: #3b463c;
+  --moss: #c0d69e;
+  --lime: #bfd77d;
+  --lime-soft: #2b3829;
+  --terra: #f1aa8b;
+  --terra-soft: #3d2d26;
+  --warning: #e6bd80;
+  --danger: #f29b93;
+  --brand-bg: #303a31;
+  --journey-line: #40503a;
+  --journey-track: #43553b;
+  --shadow: 0 12px 44px #00000030;
 }

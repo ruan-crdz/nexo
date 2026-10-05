@@ -242,7 +242,7 @@ fieldset {
 .brand-mark {
   width: 31px;
   height: 31px;
-  background: var(--ink);
+  background: var(--brand-bg);
   border-radius: 10px;
   display: grid;
   place-items: center;
@@ -504,7 +504,7 @@ fieldset {
 }
 .journey-card {
   background: var(--lime-soft);
-  border-color: #dce3c9;
+  border-color: var(--journey-line);
   position: relative;
   overflow: hidden;
 }
@@ -582,7 +582,7 @@ fieldset {
   transition: width var(--motion);
 }
 .journey-card .progress {
-  background: #d9e0c7;
+  background: var(--journey-track);
 }
 .journey-footer {
   display: flex;
@@ -765,6 +765,110 @@ fieldset {
   font-size: 11px;
   margin-left: auto;
   white-space: nowrap;
+}
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  padding: 0;
+}
+.whatsapp-grid > * {
+  min-width: 0;
+}
+.whatsapp-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 20px;
+  border-radius: var(--radius);
+  background: var(--lime-soft);
+  color: var(--moss);
+}
+.whatsapp-intro {
+  margin: 12px 0 24px;
+}
+.whatsapp-steps {
+  display: grid;
+  gap: 18px;
+  padding-left: 24px;
+}
+.whatsapp-steps li::marker {
+  color: var(--moss);
+  font-weight: 650;
+}
+.whatsapp-steps span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.whatsapp-grid .button {
+  white-space: normal;
+  text-align: center;
+}
+.whatsapp-grid .button svg {
+  flex-shrink: 0;
+}
+.whatsapp-fallback {
+  font-size: 13px;
+}
+.whatsapp-fallback summary {
+  cursor: pointer;
+  color: var(--moss);
+  padding: 8px 0;
+}
+.whatsapp-fallback p {
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.whatsapp-fallback small {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+}
+.whatsapp-preview h2 {
+  margin: 8px 0 12px;
+  font-size: 26px;
+}
+.chat-example {
+  display: grid;
+  gap: 16px;
+  margin: 24px 0;
+  font-size: 14px;
+}
+.chat-example-user,
+.chat-example-nexo {
+  max-width: 90%;
+  padding: 14px 16px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.chat-example-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+  background: var(--lime-soft);
+}
+.chat-example-user svg {
+  flex-shrink: 0;
+}
+.chat-example-nexo {
+  justify-self: start;
+  background: var(--cream);
+  border: 1px solid var(--line);
+}
+.chat-example-nexo strong {
+  color: var(--moss);
+}
+.chat-example-nexo p {
+  margin-top: 6px;
+}
+.whatsapp-tips {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  font-size: 13px;
 }
 .app-footer {
   display: flex;

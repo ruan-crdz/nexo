@@ -28,6 +28,7 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610040002_ai_whatsapp.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610040003_operations.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610040004_mfa.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610050001_whatsapp_delivery.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',

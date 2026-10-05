@@ -24,6 +24,7 @@ import {
 import { useApp } from '../data/context';
 import { Button, Dialog } from '../design-system/components';
 import { DEMO_KEY } from '../data/repository';
+import { ThemeToggle } from '../design-system/theme';
 
 export function Brand() {
   return (
@@ -161,6 +162,7 @@ export function Shell() {
             <strong>{title}</strong>
           </div>
           <div className="topbar-actions">
+            <ThemeToggle />
             {app.demo && <span className="demo-label">Demonstração</span>}
             <Button
               variant="ghost"

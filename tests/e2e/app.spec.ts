@@ -78,6 +78,23 @@ test('a demonstração não finge conexão com IA ou WhatsApp', async ({ page })
   await page.getByRole('button', { name: 'Como está meu mês?' }).click();
   await expect(page.getByText(/Esta é uma explicação local da demonstração/)).toBeVisible();
   await page.goto('/#/integracoes');
-  await page.getByRole('button', { name: 'Gerar código de vinculação' }).click();
+  await page.getByRole('button', { name: 'Conectar meu WhatsApp' }).click();
   await expect(page.getByRole('alert')).toContainText('Nenhuma mensagem foi enviada');
+});
+test('modo noturno persiste e mantém integrações acessíveis', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByRole('button', { name: 'Ativar modo noturno' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.getByRole('heading', { name: 'Seu dinheiro hoje' })).toBeVisible();
+  await page.goto('/#/integracoes');
+  await expect(page.getByRole('button', { name: 'Conectar meu WhatsApp' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const result = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(result.violations).toEqual([]);
+  await page.getByRole('button', { name: 'Ativar modo claro' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });

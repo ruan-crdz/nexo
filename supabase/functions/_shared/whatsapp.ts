@@ -1,4 +1,12 @@
-import { env, HttpError, safeFetch } from './http.ts';
+import { admin, env, HttpError, safeFetch } from './http.ts';
+
+export class WhatsAppDeliveryError extends HttpError {
+  constructor(public code: number | null) {
+    super(502, code === 131030
+      ? 'Seu celular precisa ser autorizado como destinatário de teste na Meta.'
+      : 'Não foi possível entregar a resposta no WhatsApp.');
+  }
+}
 
 export async function verifySignature(raw: string, signature: string | null): Promise<boolean> {
   if (!signature || !/^sha256=[0-9a-f]{64}$/.test(signature)) return false;
@@ -23,7 +31,7 @@ export function graphUrl(path: string) {
 }
 export async function sendText(phone: string, text: string) {
   if (!/^\d{8,15}$/.test(phone)) throw new HttpError(400, 'Número inválido.');
-  await safeFetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/messages`), {
+  const response = await fetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/messages`), {
     method: 'POST',
     headers: { Authorization: `Bearer ${env('WHATSAPP_ACCESS_TOKEN')}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -32,7 +40,32 @@ export async function sendText(phone: string, text: string) {
       type: 'text',
       text: { body: text.slice(0, 4000) },
     }),
+    signal: AbortSignal.timeout(45_000),
   });
+  const result = await response.json();
+  if (!response.ok || !result.messages?.[0]?.id) {
+    const code = Number.isInteger(result.error?.code) ? result.error.code : null;
+    console.error(JSON.stringify({ event: 'whatsapp_delivery_failed', code, status: response.status }));
+    throw new WhatsAppDeliveryError(code);
+  }
+  return result.messages[0].id as string;
+}
+
+export async function deliverReply(messageId: string, phone: string, text: string) {
+  const db = admin();
+  try {
+    const replyId = await sendText(phone, text);
+    const saved = await db.from('whatsapp_messages_metadata').update({
+      sent_at: new Date().toISOString(), reply_message_id: replyId,
+      delivery_status: 'accepted', reply_error_code: null,
+    }).eq('message_id', messageId);
+    if (saved.error) throw new HttpError(503, 'Não foi possível registrar o envio.');
+  } catch (error) {
+    await db.from('whatsapp_messages_metadata').update({
+      delivery_status: 'failed', reply_error_code: error instanceof WhatsAppDeliveryError ? error.code : null,
+    }).eq('message_id', messageId);
+    throw error;
+  }
 }
 export async function downloadAudio(mediaId: string): Promise<File> {
   if (!/^\d+$/.test(mediaId)) throw new HttpError(400, 'Identificador de mídia inválido.');

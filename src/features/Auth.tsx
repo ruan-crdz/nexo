@@ -6,6 +6,7 @@ import { supabase, configured } from '../data/client';
 import { useApp } from '../data/context';
 import { Button, Card, Progress } from '../design-system/components';
 import { Brand } from './Shell';
+import { ThemeToggle } from '../design-system/theme';
 import { parseMoney } from '../../shared/financial-engine';
 
 export function Landing() {
@@ -18,6 +19,7 @@ export function Landing() {
           <Brand />
         </Link>
         <div className="landing-actions">
+          <ThemeToggle />
           <Link className="button button-ghost" to="/login">
             Entrar
           </Link>

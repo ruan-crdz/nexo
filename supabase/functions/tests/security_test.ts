@@ -1,7 +1,60 @@
 import { strict as assert } from 'node:assert';
-import { verifySignature, hashToken } from '../_shared/whatsapp.ts';
+import { verifySignature, hashToken, sendText, WhatsAppDeliveryError } from '../_shared/whatsapp.ts';
+import {
+  linkingMessage,
+  parseLinkingCode,
+  whatsappUrl,
+  whatsappWelcome,
+} from '../../../shared/whatsapp-link.ts';
 import { extractionDecision } from '../../../shared/extraction.ts';
 import { structured, transcribe } from '../_shared/openai.ts';
+
+Deno.test('mensagem pronta vincula sem aceitar códigos incompletos ou texto arbitrário', () => {
+  const code = 'abcdef0123456789abcdef0123456789';
+  const message = linkingMessage(code.toUpperCase());
+  assert.equal(message, `Olá Nexo, meu código de vinculação é ${code}`);
+  assert.equal(parseLinkingCode(message), code);
+  assert.equal(parseLinkingCode(`vincular ${code.toUpperCase()}`), code);
+  assert.equal(parseLinkingCode(`Ola Nexo, meu codigo de vinculacao e ${code}!`), code);
+  assert.equal(parseLinkingCode(`Gastei 25 reais ${code}`), null);
+  assert.equal(parseLinkingCode(`vincular ${code.slice(1)}`), null);
+  assert.equal(parseLinkingCode(`vincular ${code} extra`), null);
+  assert.throws(() => linkingMessage('invalid'));
+  const url = new URL(whatsappUrl('5511999999999', message));
+  assert.equal(url.hostname, 'wa.me');
+  assert.equal(url.searchParams.get('text'), message);
+  assert.throws(() => whatsappUrl('+55 11 99999-9999', message));
+  for (const instruction of ['áudio', 'conta pessoal', 'desfazer', 'ajuda']) {
+    assert.ok(whatsappWelcome.includes(instruction));
+  }
+});
+Deno.test('destinatário não autorizado mantém o código de erro da Meta', async () => {
+  const previousVersion = Deno.env.get('WHATSAPP_GRAPH_VERSION');
+  const previousPhone = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
+  const previousToken = Deno.env.get('WHATSAPP_ACCESS_TOKEN');
+  Deno.env.set('WHATSAPP_GRAPH_VERSION', 'v23.0');
+  Deno.env.set('WHATSAPP_PHONE_NUMBER_ID', '123456');
+  Deno.env.set('WHATSAPP_ACCESS_TOKEN', 'test-only-token');
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: { code: 131030 } }), { status: 400 });
+    await assert.rejects(
+      () => sendText('5511999999999', 'ajuda'),
+      (error: unknown) =>
+        error instanceof WhatsAppDeliveryError && error.code === 131030 && /autorizado/.test(error.message),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of [
+      ['WHATSAPP_GRAPH_VERSION', previousVersion],
+      ['WHATSAPP_PHONE_NUMBER_ID', previousPhone],
+      ['WHATSAPP_ACCESS_TOKEN', previousToken],
+    ]) {
+      if (value === undefined) Deno.env.delete(name!);
+      else Deno.env.set(name!, value);
+    }
+  }
+});
 
 Deno.test('webhook rejeita assinatura ausente, inválida e corpo alterado', async () => {
   Deno.env.set('WHATSAPP_APP_SECRET', 'test-only-secret');

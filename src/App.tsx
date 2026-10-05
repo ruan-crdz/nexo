@@ -1,3 +1,4 @@
+import { IntegrationsPage } from './features/Integrations';
 import { lazy, Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Shell } from './features/Shell';
@@ -22,7 +23,7 @@ const BusinessSettings = lazy(() =>
 );
 const HiringPage = lazy(() => import('./features/Business').then((m) => ({ default: m.HiringPage })));
 const AccessPage = lazy(() => import('./features/Business').then((m) => ({ default: m.AccessPage })));
-import { IntegrationsPage, PrivacyPage, ProfilePage } from './features/Settings';
+import { PrivacyPage, ProfilePage } from './features/Settings';
 import { AssistantPage } from './features/Assistant';
 import { MfaPage } from './features/Mfa';
 export default function App() {

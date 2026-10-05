@@ -9,14 +9,13 @@ import {
   ArrowUpRight,
   Trash2,
   RotateCcw,
-  Copy,
 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke, supabase } from '../data/client';
 import { DEMO_KEY } from '../data/repository';
 import { parseMoney } from '../../shared/financial-engine';
 import { profileSchema } from '../../shared/domain';
-import { Badge, Button, Card, Dialog, PageHeader, SectionTitle, Why } from '../design-system/components';
+import { Badge, Button, Card, Dialog, PageHeader, SectionTitle } from '../design-system/components';
 import { download } from './Resources';
 
 export function ProfilePage() {
@@ -390,119 +389,6 @@ export function PrivacyPage() {
           </div>
         </Dialog>
       )}
-    </>
-  );
-}
-export function IntegrationsPage() {
-  const app = useApp(),
-    [code, setCode] = useState(''),
-    [error, setError] = useState(''),
-    [pending, setPending] = useState(false);
-  async function link() {
-    if (app.demo) {
-      setError(
-        'A vinculação está disponível em uma conta real, após configurar Supabase e Meta. Nenhuma mensagem foi enviada.',
-      );
-      return;
-    }
-    setPending(true);
-    try {
-      const result = await invoke<{ code: string }>('whatsapp-link', {});
-      setCode(result.code);
-      setError('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível gerar o código.');
-    } finally {
-      setPending(false);
-    }
-  }
-  return (
-    <>
-      <PageHeader
-        eyebrow="Integrações"
-        title="No seu ritmo. Do seu jeito."
-        description="O Nexo acompanha sua rotina, onde você estiver."
-      />
-      <div className="grid grid-2">
-        <Card>
-          <SectionTitle action={<Badge tone="green">Meta Cloud API</Badge>}>Nexo no WhatsApp</SectionTitle>
-          <MessageCircle size={38} className="positive" />
-          <h3 style={{ margin: '18px 0' }}>“Gastei 10 de coxinha.”</h3>
-          <p className="muted">
-            Envie texto ou áudio para registrar movimentos. A extração é validada e você pode desfazer o
-            último registro.
-          </p>
-          <div className="stack" style={{ marginTop: 24 }}>
-            <Button disabled={pending} onClick={() => void link()}>
-              Gerar código de vinculação
-            </Button>
-            {code && (
-              <div className="notice">
-                <p>Envie ao número oficial configurado:</p>
-                <code style={{ overflowWrap: 'anywhere' }}>vincular {code}</code>
-                <p>Válido por dez minutos. Não compartilhe este código.</p>
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    void navigator.clipboard
-                      .writeText(`vincular ${code}`)
-                      .then(() => app.toast('Comando copiado.'))
-                      .catch(() => setError('Copie o comando manualmente.'))
-                  }
-                >
-                  <Copy size={14} />
-                  Copiar comando
-                </Button>
-              </div>
-            )}
-            {error && (
-              <p className="error-message" role="alert">
-                {error}
-              </p>
-            )}
-            {!app.demo && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  void supabase!
-                    .from('whatsapp_connections')
-                    .delete()
-                    .eq('user_id', app.user!.id)
-                    .then(({ error }) => {
-                      if (error) setError('Não foi possível revogar.');
-                      else {
-                        setCode('');
-                        app.toast('Vínculo revogado.');
-                      }
-                    });
-                }}
-              >
-                Revogar vínculo do WhatsApp
-              </Button>
-            )}
-          </div>
-          <Why title="Como funciona a confirmação?">
-            <p>
-              Alta confiança: registro automático. Confiança intermediária: registro com correção fácil. Baixa
-              confiança: pede confirmação. Valor ausente nunca é inventado. “Desfazer” cancela o último lote
-              de movimentos registrado nas últimas vinte e quatro horas.
-            </p>
-          </Why>
-        </Card>
-        <Card>
-          <SectionTitle>Conexões bancárias</SectionTitle>
-          <Badge>Integração futura</Badge>
-          <h3 style={{ marginTop: 20 }}>Open Finance, com consentimento.</h3>
-          <p className="muted" style={{ marginTop: 12 }}>
-            A arquitetura permite adicionar um provedor oficial. Nesta versão, suas contas e movimentos são
-            cadastrados manualmente. Nenhuma conexão bancária está ativa.
-          </p>
-          <Link to="/contas" className="button button-secondary" style={{ marginTop: 24 }}>
-            Gerenciar minhas contas
-            <ArrowUpRight size={15} />
-          </Link>
-        </Card>
-      </div>
     </>
   );
 }
