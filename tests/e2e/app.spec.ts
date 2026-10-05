@@ -250,6 +250,16 @@ test('plano de investimento salva aporte e mostra projeção sem rendimento', as
   );
 });
 
+test('campo de aporte permanece disponível enquanto o valor é substituído', async ({ page }) => {
+  await page.goto('/#/investimentos');
+  const contribution = page.getByLabel('Aporte mensal (R$)');
+  await contribution.fill('');
+  await expect(contribution).toBeVisible();
+  await contribution.fill('350,00');
+  await expect(contribution).toHaveValue('350,00');
+  await expect(page.getByRole('button', { name: 'Salvar aporte nesta meta' })).toBeEnabled();
+});
+
 test('página de investimentos permite criar uma meta própria e apresenta fontes oficiais', async ({ page }) => {
   await page.goto('/#/investimentos');
   await page.getByRole('button', { name: 'Criar meta de investimento' }).click();

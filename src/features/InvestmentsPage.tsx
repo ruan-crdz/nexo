@@ -286,7 +286,7 @@ export function InvestmentsPage() {
 
           <Card>
             <SectionTitle>2. Quanto cabe no seu plano?</SectionTitle>
-            {selectedGoal && projection ? (
+            {selectedGoal ? (
               <>
                 <form
                   className="simple-form"
@@ -302,24 +302,34 @@ export function InvestmentsPage() {
                       value={monthlyInput}
                       onChange={(event) => setMonthlyInput(event.target.value)}
                       aria-describedby="investment-aporte-note"
+                      aria-invalid={monthlyAmount === null}
                     />
                     <small id="investment-aporte-note">Um valor que você pode ajustar a qualquer momento.</small>
                   </label>
+                  {monthlyAmount === null && (
+                    <p className="muted" role="status">
+                      Digite um valor válido para atualizar a simulação.
+                    </p>
+                  )}
                   <Button type="submit" disabled={saving || monthlyAmount === null}>
                     <Check size={18} /> {saving ? 'Salvando…' : 'Salvar aporte nesta meta'}
                   </Button>
                 </form>
-                <div className="investment-plan-result" aria-live="polite">
-                  <span>Para chegar na data escolhida, sem contar rendimento</span>
-                  <strong>{formatMoney(projection.required)} por mês</strong>
-                  <span>
-                    Com o aporte informado, o plano acumularia cerca de {formatMoney(balanceWithoutReturns ?? 0)} até lá.
-                  </span>
-                  <Badge tone={projection.feasible ? 'green' : 'orange'}>
-                    {projection.feasible ? 'Aporte suficiente pelas contribuições' : 'Prazo ou aporte precisa de ajuste'}
-                  </Badge>
-                  <small className="muted">A conta considera apenas o valor guardado e os aportes, sem juros, taxas ou impostos.</small>
-                </div>
+                {projection && balanceWithoutReturns !== null ? (
+                  <div className="investment-plan-result" aria-live="polite">
+                    <span>Para chegar na data escolhida, sem contar rendimento</span>
+                    <strong>{formatMoney(projection.required)} por mês</strong>
+                    <span>
+                      Com o aporte informado, o plano acumularia cerca de {formatMoney(balanceWithoutReturns)} até lá.
+                    </span>
+                    <Badge tone={projection.feasible ? 'green' : 'orange'}>
+                      {projection.feasible ? 'Aporte suficiente pelas contribuições' : 'Prazo ou aporte precisa de ajuste'}
+                    </Badge>
+                    <small className="muted">A conta considera apenas o valor guardado e os aportes, sem juros, taxas ou impostos.</small>
+                  </div>
+                ) : (
+                  <p className="muted">A projeção aparece quando o aporte informado for válido.</p>
+                )}
               </>
             ) : (
               <p className="muted">Crie ou escolha uma meta para ver o plano mensal.</p>
