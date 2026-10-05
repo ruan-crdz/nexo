@@ -34,6 +34,7 @@ export const accountSchema = z.object({
   opening_balance: z.number().int().min(-MAX_MONEY).max(MAX_MONEY),
   closing_day: z.number().int().min(1).max(31).nullable(),
   due_day: z.number().int().min(1).max(31).nullable(),
+  credit_limit: centsSchema.optional(),
 });
 export const goalSchema = z.object({
   id: z.string().uuid(),
@@ -98,6 +99,7 @@ export const profileSchema = z.object({
   reminders_enabled: z.boolean().default(false),
   weekly_digest: z.boolean().default(false),
   whatsapp_notifications: z.boolean().default(false),
+  metrics_enabled: z.boolean().default(false),
 });
 export const recurringRuleSchema = z.object({
   id: z.string().uuid(),
@@ -106,6 +108,10 @@ export const recurringRuleSchema = z.object({
   category: z.string().min(1).max(60),
   start_date: dateSchema,
   active: z.boolean(),
+  type: z.enum(['income', 'expense']).default('expense'),
+  frequency: z.enum(['weekly', 'monthly', 'yearly']).default('monthly'),
+  end_date: dateSchema.nullable().default(null),
+  annual_adjustment_bps: z.number().int().min(0).max(10000).default(0),
 });
 export type RecurringRule = z.infer<typeof recurringRuleSchema>;
 export const businessProfileSchema = z.object({
@@ -159,6 +165,8 @@ export interface Dataset {
   organizations: Workspace[];
   recurring_rules: RecurringRule[];
   recurring_occurrences: string[];
+  import_aliases: string[];
+  category_preferences: { merchant: string; category: string }[];
 }
 export const emptyProfile: Profile = {
   name: 'Você',
@@ -174,6 +182,7 @@ export const emptyProfile: Profile = {
   reminders_enabled: false,
   weekly_digest: false,
   whatsapp_notifications: false,
+  metrics_enabled: false,
 };
 export const emptyBusiness: BusinessProfile = {
   name: 'Minha empresa',
@@ -212,5 +221,7 @@ export function emptyDataset(): Dataset {
     organizations: [],
     recurring_rules: [],
     recurring_occurrences: [],
+    import_aliases: [],
+    category_preferences: [],
   };
 }

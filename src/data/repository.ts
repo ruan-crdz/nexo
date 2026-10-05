@@ -18,8 +18,18 @@ import {
 } from '../../shared/domain';
 import { civilDate } from '../../shared/financial-engine';
 import { recurringTransactions } from '../../shared/planning';
+import { merchantKey } from '../../shared/financial-decisions';
+import { readPages } from '../../shared/pagination';
 import { createDemo } from './demo';
 import { supabase } from './client';
+import {
+  cacheDataset,
+  drainTransactions,
+  enqueueTransaction,
+  offlineDataset,
+  offlineEnabled,
+  pendingTransactions,
+} from './offline';
 
 export const DEMO_KEY = 'nexo.demo.v1';
 export interface Repository {
@@ -31,7 +41,11 @@ export interface Repository {
   createOrganization(name: string): Promise<string>;
   saveRecurring(value: RecurringRule): Promise<void>;
   removeRecurring(id: string): Promise<void>;
-  importTransactions(rows: Transaction[]): Promise<{ saved: number; skipped: number }>;
+  importTransactions(
+    rows: Transaction[],
+    links?: { incoming_id: string; canonical_id: string }[],
+  ): Promise<{ saved: number; skipped: number }>;
+  categoryPreference(merchant: string, category: string | null): Promise<void>;
 }
 const businessEntities = new Set<Entity>(['employees', 'business_transactions', 'business_budgets']);
 export function readDemo(): Dataset {
@@ -42,6 +56,8 @@ export function readDemo(): Dataset {
       data.profile = profileSchema.parse(data.profile);
       data.recurring_rules = recurringRuleSchema.array().parse(data.recurring_rules ?? []);
       data.recurring_occurrences ??= [];
+      data.import_aliases ??= [];
+      data.category_preferences ??= [];
       businessProfileSchema.parse(data.business);
       for (const key of Object.keys(entitySchemas) as Entity[]) entitySchemas[key].array().parse(data[key]);
       return data;
@@ -81,21 +97,44 @@ export const demoRepository: Repository = {
     data.recurring_rules = data.recurring_rules.filter((rule) => rule.id !== id);
     writeDemo(data);
   },
-  async importTransactions(rows) {
-    const parsed = transactionSchema.array().max(1000).parse(rows);
+  async importTransactions(rows, links = []) {
+    const parsed = transactionSchema.array().max(10000).parse(rows);
     const data = readDemo();
-    const known = new Set(data.transactions.map((row) => row.id));
+    const known = new Set([...data.transactions.map((row) => row.id), ...data.import_aliases]);
+    for (const link of links) {
+      const incoming = parsed.find((row) => row.id === link.incoming_id);
+      const canonical = data.transactions.find((row) => row.id === link.canonical_id);
+      if (
+        !incoming ||
+        !canonical ||
+        incoming.amount !== canonical.amount ||
+        incoming.type !== canonical.type ||
+        Math.abs(Date.parse(incoming.date) - Date.parse(canonical.date)) > 172800000
+      )
+        throw new Error('Conciliação inválida.');
+      known.add(incoming.id);
+      data.import_aliases.push(incoming.id);
+    }
     let saved = 0;
     for (const row of parsed) {
       if (known.has(row.id)) continue;
       if (row.account_id && !data.financial_accounts.some((account) => account.id === row.account_id))
         throw new Error('Conta inválida.');
-      data.transactions.push({ ...row, source: 'import' });
+      const preference = data.category_preferences.find(
+        (item) => item.merchant === merchantKey(row.description),
+      );
+      data.transactions.push({ ...row, category: preference?.category ?? row.category, source: 'import' });
       known.add(row.id);
       saved++;
     }
     writeDemo(data);
     return { saved, skipped: parsed.length - saved };
+  },
+  async categoryPreference(merchant, category) {
+    const data = readDemo();
+    data.category_preferences = data.category_preferences.filter((row) => row.merchant !== merchant);
+    if (category) data.category_preferences.push({ merchant, category });
+    writeDemo(data);
   },
   async save<K extends Entity>(entity: K, value: EntityMap[K]) {
     entitySchemas[entity].parse(value);
@@ -136,8 +175,25 @@ export const demoRepository: Repository = {
 export function cloudRepository(userId: string): Repository {
   if (!supabase) throw new Error('Supabase indisponível.');
   const db = supabase;
+  let collectMetrics = false;
+  let transactionIds = new Set<string>();
   return {
     async load(organizationId) {
+      if (!navigator.onLine && !organizationId) {
+        const cached = await offlineDataset(userId);
+        if (cached) return cached;
+        throw new Error('Sem internet e sem cópia offline autorizada.');
+      }
+      if (offlineEnabled(userId))
+        await drainTransactions(userId, async (row) => {
+          const response = await db
+            .from('transactions')
+            .upsert(
+              { ...transactionSchema.parse(row), user_id: userId },
+              { onConflict: 'id', ignoreDuplicates: true },
+            );
+          if (response.error) throw new Error('Fila offline ainda não foi sincronizada.');
+        });
       const data = emptyDataset();
       const [profile, organizations] = await Promise.all([
         db.from('profiles').select('*').eq('id', userId).maybeSingle(),
@@ -156,10 +212,28 @@ export function cloudRepository(userId: string): Repository {
         throw new Error(
           'Não foi possível carregar o planejamento. Confira se a migração de planejamento foi aplicada.',
         );
-      const rules = await db.from('recurring_rules').select('*').eq('user_id', userId).limit(201);
-      if (rules.error || (rules.data?.length ?? 0) > 200)
-        throw new Error('Não foi possível carregar todas as recorrências.');
-      data.recurring_rules = recurringRuleSchema.array().parse(rules.data ?? []);
+      const rules = await readPages((from, to) =>
+        db.from('recurring_rules').select('*').eq('user_id', userId).order('id').range(from, to),
+      );
+      data.recurring_rules = recurringRuleSchema.array().parse(rules);
+      data.import_aliases = (
+        await readPages((from, to) =>
+          db
+            .from('transaction_sources')
+            .select('incoming_id')
+            .eq('user_id', userId)
+            .order('incoming_id')
+            .range(from, to),
+        )
+      ).map((row) => row.incoming_id);
+      data.category_preferences = await readPages((from, to) =>
+        db
+          .from('category_preferences')
+          .select('merchant,category')
+          .eq('user_id', userId)
+          .order('merchant')
+          .range(from, to),
+      );
       data.organizations = (organizations.data ?? []).map((item) => ({
         id: item.organization_id,
         role: item.role,
@@ -173,21 +247,19 @@ export function cloudRepository(userId: string): Repository {
           : (['transactions', 'financial_accounts', 'goals', 'budgets'] as Entity[])
         ).map(async (entity) => {
           if (businessEntities.has(entity) && !organizationId) return;
-          const { data: rows, error } = await db
-            .from(entity)
-            .select('*')
-            .eq(
-              businessEntities.has(entity) ? 'organization_id' : 'user_id',
-              businessEntities.has(entity) ? organizationId : userId,
-            )
-            .order('created_at', { ascending: false })
-            .limit(5000);
-          if (error) throw error;
-          if (rows?.length === 5000)
-            throw new Error(
-              'Limite de leitura atingido. Exporte os dados e ajuste a paginação antes de continuar.',
-            );
-          Object.assign(data, { [entity]: entitySchemas[entity].array().parse(rows ?? []) });
+          const rows = await readPages((from, to) =>
+            db
+              .from(entity)
+              .select('*')
+              .eq(
+                businessEntities.has(entity) ? 'organization_id' : 'user_id',
+                businessEntities.has(entity) ? organizationId : userId,
+              )
+              .order('created_at', { ascending: false })
+              .order('id', { ascending: false })
+              .range(from, to),
+          );
+          Object.assign(data, { [entity]: entitySchemas[entity].array().parse(rows) });
         }),
       );
       if (organizationId) {
@@ -199,15 +271,49 @@ export function cloudRepository(userId: string): Repository {
         if (result.error) throw result.error;
         if (result.data) data.business = businessProfileSchema.parse(result.data);
       }
+      try {
+        await cacheDataset(userId, data);
+        localStorage.removeItem(`nexo.offline.error.${userId}`);
+      } catch {
+        localStorage.setItem(`nexo.offline.error.${userId}`, 'cache');
+      }
+      collectMetrics = data.profile.metrics_enabled;
+      transactionIds = new Set(data.transactions.map((row) => row.id));
       return data;
     },
     async save(entity, value, organizationId) {
+      const started = Date.now();
       const parsed = entitySchemas[entity].parse(value),
         business = businessEntities.has(entity);
+      if (!navigator.onLine) {
+        if (entity !== 'transactions' || organizationId) throw new Error('Esta operação exige conexão.');
+        const pending = await pendingTransactions(userId);
+        const cached = await offlineDataset(userId);
+        if (
+          cached?.transactions.some((row) => row.id === parsed.id) &&
+          !pending.some((row) => row.id === parsed.id)
+        )
+          throw new Error('Corrigir anotação já sincronizada exige conexão para conferir a versão atual.');
+        await enqueueTransaction(userId, transactionSchema.parse(parsed));
+        return;
+      }
       if (business && !organizationId) throw new Error('Selecione uma empresa.');
       const { error } = await db
         .from(entity)
         .upsert({ ...parsed, ...(business ? { organization_id: organizationId } : { user_id: userId }) });
+      if (entity === 'transactions' && collectMetrics) {
+        try {
+          await db.from('operation_metrics').insert({
+            user_id: userId,
+            operation: transactionIds.has(parsed.id) ? 'correction' : 'manual',
+            latency_ms: Math.max(0, Date.now() - started),
+            success: !error,
+          });
+        } catch {
+          collectMetrics = false;
+        }
+      }
+      if (!error && entity === 'transactions') transactionIds.add(parsed.id);
       if (error) throw new Error('Não foi possível salvar. Verifique seus dados e sua permissão de acesso.');
     },
     async saveRecurring(value) {
@@ -220,11 +326,20 @@ export function cloudRepository(userId: string): Repository {
       const { error } = await db.from('recurring_rules').delete().eq('id', id).eq('user_id', userId);
       if (error) throw new Error('Não foi possível remover a recorrência.');
     },
-    async importTransactions(rows) {
-      const payload = transactionSchema.array().max(1000).parse(rows);
-      const { data, error } = await db.rpc('import_transactions', { payload });
+    async importTransactions(rows, links = []) {
+      const payload = transactionSchema.array().max(10000).parse(rows);
+      const { data, error } = await db.rpc('import_reviewed_transactions', {
+        payload,
+        reconciliation: links,
+      });
       if (error) throw new Error('O lote não foi salvo. Confira os registros, a conta e sua conexão.');
       return data as { saved: number; skipped: number };
+    },
+    async categoryPreference(merchant, category) {
+      const result = category
+        ? await db.from('category_preferences').upsert({ user_id: userId, merchant, category })
+        : await db.from('category_preferences').delete().eq('user_id', userId).eq('merchant', merchant);
+      if (result.error) throw new Error('Não foi possível atualizar a preferência.');
     },
     async remove(entity, id, organizationId) {
       const business = businessEntities.has(entity);

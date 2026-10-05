@@ -28,6 +28,10 @@ it('recorrência preserva dia âncora, é idempotente e nunca marca como pago', 
     category: 'Moradia',
     start_date: '2026-01-31',
     active: true,
+    type: 'expense',
+    frequency: 'monthly',
+    end_date: null,
+    annual_adjustment_bps: 0,
   };
   const rows = recurringTransactions([rule], [], '2026-02-28');
   expect(rows.map((row) => row.date)).toEqual(['2026-01-31', '2026-02-28']);

@@ -96,6 +96,10 @@ A documentação Meta bloqueou leitura automática nesta sessão. A implementaç
 
 Antes de publicar a nova interface de planejamento/família, aplique `202610050002_planning_family.sql` com `npx supabase db push` e publique as Functions. A interface carrega metas, limites e recorrências; não ative o frontend novo sobre o banco antigo.
 
+A atualização de operações exige também `202610050003_operations_upgrade.sql`: recorrências ampliadas, histórico, preferências, conciliação, filtros/propostas familiares, leases e métricas. Publique banco e Functions antes do frontend. Configure somente `OPENAI_VISION_MODEL=gpt-4o-mini` para o modelo de recibos validado por amostra sintética; não sobrescreva os demais secrets. A versão PWA tem atualização controlada: usuários concluem suas anotações antes de atualizar. O cache do app é estático; dados privados são opt-in, cifrados em IndexedDB e separados por usuário, sem proteção prometida contra XSS ou aparelho comprometido.
+
+Open Finance: Pluggy foi avaliada como candidata, não contratada nem homologada. Ver `docs/open-finance-evaluation.json`. Comparação com Pierre depende da execução do protocolo em `docs/usability-study.json`; nenhum resultado com participantes foi criado. `docs/next-release-status.json` registra os estados e bloqueios.
+
 Avisos proativos requerem configuração separada descrita em [WHATSAPP.md](WHATSAPP.md): template aprovado com um parâmetro de corpo, `WHATSAPP_FINANCIAL_TEMPLATE`, `FINANCIAL_JOB_SECRET`, Vault e agendamento. Consentimento de WhatsApp é desativado por padrão. Não execute o seed, o worker ou a preparação completa de secrets contra produção sem revisar valores locais: um token antigo no arquivo local pode sobrescrever o token atualizado no painel.
 
 Open Finance não foi conectado. Antes de implementar um provedor, defina contrato/custos, consentimento e revogação, reconciliação com CSV/OFX e revisão de segurança/LGPD. Nunca peça senha do banco no Nexo.

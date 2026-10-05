@@ -732,6 +732,22 @@ label {
   gap: 16px;
   min-width: 0;
 }
+.app-update {
+  position: fixed;
+  bottom: 110px;
+  left: 16px;
+  right: 16px;
+  max-width: 600px;
+  margin: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px;
+  z-index: 60;
+  display: grid;
+  gap: 16px;
+}
 .plan-list,
 .family-list,
 .evidence-list,

@@ -32,6 +32,12 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
   const [category, setCategory] = useState(value && 'category' in value ? value.category : 'Outros');
   const [month, setMonth] = useState(value && 'month' in value ? value.month : today.slice(0, 7));
   const [active, setActive] = useState(value && 'active' in value ? value.active : true);
+  const [frequency, setFrequency] = useState(value && 'frequency' in value ? value.frequency : 'monthly');
+  const [ruleType, setRuleType] = useState(value && 'type' in value ? value.type : 'expense');
+  const [endDate, setEndDate] = useState(value && 'end_date' in value ? (value.end_date ?? '') : '');
+  const [adjustment, setAdjustment] = useState(
+    value && 'annual_adjustment_bps' in value ? value.annual_adjustment_bps : 0,
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   async function save(event: React.FormEvent) {
@@ -49,6 +55,10 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
             category,
             start_date: date,
             active,
+            frequency,
+            type: ruleType,
+            end_date: endDate || null,
+            annual_adjustment_bps: adjustment,
           }),
         );
       if (kind === 'budget') {
@@ -156,8 +166,49 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
           )}
           {kind === 'recurring' && (
             <>
+              <label>
+                Frequência
+                <select
+                  value={frequency}
+                  onChange={(event) => setFrequency(event.target.value as 'weekly' | 'monthly' | 'yearly')}
+                >
+                  <option value="weekly">Semanal</option>
+                  <option value="monthly">Mensal</option>
+                  <option value="yearly">Anual</option>
+                </select>
+              </label>
+              <label>
+                Gasto ou renda
+                <select
+                  value={ruleType}
+                  onChange={(event) => setRuleType(event.target.value as 'income' | 'expense')}
+                >
+                  <option value="expense">Gasto previsto</option>
+                  <option value="income">Renda prevista</option>
+                </select>
+              </label>
+              <label>
+                Data final (opcional)
+                <input
+                  type="date"
+                  min={date}
+                  value={endDate}
+                  onChange={(event) => setEndDate(event.target.value)}
+                />
+              </label>
+              <label>
+                Reajuste anual (pontos-base: 100 = 1%)
+                <input
+                  type="number"
+                  min={0}
+                  max={10000}
+                  value={adjustment}
+                  onChange={(event) => setAdjustment(Number(event.target.value))}
+                />
+              </label>
               <p className="muted">
-                Repetição mensal. Os vencimentos entram como pendentes, nunca como pagos automaticamente.
+                Os vencimentos ficam pendentes, nunca pagos ou recebidos automaticamente. Alterações valem
+                para próximos vencimentos ainda não gerados.
               </p>
               <label className="check-label">
                 <input

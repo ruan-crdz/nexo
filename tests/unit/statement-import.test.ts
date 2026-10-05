@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { csvCandidates, csvTable, ofxCandidates } from '../../shared/statement-import';
+import { csvCandidates, csvTable, ofxCandidates, inferCsvMapping } from '../../shared/statement-import';
 const mapping = {
   date: 0,
   description: 1,
@@ -39,6 +39,16 @@ it('sinaliza registros parecidos e rejeita datas inválidas antes de salvar', ()
     csvCandidates(text, mapping, null, [{ ...row, id: crypto.randomUUID(), source: 'manual' }])[0].duplicate,
   ).toBe('possible');
   expect(() => csvCandidates(text.replace('04/10/2026', '31/02/2026'), mapping, null, [])).toThrow(/Linha 2/);
+});
+it('CSV grande preserva linhas válidas e lista inválidas na revisão', () => {
+  const text =
+    'Data;Descrição;Valor\n' +
+    Array.from({ length: 1501 }, (_, index) => `04/10/2026;Compra ${index};-12,34`).join('\n') +
+    '\n31/02/2026;Inválida;-1,00';
+  const issues: { line: number; message: string }[] = [];
+  expect(csvCandidates(text, mapping, null, [], 'a', issues)).toHaveLength(1501);
+  expect(issues).toHaveLength(1);
+  expect(inferCsvMapping(['Data', 'Descrição', 'Valor'])?.amount).toBe(2);
 });
 it('OFX usa FITID, identifica conta e conserva valor', () => {
   const text =

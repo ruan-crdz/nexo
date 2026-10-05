@@ -75,8 +75,11 @@ export async function sendFinancialTemplate(phone: string, text: string) {
     signal: AbortSignal.timeout(45_000),
   });
   const result = await response.json();
-  if (!response.ok || !result.messages?.[0]?.id)
+  if (response.status >= 500)
+    throw new HttpError(502, 'Resultado de envio ambíguo; precisa de reconciliação.');
+  if (!response.ok)
     throw new WhatsAppDeliveryError(Number.isInteger(result.error?.code) ? result.error.code : null);
+  if (!result.messages?.[0]?.id) throw new HttpError(502, 'A API não confirmou o identificador de envio.');
   return String(result.messages[0].id);
 }
 

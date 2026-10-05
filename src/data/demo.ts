@@ -10,6 +10,8 @@ export function createDemo(): Dataset {
   return {
     recurring_rules: [],
     recurring_occurrences: [],
+    import_aliases: [],
+    category_preferences: [],
     profile: {
       name: 'Ruan',
       objective: 'Criar reserva',
@@ -24,6 +26,7 @@ export function createDemo(): Dataset {
       reminders_enabled: false,
       weekly_digest: false,
       whatsapp_notifications: false,
+      metrics_enabled: false,
     },
     financial_accounts: [
       {

@@ -4,6 +4,7 @@ import { vector } from '@electric-sql/pglite-pgvector';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { readFileSync } from 'node:fs';
 import { v5 as uuid } from 'uuid';
+import { readPages } from '../../shared/pagination';
 const alice = '00000000-0000-4000-8000-00000000000a',
   bob = '00000000-0000-4000-8000-00000000000b';
 let db: PGlite, org: string;
@@ -30,8 +31,11 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610040003_operations.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610040004_mfa.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050001_whatsapp_delivery.sql', 'utf8'));
-  await db.exec('alter default privileges in schema public grant all on tables to anon,authenticated; alter default privileges in schema public grant execute on functions to anon,authenticated;');
+  await db.exec(
+    'alter default privileges in schema public grant all on tables to anon,authenticated; alter default privileges in schema public grant execute on functions to anon,authenticated;',
+  );
   await db.exec(readFileSync('supabase/migrations/202610050002_planning_family.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610050003_operations_upgrade.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -308,6 +312,116 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
       /invalid batch/,
     );
   });
+  it('histórico só restaura a versão atual e nunca a de outra pessoa', async () => {
+    await asUser(alice);
+    const id = crypto.randomUUID();
+    await db.query(
+      "insert into transactions(id,user_id,description,amount,type,category,date) values($1,$2,'Histórico',100,'expense','Outros','2026-10-05')",
+      [id, alice],
+    );
+    await db.query('update transactions set amount=200 where id=$1', [id]);
+    const version = (
+      await db.query<{ id: string }>(
+        "select id from transaction_history where transaction_id=$1 and operation='UPDATE' order by created_at desc limit 1",
+        [id],
+      )
+    ).rows[0].id;
+    await asUser(bob);
+    await expect(db.query('select restore_transaction_version($1)', [version])).rejects.toThrow(
+      /unavailable/,
+    );
+    await asUser(alice);
+    await db.query('select restore_transaction_version($1)', [version]);
+    expect(
+      (await db.query<{ amount: number }>('select amount from transactions where id=$1', [id])).rows[0]
+        .amount,
+    ).toBe(100);
+    await expect(db.query('select restore_transaction_version($1)', [version])).rejects.toThrow(/changed/);
+  });
+  it('família respeita conta e período e proposta só muda dado após aprovação', async () => {
+    await asUser(alice);
+    const account = (
+      await db.query<{ id: string }>(
+        "insert into financial_accounts(user_id,name,kind) values($1,'Família filtro','checking') returning id",
+        [alice],
+      )
+    ).rows[0].id;
+    const record = (
+      await db.query<{ id: string }>(
+        "insert into transactions(user_id,account_id,description,amount,type,category,date) values($1,$2,'Proposta segura',100,'expense','Outros',current_date) returning id",
+        [alice, account],
+      )
+    ).rows[0].id;
+    const invite = (
+      await db.query<{ invite: { id: string; code: string } }>(
+        "select create_family_invite('transactions',$1,current_date,current_date,true) as invite",
+        [account],
+      )
+    ).rows[0].invite;
+    await asUser(bob);
+    await db.query('select request_family_access($1)', [invite.code]);
+    await asUser(alice);
+    await db.query('select approve_family_access($1)', [invite.id]);
+    await asUser(bob);
+    const snapshot = (
+      await db.query<{ data: { transactions: { id: string }[] } }>('select family_snapshot($1) as data', [
+        invite.id,
+      ])
+    ).rows[0].data;
+    expect(snapshot.transactions.map((row) => row.id)).toEqual([record]);
+    const proposal = (
+      await db.query<{ id: string }>(
+        "select propose_family_correction($1,$2,'Proposta segura',200,'Lazer') as id",
+        [invite.id, record],
+      )
+    ).rows[0].id;
+    await expect(db.query('select decide_family_proposal($1,true)', [proposal])).rejects.toThrow(
+      /owner required/,
+    );
+    await asUser(alice);
+    expect(
+      (await db.query<{ amount: number }>('select amount from transactions where id=$1', [record])).rows[0]
+        .amount,
+    ).toBe(100);
+    await db.query('select decide_family_proposal($1,true)', [proposal]);
+    expect(
+      (await db.query<{ amount: number }>('select amount from transactions where id=$1', [record])).rows[0]
+        .amount,
+    ).toBe(200);
+  });
+  it('conciliação entre fontes não duplica e não aceita registro alheio', async () => {
+    await asUser(alice);
+    const canonical = crypto.randomUUID();
+    const incoming = crypto.randomUUID();
+    await db.query(
+      "insert into transactions(id,user_id,description,amount,type,category,date) values($1,$2,'Mercado',1234,'expense','Outros','2026-10-05')",
+      [canonical, alice],
+    );
+    const payload = [
+      {
+        id: incoming,
+        account_id: null,
+        description: 'PIX Mercado',
+        amount: 1234,
+        type: 'expense',
+        category: 'Outros',
+        date: '2026-10-05',
+        status: 'paid',
+      },
+    ];
+    const result = await db.query<{ result: { saved: number; skipped: number } }>(
+      'select import_reviewed_transactions($1::jsonb,$2::jsonb) as result',
+      [JSON.stringify(payload), JSON.stringify([{ incoming_id: incoming, canonical_id: canonical }])],
+    );
+    expect(result.rows[0].result).toEqual({ saved: 0, skipped: 1 });
+    await asUser(bob);
+    await expect(
+      db.query('select import_reviewed_transactions($1::jsonb,$2::jsonb)', [
+        JSON.stringify(payload),
+        JSON.stringify([{ incoming_id: incoming, canonical_id: canonical }]),
+      ]),
+    ).rejects.toThrow(/invalid reconciliation/);
+  });
   it('consentimento de avisos fica registrado e pode ser retirado', async () => {
     await asUser(alice);
     await db.query('update profiles set whatsapp_notifications=true where id=$1', [alice]);
@@ -334,5 +448,83 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
         bob,
       ]),
     ).rejects.toThrow(/permission denied/);
+  });
+  it('Postgres lê seis mil movimentos com soma completa', async () => {
+    await asUser(alice);
+    await db.query(
+      "insert into transactions(user_id,description,amount,type,category,date) select $1,'Paginação de teste',1,'expense','Outros','2026-10-05' from generate_series(1,6001)",
+      [alice],
+    );
+    const rows = await readPages(async (from, to) => {
+      const result = await db.query<{ id: string; amount: number }>(
+        "select id,amount from transactions where user_id=$1 and description='Paginação de teste' order by id limit $2 offset $3",
+        [alice, to - from + 1, from],
+      );
+      return { data: result.rows, error: null };
+    });
+    expect(rows).toHaveLength(6001);
+    expect(rows.reduce((total, row) => total + row.amount, 0)).toBe(6001);
+  }, 30000);
+  it('leases interrompidos vão para reconciliação e ninguém retoma o mesmo aviso', async () => {
+    await db.exec('reset role; set role service_role');
+    const id = (
+      await db.query<{ id: string }>(
+        "insert into financial_notifications(user_id,dedupe_key,kind) values($1,'lease-test','bill') returning id",
+        [alice],
+      )
+    ).rows[0].id;
+    expect(
+      (await db.query<{ count: number }>('select claim_financial_notification($1) as count', [id])).rows[0]
+        .count,
+    ).toBe(1);
+    expect(
+      (await db.query<{ count: number | null }>('select claim_financial_notification($1) as count', [id]))
+        .rows[0].count,
+    ).toBeNull();
+    await db.query("update financial_notifications set lease_until=now()-interval '1 minute' where id=$1", [
+      id,
+    ]);
+    await db.query('select reconcile_expired_notifications()');
+    expect(
+      (await db.query<{ state: string }>('select state from financial_notifications where id=$1', [id]))
+        .rows[0].state,
+    ).toBe('reconcile');
+    await asUser(bob);
+    await expect(db.query('select claim_financial_notification($1)', [id])).rejects.toThrow(
+      /permission denied/,
+    );
+  });
+  it('métricas exigem opt-in e não aceitam autoria de outra pessoa', async () => {
+    await asUser(alice);
+    await expect(
+      db.query(
+        "insert into operation_metrics(user_id,operation,latency_ms,success) values($1,'visit',1,true)",
+        [alice],
+      ),
+    ).rejects.toThrow(/row-level security/);
+    await db.query('update profiles set metrics_enabled=true where id=$1', [alice]);
+    await db.query(
+      "insert into operation_metrics(user_id,operation,latency_ms,success) values($1,'visit',1,true)",
+      [alice],
+    );
+    await asUser(bob);
+    expect((await db.query('select * from operation_metrics where user_id=$1', [alice])).rows).toHaveLength(
+      0,
+    );
+  });
+  it('exclusão em cascata remove histórico sem recriar dados do usuário', async () => {
+    const owner = crypto.randomUUID();
+    await db.exec('reset role');
+    await db.query('insert into auth.users(id,email) values($1,$2)', [owner, 'delete-test@example.test']);
+    await asUser(owner);
+    await db.query(
+      "insert into transactions(user_id,description,amount,type,category,date) values($1,'Apagar',100,'expense','Outros','2026-10-05')",
+      [owner],
+    );
+    await db.exec('reset role');
+    await db.query('delete from auth.users where id=$1', [owner]);
+    expect((await db.query('select * from transaction_history where user_id=$1', [owner])).rows).toHaveLength(
+      0,
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { v5 as uuid } from 'uuid';
 import type { Budget, Dataset, Goal, RecurringRule, Transaction } from './domain.ts';
-import { formatMoney, shiftDays, shiftMonths, sum } from './financial-engine.ts';
+import { applyRate, formatMoney, shiftDays, shiftMonths, sum } from './financial-engine.ts';
 
 const namespace = '9667e0ce-412e-47d9-a212-91d1d616f74b';
 export function recurringTransactions(
@@ -17,18 +17,38 @@ export function recurringTransactions(
       (Number(today.slice(0, 4)) - Number(rule.start_date.slice(0, 4))) * 12 +
       Number(today.slice(5, 7)) -
       Number(rule.start_date.slice(5, 7));
-    for (let offset = Math.max(0, distance - 1); offset <= Math.max(0, distance) + 2; offset++) {
-      const date = shiftMonths(rule.start_date, offset);
-      if (date > until) continue;
+    const frequency = rule.frequency ?? 'monthly';
+    const period =
+      frequency === 'weekly'
+        ? Math.floor((Date.parse(today) - Date.parse(rule.start_date)) / 604800000)
+        : frequency === 'yearly'
+          ? Math.floor(distance / 12)
+          : distance;
+    for (
+      let offset = Math.max(0, period - 1);
+      offset <= Math.max(0, period) + (frequency === 'weekly' ? 6 : 2);
+      offset++
+    ) {
+      const date =
+        frequency === 'weekly'
+          ? shiftDays(rule.start_date, offset * 7)
+          : shiftMonths(rule.start_date, offset * (frequency === 'yearly' ? 12 : 1));
+      if (date > until || (rule.end_date && date > rule.end_date)) continue;
+      let amount = rule.amount;
+      let anniversaries = Math.max(0, Number(date.slice(0, 4)) - Number(rule.start_date.slice(0, 4)));
+      if (date < shiftMonths(rule.start_date, anniversaries * 12))
+        anniversaries = Math.max(0, anniversaries - 1);
+      for (let anniversary = 0; anniversary < anniversaries; anniversary++)
+        amount = sum([amount, applyRate(amount, rule.annual_adjustment_bps ?? 0)]);
       const id = uuid(`${rule.id}:${date}`, namespace);
       if (known.has(id)) continue;
       result.push({
         id,
         date,
         description: rule.description,
-        amount: rule.amount,
+        amount,
         category: rule.category,
-        type: 'expense',
+        type: rule.type ?? 'expense',
         status: 'planned',
         source: 'manual',
         account_id: null,

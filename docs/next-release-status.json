@@ -1,0 +1,106 @@
+{
+  "version": "operations-upgrade",
+  "states_are_not_a_claim_of_live_external_homologation": true,
+  "items": [
+    {
+      "id": 1,
+      "state": "blocked",
+      "reason": "Sem template aprovado, FINANCIAL_JOB_SECRET ou agendamento configurado; nenhum envio real alegado."
+    },
+    {
+      "id": 2,
+      "state": "implemented_tested",
+      "evidence": "notification-recovery.test.ts; leases, backoff limitado e reconciliação de resultados ambíguos."
+    },
+    {
+      "id": 3,
+      "state": "implemented_tested",
+      "evidence": "pagination.test.ts; 201 usuários em páginas e database.test.ts com 6001 registros reais no Postgres local."
+    },
+    {
+      "id": 4,
+      "state": "blocked",
+      "reason": "Pluggy avaliada; contrato, credenciais e homologação sandbox ausentes. Ver open-finance-evaluation.json."
+    },
+    {
+      "id": 5,
+      "state": "implemented_tested",
+      "evidence": "Vínculo de fontes com revisão explícita; testes de duas contas. Não elimina compras parecidas automaticamente."
+    },
+    {
+      "id": 6,
+      "state": "implemented_tested",
+      "evidence": "Premissas confirmadas, renda não recebida excluída e contas/reservas/metas evidenciadas."
+    },
+    {
+      "id": 7,
+      "state": "implemented_tested",
+      "evidence": "Renda/despesa semanal/mensal/anual, data final e reajuste; sempre previsto."
+    },
+    {
+      "id": 8,
+      "state": "implemented_tested",
+      "evidence": "Preferência opt-in por estabelecimento, próxima importação/WhatsApp, desfazer; sem reclassificar o passado."
+    },
+    {
+      "id": 9,
+      "state": "implemented_tested",
+      "evidence": "Três períodos recorrentes como sugestão com registros, confirmação exigida."
+    },
+    {
+      "id": 10,
+      "state": "implemented_tested",
+      "evidence": "Comparação com mediana e possíveis duplicatas; não acusa fraude. Taxa real de falsos positivos ainda não medida."
+    },
+    {
+      "id": 11,
+      "state": "implemented_tested",
+      "evidence": "Filtros de período, categoria, conta e estabelecimento; soma determinística e pedido de esclarecimento."
+    },
+    {
+      "id": 12,
+      "state": "implemented_tested",
+      "evidence": "Compras/parcelas por fechamento e vencimento; limite não tratado como dinheiro. Não é fatura bancária sincronizada."
+    },
+    {
+      "id": 13,
+      "state": "implemented_external_sample_tested",
+      "evidence": "Payload e revisão testados; uma imagem sintética foi lida pela API real gpt-4o-mini com 1234 centavos e data 2026-10-05. Não representa acurácia geral ou validação de fotos de usuários; foto nunca confirma pagamento."
+    },
+    {
+      "id": 14,
+      "state": "implemented_tested",
+      "evidence": "CSV/OFX até 10000 registros, revisão de 50 por página, inferência de colunas e erros de linha."
+    },
+    {
+      "id": 15,
+      "state": "implemented_tested",
+      "evidence": "Conta/período no convite; testes RLS com duas identidades."
+    },
+    {
+      "id": 16,
+      "state": "implemented_tested",
+      "evidence": "Proposta em escopo visível; só dono aprova; conflito/revogação bloqueiam alteração."
+    },
+    {
+      "id": 17,
+      "state": "implemented_tested",
+      "evidence": "Histórico autor/antes/depois, restauração condicionada à versão atual; exclusão em cascata testada."
+    },
+    {
+      "id": 18,
+      "state": "implemented_tested",
+      "evidence": "Fila e cache cifrados opt-in por pessoa; testes IndexedDB, IDs estáveis e limpeza no logout. Não protege contra XSS/dispositivo comprometido."
+    },
+    {
+      "id": 19,
+      "state": "partial",
+      "reason": "Telemetria técnica opt-in e visualização implementadas. Custo monetário real, retenção e utilidade precisam de operação observada e tarifas corretas."
+    },
+    {
+      "id": 20,
+      "state": "blocked",
+      "reason": "Protocolo disponível em usability-study.json. Nenhum participante, coleta ou resultado comparativo foi inventado."
+    }
+  ]
+}

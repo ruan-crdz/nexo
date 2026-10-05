@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import { goalSchema } from '../../../shared/domain.ts';
-import { isVerifiedQuestion, verifiedReply } from '../../../shared/planning.ts';
+import { isFinancialQuestion, answerFinancialQuestion } from '../../../shared/financial-questions.ts';
+import { merchantKey } from '../../../shared/financial-decisions.ts';
+import { readPages } from '../../../shared/pagination.ts';
+import { accountSchema } from '../../../shared/domain.ts';
 import { admin, env, HttpError, json } from '../_shared/http.ts';
 import { downloadAudio, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
-import { parseTransaction, transcribe } from '../_shared/openai.ts';
+import { parseTransaction, transcribe, readReceipt } from '../_shared/openai.ts';
 import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
 import { transactionSchema } from '../../../shared/domain.ts';
 import { isSummaryRequest, whatsappMonthSummary } from '../../../shared/whatsapp-summary.ts';
@@ -16,6 +19,7 @@ const messageSchema = z.object({
   type: z.string(),
   text: z.object({ body: z.string().max(4000) }).optional(),
   audio: z.object({ id: z.string(), mime_type: z.string().optional() }).optional(),
+  image: z.object({ id: z.string() }).optional(),
 });
 const webhookSchema = z.object({
   object: z.literal('whatsapp_business_account'),
@@ -116,7 +120,38 @@ async function processMessage(message: Message) {
     const profile = await db.from('profiles').select('timezone').eq('id', userId).single();
     if (profile.error) throw new Error('profile');
     if (message.type === 'audio' && message.audio)
-      text = await transcribe(await downloadAudio(message.audio.id));
+      text = await transcribe(await downloadAudio(message.audio.id), userId);
+    if (message.type === 'image' && message.image) {
+      const receipt = await readReceipt(
+        await downloadAudio(message.image.id),
+        profile.data.timezone,
+        userId,
+        new Date(Number(message.timestamp) * 1000),
+      );
+      const learned = await db.from('category_preferences').select('merchant,category').eq('user_id', userId);
+      if (learned.error) throw new HttpError(503, 'Não foi possível conferir preferências.');
+      for (const row of receipt.transactions) {
+        const preference = learned.data.find((item) => item.merchant === merchantKey(row.description));
+        if (preference) row.category = preference.category;
+      }
+      if (!receipt.transactions.length) {
+        await finish(
+          receipt.parsed.clarification ??
+            'Não consegui ler valor e data com segurança. Envie uma foto mais nítida ou os dados por texto.',
+          userId,
+        );
+        return;
+      }
+      const reply = `Confira o recibo antes de salvar:\n${receipt.transactions.map((row) => `${row.description} · ${row.date} · ${formatMoney(row.amount)}`).join('\n')}\nEnvie “confirmar” em até dez minutos para anotar como pendente. A foto não confirma pagamento; marque como pago no app somente depois de conferir. Nada foi registrado ainda.`;
+      const pending = await db
+        .from('whatsapp_messages_metadata')
+        .update({ user_id: userId, state: 'pending', pending_payload: receipt.transactions, reply })
+        .eq('message_id', message.id);
+      if (pending.error) throw new HttpError(503, 'Não foi possível preparar revisão.');
+      committed = true;
+      await deliverReply(message.id, message.from, reply);
+      return;
+    }
     if (!text) {
       await finish(
         'Nesta versão, envie texto ou áudio. Recibos em imagem ainda não são interpretados.',
@@ -130,29 +165,36 @@ async function processMessage(message: Message) {
     }
     if (isSummaryRequest(text)) {
       const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
-      const rows = await db
-        .from('transactions')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('date', `${today.slice(0, 7)}-01`)
-        .lte('date', today)
-        .limit(5000);
-      if (rows.error || rows.data.length >= 5000)
-        throw new HttpError(503, 'Não foi possível conferir todas as anotações.');
-      await finish(whatsappMonthSummary(transactionSchema.array().parse(rows.data), today), userId);
+      const rows = await readPages((from, to) =>
+        db
+          .from('transactions')
+          .select('*')
+          .eq('user_id', userId)
+          .gte('date', `${today.slice(0, 7)}-01`)
+          .lte('date', today)
+          .order('id')
+          .range(from, to),
+      );
+      await finish(whatsappMonthSummary(transactionSchema.array().parse(rows), today), userId);
       return;
     }
-    if (isVerifiedQuestion(text)) {
-      const [rows, goals] = await Promise.all([
-        db.from('transactions').select('*').eq('user_id', userId).limit(5000),
-        db.from('goals').select('*').eq('user_id', userId).limit(1001),
+    if (isFinancialQuestion(text)) {
+      const [rows, goals, accounts] = await Promise.all([
+        readPages((from, to) =>
+          db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
+        ),
+        readPages((from, to) =>
+          db.from('goals').select('*').eq('user_id', userId).order('id').range(from, to),
+        ),
+        readPages((from, to) =>
+          db.from('financial_accounts').select('*').eq('user_id', userId).order('id').range(from, to),
+        ),
       ]);
-      if (rows.error || goals.error || rows.data.length >= 5000 || goals.data.length > 1000)
-        throw new HttpError(503, 'Leitura incompleta da resposta.');
-      const reply = verifiedReply(
+      const reply = answerFinancialQuestion(
         {
-          transactions: transactionSchema.array().parse(rows.data),
-          goals: goalSchema.array().parse(goals.data),
+          transactions: transactionSchema.array().parse(rows),
+          goals: goalSchema.array().parse(goals),
+          financial_accounts: accountSchema.array().parse(accounts),
         },
         text,
         civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
@@ -216,7 +258,17 @@ async function processMessage(message: Message) {
       text,
       profile.data.timezone,
       new Date(Number(message.timestamp) * 1000),
+      userId,
     );
+    const preferences = await db
+      .from('category_preferences')
+      .select('merchant,category')
+      .eq('user_id', userId);
+    if (preferences.error) throw new HttpError(503, 'Não foi possível conferir preferências.');
+    for (const row of parsed.transactions) {
+      const preference = preferences.data.find((item) => item.merchant === merchantKey(row.description));
+      if (preference) row.category = preference.category;
+    }
     if (parsed.parsed.intent === 'question') {
       await finish(
         'Posso anotar o que você gastou ou recebeu e mostrar seu resumo do mês.\n\nEnvie “resumo” para ver o que entrou, saiu e sobrou. Para conferir uma anotação específica, abra “Anotações” no app.\n\nNão salvei nenhuma anotação com esta pergunta.',
@@ -311,10 +363,10 @@ Deno.serve(async (request) => {
             // A late receipt must not downgrade a message already delivered/read.
             const allowed =
               status.status === 'read'
-                ? ['accepted', 'delivered', 'failed']
+                ? ['accepted', 'delivered', 'failed', 'reconcile']
                 : status.status === 'delivered'
-                  ? ['accepted', 'failed']
-                  : ['accepted'];
+                  ? ['accepted', 'failed', 'reconcile']
+                  : ['accepted', 'reconcile'];
             const updated = await admin()
               .from('whatsapp_messages_metadata')
               .update({

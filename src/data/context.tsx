@@ -7,6 +7,8 @@ import { cloudRepository, demoRepository } from './repository';
 import type { Repository } from './repository';
 import type { Dataset } from '../../shared/domain';
 import { emptyDataset } from '../../shared/domain';
+import { clearOffline, offlineEnabled } from './offline';
+import { civilDate } from '../../shared/financial-engine';
 
 interface AppContextValue {
   demo: boolean;
@@ -35,6 +37,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null),
     [message, setMessage] = useState('');
   const client = useQueryClient();
+  useEffect(() => {
+    const online = () => {
+      void client.invalidateQueries({ queryKey: ['dataset'] });
+    };
+    window.addEventListener('online', online);
+    window.addEventListener('offline', online);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', online);
+    };
+  }, [client]);
   useEffect(() => {
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data, error }) => {
@@ -78,6 +91,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
   useEffect(() => {
+    if (demo || !user || !supabase || !query.data?.profile.metrics_enabled || !navigator.onLine) return;
+    const key = `nexo.visit.${user.id}.${civilDate(new Date(), query.data.profile.timezone)}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, 'yes');
+    void Promise.resolve(
+      supabase
+        .from('operation_metrics')
+        .insert({ user_id: user.id, operation: 'visit', latency_ms: 0, success: true }),
+    )
+      .then((response) => {
+        if (response.error) sessionStorage.removeItem(key);
+      })
+      .catch(() => sessionStorage.removeItem(key));
+  }, [demo, user, query.data]);
+  useEffect(() => {
     if (demo || !user || !supabase) return;
     const channel = supabase
       .channel(`personal-${user.id}`)
@@ -119,6 +147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOrganizationId(null);
     },
     signOut: async () => {
+      if (user && offlineEnabled(user.id)) await clearOffline(user.id);
       if (!demo && supabase) {
         const { error } = await supabase.auth.signOut();
         if (error) throw error;

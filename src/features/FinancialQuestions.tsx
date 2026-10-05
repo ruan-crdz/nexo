@@ -3,18 +3,26 @@ import { Search, Calculator } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button } from '../design-system/components';
 import { civilDate, formatMoney } from '../../shared/financial-engine';
-import { verifiedReply } from '../../shared/planning';
+import { answerFinancialQuestion } from '../../shared/financial-questions';
+import { Link } from 'react-router-dom';
 export function FinancialQuestions() {
   const app = useApp();
   const [question, setQuestion] = useState('');
   const [submitted, setSubmitted] = useState('');
-  const reply = verifiedReply(app.data, submitted, civilDate(new Date(), app.data.profile.timezone));
+  const reply = answerFinancialQuestion(
+    app.data,
+    submitted,
+    civilDate(new Date(), app.data.profile.timezone),
+  );
   return (
     <>
       <header className="simple-heading">
         <h1>Pergunte ao seu dinheiro</h1>
         <p>Respostas calculadas com suas anotações, não estimativas inventadas.</p>
       </header>
+      <Link className="button button-secondary" to="/controle">
+        Quanto posso gastar? · Faturas e sugestões
+      </Link>
       <div className="simple-inline-actions">
         {['Por que gastei mais?', 'Quanto falta para minha meta?', 'Quais contas ainda vencem?'].map(
           (text) => (

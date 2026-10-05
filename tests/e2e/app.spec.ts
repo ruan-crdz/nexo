@@ -170,6 +170,8 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
       'perguntas',
       'importar',
       'familia',
+      'controle',
+      'recibo',
     ]) {
       await page.goto(`/#/${route}`);
       await expect(page.locator('main h1').first()).toBeVisible();
@@ -198,6 +200,8 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
       'perguntas',
       'importar',
       'familia',
+      'controle',
+      'recibo',
     ]) {
       await page.goto(`/#/${route}`);
       await expect(page.locator('main h1').first()).toBeVisible();
@@ -407,4 +411,54 @@ test('extrato só é salvo após revisão e o mesmo lote não entra duas vezes',
         ).length,
     ),
   ).toBe(1);
+});
+test('decisão recusa premissas vazias e mostra dinheiro calculado sem antecipar renda', async ({ page }) => {
+  await page.goto('/#/controle');
+  await expect(page.getByRole('button', { name: 'Calcular com minhas premissas' })).toBeDisabled();
+  await page.getByLabel('Dinheiro disponível confirmado (R$)').fill('1000,00');
+  await page.getByLabel('Reserva que não quer gastar (R$)').fill('100,00');
+  await page.getByLabel('Separado para metas (R$)').fill('100,00');
+  await page.getByLabel('Renda esperada (não recebida) (R$)').fill('5000,00');
+  await page.getByRole('checkbox', { name: /Confirmei o dinheiro disponível/ }).check();
+  await page.getByRole('button', { name: 'Calcular com minhas premissas' }).click();
+  await expect(page.locator('.verified-answer')).toContainText('não foi tratada como dinheiro recebido');
+});
+test('renda semanal é prevista e fatura não transforma limite em saldo', async ({ page }) => {
+  await page.goto('/#/planejar');
+  await page.getByRole('button', { name: 'Nova conta recorrente' }).click();
+  await page.getByLabel('Nome', { exact: true }).fill('Renda semanal teste');
+  await page.getByLabel('Valor (R$)', { exact: true }).fill('100,00');
+  await page.getByRole('combobox', { name: 'Frequência' }).selectOption('weekly');
+  await page.getByRole('combobox', { name: 'Gasto ou renda' }).selectOption('income');
+  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
+  await expect(page.getByRole('heading', { name: 'Renda semanal teste' })).toBeVisible();
+  const rows = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
+      (row: { description: string }) => row.description === 'Renda semanal teste',
+    ),
+  );
+  expect(
+    rows.every((row: { type: string; status: string }) => row.type === 'income' && row.status === 'planned'),
+  ).toBe(true);
+  await page.goto('/#/controle');
+  await page.getByRole('button', { name: 'Faturas', exact: true }).click();
+  await page.getByRole('button', { name: 'Cadastrar cartão' }).click();
+  await page.getByLabel('Nome do cartão').fill('Cartão teste');
+  await page.getByLabel('Limite informado (R$)').fill('1000,00');
+  await page.getByRole('button', { name: 'Salvar cartão' }).click();
+  await expect(page.locator('.verified-answer')).toContainText('Não é dinheiro disponível');
+});
+test('CSV lista linha inválida sem impedir revisão das válidas', async ({ page }) => {
+  await page.goto('/#/importar');
+  await page
+    .getByLabel('Extrato CSV ou OFX')
+    .setInputFiles({
+      name: 'com-erros.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('Data;Descrição;Valor\n04/10/2026;Válida;-12,34\n31/02/2026;Inválida;-1,00'),
+    });
+  await page.getByRole('button', { name: 'Revisar registros' }).click();
+  await expect(page.getByRole('heading', { name: '1 linhas não serão salvas' })).toBeVisible();
+  await expect(page.locator('.import-preview')).toContainText('Válida');
+  await expect(page.getByRole('button', { name: 'Salvar 1 registros selecionados' })).toBeEnabled();
 });

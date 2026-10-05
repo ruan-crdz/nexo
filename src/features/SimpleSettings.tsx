@@ -6,6 +6,7 @@ import { useApp } from '../data/context';
 import { supabase } from '../data/client';
 import { useTheme } from '../design-system/theme';
 import { Button, Card, Dialog } from '../design-system/components';
+import { offlineEnabled, setOffline, cacheDataset } from '../data/offline';
 
 export function SimpleSettings() {
   const app = useApp();
@@ -16,10 +17,12 @@ export function SimpleSettings() {
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deviceOffline, setDeviceOffline] = useState(() => (app.user ? offlineEnabled(app.user.id) : false));
   const [notificationPreferences, setNotificationPreferences] = useState({
     reminders_enabled: app.data.profile.reminders_enabled,
     weekly_digest: app.data.profile.weekly_digest,
     whatsapp_notifications: app.data.profile.whatsapp_notifications,
+    metrics_enabled: app.data.profile.metrics_enabled,
   });
   async function updateNotificationPreference(key: keyof typeof notificationPreferences, enabled: boolean) {
     if (pending) return;
@@ -129,7 +132,40 @@ export function SimpleSettings() {
           <p className="muted">Sua escolha fica guardada neste aparelho.</p>
         </div>
       </Card>
+      {!app.demo && app.user && (
+        <section className="simple-form">
+          <h2>Uso sem internet</h2>
+          <label className="check-label">
+            <input
+              type="checkbox"
+              checked={deviceOffline}
+              disabled={pending}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                setPending(true);
+                setError('');
+                void setOffline(app.user!.id, enabled)
+                  .then(async () => {
+                    if (enabled) await cacheDataset(app.user!.id, app.data);
+                    setDeviceOffline(enabled);
+                  })
+                  .catch(() => setError('Não foi possível configurar o armazenamento neste aparelho.'))
+                  .finally(() => setPending(false));
+              }}
+            />
+            Guardar uma cópia cifrada e permitir anotações pendentes neste aparelho.
+          </label>
+          <p className="muted">
+            Não ative em aparelho compartilhado. Desativar ou sair da conta remove a cópia e pendências
+            locais.
+          </p>
+        </section>
+      )}
       <Card className="simple-settings-links">
+        <Link to="/controle">
+          <span>Decidir, faturas, sugestões e histórico</span>
+          <ChevronRight />
+        </Link>
         <Link to="/planejar">
           <span>Contas, limites e metas</span>
           <ChevronRight />
@@ -225,6 +261,8 @@ export function SimpleSettings() {
                         delivered: 'Entregue',
                         read: 'Lido',
                         failed: 'Falha registrada na tentativa',
+                        retry: 'Nova tentativa programada após rejeição temporária',
+                        reconcile: 'Resultado incerto; não será reenviado automaticamente',
                         cancelled: 'Cancelado',
                       } as Record<string, string>
                     )[item.state] ?? item.state}
@@ -240,6 +278,16 @@ export function SimpleSettings() {
           )}
         </section>
       )}
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={notificationPreferences.metrics_enabled}
+          disabled={pending || app.demo}
+          onChange={(event) => void updateNotificationPreference('metrics_enabled', event.target.checked)}
+        />
+        Autorizo métricas técnicas da minha conta, sem texto, imagens ou valores financeiros. Posso desativar
+        depois.
+      </label>
       {error && (
         <p className="error-message" role="alert">
           {error}
@@ -254,6 +302,10 @@ export function SimpleSettings() {
         >
           <div className="simple-form">
             <p>Suas anotações continuam salvas. Para voltar, use seu e-mail e sua senha.</p>
+            <p>
+              Sincronize pendências offline antes de sair: dados ainda não enviados neste aparelho serão
+              removidos.
+            </p>
             {error && (
               <p role="alert" className="error-message">
                 {error}

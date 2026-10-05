@@ -4,6 +4,7 @@ import { v5 as uuid } from 'uuid';
 import { transactionSchema } from './domain';
 import type { Transaction } from './domain';
 import { money, parseMoney, validDate } from './financial-engine';
+import { merchantKey, reconciliationMatches } from './financial-decisions';
 
 const namespace = 'd759f194-f45b-4c60-8a47-0c41b49cf92f';
 export type CsvMapping = {
@@ -14,11 +15,15 @@ export type CsvMapping = {
   numberFormat: 'br' | 'decimal';
   dateFormat: 'iso' | 'br';
 };
-export type ImportCandidate = { transaction: Transaction; duplicate: 'confirmed' | 'possible' | null };
+export type ImportCandidate = {
+  transaction: Transaction;
+  duplicate: 'confirmed' | 'possible' | null;
+  matches?: Transaction[];
+};
 export function csvTable(text: string) {
   const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { skipEmptyLines: 'greedy' });
-  if (parsed.errors.length || parsed.data.length < 2 || parsed.data.length > 1001)
-    throw new Error('Confira o CSV: cabeçalho e até 1.000 registros são necessários.');
+  if (parsed.errors.length || parsed.data.length < 2 || parsed.data.length > 10001)
+    throw new Error('Confira o CSV: cabeçalho e até 10.000 registros são necessários.');
   return { headers: parsed.data[0], rows: parsed.data.slice(1) };
 }
 function decimalAmount(value: string) {
@@ -50,13 +55,14 @@ function review(rows: Transaction[], existing: Transaction[]) {
   const knownIds = new Set(existing.map((row) => row.id));
   const signatures = new Set(existing.map(signature));
   return rows.map((transaction): ImportCandidate => {
+    const matches = reconciliationMatches(transaction, existing);
     const duplicate = knownIds.has(transaction.id)
       ? 'confirmed'
-      : signatures.has(signature(transaction))
+      : signatures.has(signature(transaction)) || matches.length > 0
         ? 'possible'
         : null;
     knownIds.add(transaction.id);
-    return { transaction, duplicate };
+    return { transaction, duplicate, matches };
   });
 }
 export function csvCandidates(
@@ -65,6 +71,7 @@ export function csvCandidates(
   accountId: string | null,
   existing: Transaction[],
   ownerId = 'demo',
+  issues?: { line: number; message: string }[],
 ) {
   const table = csvTable(text);
   const occurrences = new Map<string, number>();
@@ -98,13 +105,24 @@ export function csvCandidates(
       occurrences.set(fingerprint, ordinal);
       return { ...transaction, id: uuid(`${ownerId}:csv:${fingerprint}:${ordinal}`, namespace) };
     } catch (error) {
+      if (issues) {
+        issues.push({
+          line: index + 2,
+          message:
+            error instanceof Error && error.message.length < 200 ? error.message : 'Confira os campos.',
+        });
+        return null;
+      }
       throw new Error(
         `Linha ${index + 2}: ${error instanceof Error && error.message.length < 200 ? error.message : 'confira os campos selecionados.'}`,
         { cause: error },
       );
     }
   });
-  return review(rows, existing);
+  return review(
+    rows.filter((row): row is Transaction => row !== null),
+    existing,
+  );
 }
 const arrayOf = <Item>(value: Item | Item[] | undefined): Item[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
@@ -148,6 +166,16 @@ export function ofxCandidates(
       );
     }
   }
-  if (!rows.length || rows.length > 1000) throw new Error('O OFX deve ter de 1 a 1.000 registros.');
+  if (!rows.length || rows.length > 10000) throw new Error('O OFX deve ter de 1 a 10.000 registros.');
   return review(rows, existing);
+}
+export function inferCsvMapping(headers: string[]): CsvMapping | null {
+  const names = headers.map((header) => merchantKey(header));
+  const find = (pattern: RegExp) => names.findIndex((name) => pattern.test(name));
+  const date = find(/^(data|date|data lancamento|data transacao)$/),
+    description = find(/descricao|historico|description|memo|estabelecimento/),
+    amount = find(/^(valor|amount|valor transacao)$/);
+  if (date < 0 || description < 0 || amount < 0) return null;
+  const type = find(/^(tipo|type)$/);
+  return { date, description, amount, type: type < 0 ? null : type, dateFormat: 'br', numberFormat: 'br' };
 }

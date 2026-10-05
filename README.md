@@ -32,6 +32,13 @@ Abra `http://localhost:5173` e escolha **Experimentar sem cadastro**. Dados fict
 - CSV/OFX: seleção de conta, mapeamento de colunas, revisão, identificação de duplicatas e importação atômica. Não é Open Finance.
 - Família: convite com expiração, pedido de acesso, aprovação do dono, escopo de resumo ou últimas 100 anotações, somente consulta e revogação.
 - Worker de avisos WhatsApp preparado, mas exige publicação, credencial de job, template Meta aprovado e agendamento. Não é ativado automaticamente.
+- Decidir: dinheiro confirmado no dia, contas/reservas/metas protegidas e renda prevista não antecipada; premissas e registros ficam visíveis.
+- Mais controle: sugestões de assinaturas/cobranças incomuns, ciclos de cartões, preferências futuras de categoria, histórico com restauração condicionada à versão atual e métricas técnicas opt-in.
+- Recorrências de renda/despesa semanal, mensal e anual, com término e reajuste. Importação revisada até 10.000 registros, páginas de 50, erros por linha e conciliação explícita entre fontes.
+- Família por conta/período e propostas de correção: o dono aprova e conflitos bloqueiam alteração; nunca há edição direta pelo familiar.
+- Offline opt-in neste aparelho: cache/fila cifrados por usuário e inserção idempotente ao reconectar. O service worker guarda só arquivos públicos do app; sair ou desativar remove dados locais.
+- Fotos de recibos geram prévia pendente, nunca confirmação automática de pagamento; requer `OPENAI_VISION_MODEL` e revisão do usuário.
+- Estado dos vinte itens, limitações e evidências em `docs/next-release-status.json`. Não há estudo comparativo realizado nem integração Open Finance homologada.
 
 **Escopo simplificado em outubro de 2026.** Empresa, score e simuladores saíram da navegação e das rotas públicas. Planejamento, perguntas e importação ficam em áreas secundárias, preservando os quatro destinos principais. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp usa o status real das entregas para informar falhas, sem avisos fixos de bloqueio.
 

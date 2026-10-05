@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
 import { Brand, Button } from '../design-system/components';
 import { ThemeToggle } from '../design-system/theme';
+import { OfflineStatus } from './OfflineStatus';
 export { Brand } from '../design-system/components';
 
 const navigation = [
@@ -66,6 +67,7 @@ export function Shell() {
         ))}
       </nav>
       <main id="main-content" ref={main} tabIndex={-1} className="simple-content" data-page={pathname}>
+        <OfflineStatus />
         {app.demo && (
           <div className="simple-demo">
             Você está experimentando com dados de exemplo. <Link to="/cadastro">Criar minha conta</Link>

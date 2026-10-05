@@ -1,0 +1,26 @@
+{
+  "status": "protocol_only_no_participants_or_results",
+  "objective": "Comparar conclusão, tempo, erros e compreensão do Nexo e Pierre sem afirmar superioridade antecipadamente.",
+  "population": ["adultos jovens", "pessoas com 65 anos ou mais"],
+  "design": "tarefas equivalentes; ordem de aplicativos alternada; cenário financeiro sintético idêntico; observador não ajuda durante a tentativa",
+  "tasks": [
+    "registrar gasto",
+    "corrigir valor",
+    "encontrar contas pendentes",
+    "explicar cálculo de uma resposta",
+    "revogar compartilhamento",
+    "revisar extrato sem duplicar"
+  ],
+  "consent": "Consentimento específico do participante; não coletar extratos reais, credenciais, áudios ou telas com dados pessoais.",
+  "metrics": [
+    "conclusão sem ajuda",
+    "tempo por tarefa",
+    "erros financeiros",
+    "pedidos de ajuda",
+    "compreensão da origem dos valores",
+    "preferência declarada"
+  ],
+  "sample_size": "Definir após piloto e análise de poder para a diferença mínima relevante; não apresentar um piloto pequeno como prova estatística.",
+  "analysis": "Reportar resultados por faixa etária, intervalos de confiança e limitações. Não testar contra funcionalidades indisponíveis no plano escolhido sem declarar a limitação.",
+  "publish_claims_only_after": "Execução com pessoas reais, análise revisada e documentação da versão e plano dos dois produtos."
+}

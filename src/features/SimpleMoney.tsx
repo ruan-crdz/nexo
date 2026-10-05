@@ -25,6 +25,7 @@ import type { Transaction } from '../../shared/domain';
 import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
 import { monthlyFlow } from '../../shared/insights';
 import { budgetUsage, weeklySummary } from '../../shared/planning';
+import { merchantKey } from '../../shared/financial-decisions';
 
 function monthLabel(month: string) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
@@ -54,6 +55,7 @@ export function MoneyForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [learnCategory, setLearnCategory] = useState(false);
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setError('');
@@ -83,6 +85,13 @@ export function MoneyForm({
     setPending(true);
     try {
       await app.repository.save('transactions', value, null);
+      if (learnCategory && merchantKey(description).length >= 3) {
+        try {
+          await app.repository.categoryPreference(merchantKey(description), category);
+        } catch {
+          app.toast('A anotação foi salva, mas a preferência para próximos registros não foi atualizada.');
+        }
+      }
       setSaved(true);
       await app.refresh();
     } catch {
@@ -109,7 +118,7 @@ export function MoneyForm({
       {saved ? (
         <div className="money-success" role="status">
           <CheckCircle2 size={48} />
-          <h3>Anotação salva.</h3>
+          <h3>{!app.demo && !navigator.onLine ? 'Anotação pendente neste aparelho.' : 'Anotação salva.'}</h3>
           <p>
             {description} · {formatMoney(parseMoney(amount))}
           </p>
@@ -191,6 +200,17 @@ export function MoneyForm({
                 )}
               </div>
             </details>
+            {existing && (
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={learnCategory}
+                  onChange={(event) => setLearnCategory(event.target.checked)}
+                />
+                Usar esta categoria nos próximos registros deste estabelecimento. Não alterar registros
+                antigos.
+              </label>
+            )}
             {error && (
               <p role="alert" className="error-message">
                 {error}

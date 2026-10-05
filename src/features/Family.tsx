@@ -4,8 +4,8 @@ import { Check, Copy, RefreshCw, Users, X } from 'lucide-react';
 import { useApp } from '../data/context';
 import { supabase } from '../data/client';
 import { Button, Dialog } from '../design-system/components';
-import { formatMoney } from '../../shared/financial-engine';
-import { transactionSchema } from '../../shared/domain';
+import { formatMoney, parseMoney } from '../../shared/financial-engine';
+import { categories, transactionSchema } from '../../shared/domain';
 type Invite = {
   id: string;
   owner_id: string;
@@ -16,14 +16,21 @@ type Invite = {
   scope: 'summary' | 'transactions';
   state: 'invited' | 'pending' | 'active' | 'revoked';
   expires_at: string;
+  account_id?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  can_propose?: boolean;
 };
 type Snapshot = {
   owner_name: string;
   month: string;
+  start?: string;
+  end?: string;
   scope: 'summary' | 'transactions';
   income: number;
   expenses: number;
   net: number;
+  can_propose?: boolean;
   transactions: ReturnType<typeof transactionSchema.parse>[];
 };
 async function rpc<Reply>(name: string, body: Record<string, unknown> = {}) {
@@ -42,6 +49,30 @@ export function FamilyPage() {
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState<{ invite: Invite; action: 'approve' | 'revoke' } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [allowProposals, setAllowProposals] = useState(false);
+  const [proposal, setProposal] = useState<Snapshot['transactions'][number] | null>(null);
+  const [proposalDescription, setProposalDescription] = useState('');
+  const [proposalAmount, setProposalAmount] = useState('');
+  const [proposalCategory, setProposalCategory] = useState('Outros');
+  const proposals = useQuery({
+    queryKey: ['family-proposals', app.user?.id],
+    enabled: !app.demo && !!app.user,
+    retry: false,
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const result = await supabase!
+        .from('family_proposals')
+        .select('*')
+        .eq('owner_id', app.user!.id)
+        .eq('state', 'pending')
+        .order('created_at');
+      if (result.error) throw result.error;
+      return result.data;
+    },
+  });
   const invites = useQuery({
     queryKey: ['family-invites', app.user?.id],
     queryFn: () => rpc<Invite[]>('list_family_invites'),
@@ -105,6 +136,58 @@ export function FamilyPage() {
                 <option value="transactions">Resumo e últimas 100 anotações</option>
               </select>
             </label>
+            <label>
+              Conta compartilhada
+              <select
+                value={accountId}
+                onChange={(event) => {
+                  setAccountId(event.target.value);
+                  setConsent(false);
+                }}
+              >
+                <option value="">Todas as contas</option>
+                {app.data.financial_accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Período inicial (opcional)
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => {
+                  setStartDate(event.target.value);
+                  setConsent(false);
+                }}
+              />
+            </label>
+            <label>
+              Período final (opcional)
+              <input
+                type="date"
+                min={startDate || undefined}
+                value={endDate}
+                onChange={(event) => {
+                  setEndDate(event.target.value);
+                  setConsent(false);
+                }}
+              />
+            </label>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                disabled={scope !== 'transactions'}
+                checked={allowProposals && scope === 'transactions'}
+                onChange={(event) => {
+                  setAllowProposals(event.target.checked);
+                  setConsent(false);
+                }}
+              />
+              Permitir propostas de correção. Só eu posso aprovar alterações.
+            </label>
             <label className="check-label">
               <input
                 type="checkbox"
@@ -121,6 +204,10 @@ export function FamilyPage() {
                   void action(async () => {
                     const result = await rpc<{ code: string }>('create_family_invite', {
                       selected_scope: scope,
+                      allowed_account: accountId || null,
+                      start_date: startDate || null,
+                      end_date: endDate || null,
+                      allow_proposals: allowProposals && scope === 'transactions',
                     });
                     setCreated(result.code);
                     setConsent(false);
@@ -244,6 +331,45 @@ export function FamilyPage() {
           </section>
         </>
       )}
+      {proposals.data?.length ? (
+        <section className="simple-form">
+          <h2>Propostas para revisar</h2>
+          {proposals.data.map((item) => (
+            <article className="verified-answer" key={item.id}>
+              <h3>{item.proposed_data.description}</h3>
+              <p>
+                Proposto por {item.proposer_id}: {formatMoney(Number(item.before_data.amount))} →{' '}
+                {formatMoney(Number(item.proposed_data.amount))} · {item.proposed_data.category}
+              </p>
+              <div className="simple-inline-actions">
+                <Button
+                  disabled={pending}
+                  onClick={() =>
+                    void action(async () => {
+                      await rpc('decide_family_proposal', { proposal_id: item.id, approve: true });
+                      await proposals.refetch();
+                    })
+                  }
+                >
+                  Aprovar proposta
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() =>
+                    void action(async () => {
+                      await rpc('decide_family_proposal', { proposal_id: item.id, approve: false });
+                      await proposals.refetch();
+                    })
+                  }
+                >
+                  Rejeitar
+                </Button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
       {error && (
         <p role="alert" className="error-message">
           {error}
@@ -262,7 +388,8 @@ export function FamilyPage() {
             snapshot.data && (
               <>
                 <p>
-                  {snapshot.data.owner_name} · {snapshot.data.month}
+                  {snapshot.data.owner_name} · {snapshot.data.start ?? snapshot.data.month}
+                  {snapshot.data.end ? ` a ${snapshot.data.end}` : ''}
                 </p>
                 <div className="simple-totals">
                   <div>
@@ -290,6 +417,19 @@ export function FamilyPage() {
                             {record.description} · {record.date}
                           </span>
                           <strong>{formatMoney(record.amount)}</strong>
+                          {snapshot.data?.can_propose && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setProposal(record);
+                                setProposalDescription(record.description);
+                                setProposalAmount(String(record.amount / 100).replace('.', ','));
+                                setProposalCategory(record.category);
+                              }}
+                            >
+                              Propor correção
+                            </Button>
+                          )}
                         </li>
                       ))}
                   </ul>
@@ -298,6 +438,65 @@ export function FamilyPage() {
             )
           )}
         </section>
+      )}
+      {proposal && (
+        <Dialog
+          title="Propor correção ao dono"
+          onClose={() => {
+            if (!pending) setProposal(null);
+          }}
+        >
+          <form
+            className="simple-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void action(async () => {
+                await rpc('propose_family_correction', {
+                  invite_id: selected,
+                  record_id: proposal.id,
+                  new_description: proposalDescription,
+                  new_amount: parseMoney(proposalAmount),
+                  new_category: proposalCategory,
+                });
+                setProposal(null);
+              });
+            }}
+          >
+            <label>
+              Descrição
+              <input
+                required
+                minLength={2}
+                maxLength={180}
+                value={proposalDescription}
+                onChange={(event) => setProposalDescription(event.target.value)}
+              />
+            </label>
+            <label>
+              Valor sugerido (R$)
+              <input
+                inputMode="decimal"
+                value={proposalAmount}
+                onChange={(event) => setProposalAmount(event.target.value)}
+              />
+            </label>
+            <label>
+              Categoria
+              <select value={proposalCategory} onChange={(event) => setProposalCategory(event.target.value)}>
+                {categories.map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
+              </select>
+            </label>
+            <p>Nada será alterado até o dono aprovar.</p>
+            {error && (
+              <p role="alert" className="error-message">
+                {error}
+              </p>
+            )}
+            <Button disabled={pending}>Enviar proposta</Button>
+          </form>
+        </Dialog>
       )}
       {confirm && (
         <Dialog
@@ -309,6 +508,12 @@ export function FamilyPage() {
           <div className="simple-form">
             <p>{confirm.invite.viewer_name ?? confirm.invite.owner_name}</p>
             {confirm.invite.viewer_email && <p>{confirm.invite.viewer_email}</p>}
+            <p>
+              Conta: {confirm.invite.account_id ? 'Somente a conta escolhida' : 'Todas'} · período:{' '}
+              {confirm.invite.period_start ?? 'Início do mês atual'} a {confirm.invite.period_end ?? 'Hoje'} ·
+              propostas:{' '}
+              {confirm.invite.can_propose ? 'permitidas, sujeitas à sua aprovação' : 'não permitidas'}.
+            </p>
             <p>
               {confirm.action === 'approve'
                 ? `Esta pessoa poderá consultar ${confirm.invite.scope === 'summary' ? 'somente seu resumo mensal' : 'seu resumo e as últimas 100 anotações'}. Não poderá editar.`
