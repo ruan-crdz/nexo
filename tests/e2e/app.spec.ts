@@ -228,14 +228,14 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('plano de investimento salva aporte e mostra projeção sem rendimento', async ({ page }) => {
+test('plano de investimento calcula quanto guardar sem prometer ganhos', async ({ page }) => {
   await page.goto('/#/investimentos');
   await expect(page.getByRole('heading', { name: 'Investir sem complicar' })).toBeVisible();
-  const selectedGoalId = await page.getByLabel('Meta para este plano').inputValue();
-  await page.getByLabel('Aporte mensal (R$)').fill('100,00');
-  await page.getByRole('button', { name: 'Prefiro pouca oscilação' }).click();
-  await expect(page.getByText('Para chegar na data escolhida, sem contar rendimento')).toBeVisible();
-  await page.getByRole('button', { name: 'Salvar aporte nesta meta' }).click();
+  const selectedGoalId = await page.getByLabel('Para que você quer guardar?').inputValue();
+  await page.getByLabel('Quanto quer guardar por mês? (R$)').fill('100,00');
+  await page.getByRole('button', { name: 'Quero que o valor mude pouco' }).click();
+  await expect(page.getByText('Sem contar possíveis ganhos, você teria de guardar')).toBeVisible();
+  await page.getByRole('button', { name: 'Salvar meu plano' }).click();
   await expect
     .poll(() =>
       page.evaluate((goalId) => {
@@ -244,32 +244,46 @@ test('plano de investimento salva aporte e mostra projeção sem rendimento', as
       }, selectedGoalId),
     )
     .toBe(10000);
-  await expect(page.getByRole('button', { name: 'Prefiro pouca oscilação' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: 'Quero que o valor mude pouco' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
 });
 
-test('campo de aporte permanece disponível enquanto o valor é substituído', async ({ page }) => {
+test('plano explica quando guardar, onde procurar e o que conferir', async ({ page }) => {
   await page.goto('/#/investimentos');
-  const contribution = page.getByLabel('Aporte mensal (R$)');
+  await expect(page.getByRole('heading', { name: 'Seu próximo passo' })).toBeVisible();
+  await expect(page.getByText(/Quando guardar:/)).toBeVisible();
+  await expect(page.getByText(/Onde procurar:/)).toBeVisible();
+  await expect(page.getByText(/Como escolher:/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Ver opções no simulador oficial' })).toHaveAttribute(
+    'href',
+    'https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal',
+  );
+  const visibleCopy = await page.locator('main').innerText();
+  expect(visibleCopy).not.toMatch(/\baporte\b|\boscilação\b|\brendimento\b|\bativos\b|\bliquidez\b|\bresgate\b/i);
+});
+
+test('campo para guardar por mês permanece disponível durante a edição', async ({ page }) => {
+  await page.goto('/#/investimentos');
+  const contribution = page.getByLabel('Quanto quer guardar por mês? (R$)');
   await contribution.fill('');
   await expect(contribution).toBeVisible();
   await contribution.fill('350,00');
   await expect(contribution).toHaveValue('350,00');
-  await expect(page.getByRole('button', { name: 'Salvar aporte nesta meta' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Salvar meu plano' })).toBeEnabled();
 });
 
 test('página de investimentos permite criar uma meta própria e apresenta fontes oficiais', async ({ page }) => {
   await page.goto('/#/investimentos');
-  await page.getByRole('button', { name: 'Criar meta de investimento' }).click();
-  await page.getByLabel('Nome da meta').fill('Reformar a casa');
-  await page.getByLabel('Valor que quer alcançar (R$)').fill('12000,00');
+  await page.getByRole('button', { name: 'Criar objetivo' }).click();
+  await page.getByLabel('O que você quer fazer?').fill('Reformar a casa');
+  await page.getByLabel('Quanto quer juntar? (R$)').fill('12000,00');
   await page.getByLabel('Quanto já está guardado? (R$)').fill('1000,00');
-  await page.getByLabel('Data desejada').fill('2027-10-05');
-  await page.getByRole('button', { name: 'Salvar meta' }).click();
-  await expect(page.getByLabel('Meta para este plano')).toContainText('Reformar a casa');
-  await expect(page.getByRole('link', { name: /Portal do Investidor da CVM/ })).toHaveAttribute(
+  await page.getByLabel('Até quando gostaria?').fill('2027-10-05');
+  await page.getByRole('button', { name: 'Salvar objetivo' }).click();
+  await expect(page.getByLabel('Para que você quer guardar?')).toContainText('Reformar a casa');
+  await expect(page.getByRole('link', { name: /Portal do Investidor: dicas antes de investir/ })).toHaveAttribute(
     'href',
     'https://www.gov.br/investidor/pt-br/investir',
   );

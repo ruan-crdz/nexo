@@ -1028,6 +1028,14 @@ label {
   font-size: 22px;
   font-variant-numeric: tabular-nums;
 }
+.investment-next-steps {
+  display: grid;
+  gap: 14px;
+  padding-left: 24px;
+}
+.investment-next-steps li {
+  padding-left: 4px;
+}
 .feature-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

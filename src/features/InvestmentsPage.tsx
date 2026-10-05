@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { AlertTriangle, ArrowUpRight, BookOpen, Check, Plus, ShieldCheck, Target, TrendingUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  BookOpen,
+  Check,
+  ExternalLink,
+  Plus,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+} from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke } from '../data/client';
 import { Badge, Button, Card, Dialog, PageHeader, SectionTitle, Stat, Why } from '../design-system/components';
@@ -18,18 +28,18 @@ type AdviceReply = {
 const riskChoices: { id: RiskPreference; label: string; detail: string }[] = [
   {
     id: 'steady',
-    label: 'Prefiro pouca oscilação',
-    detail: 'Prioriza previsibilidade e acesso ao dinheiro, mas pode avançar mais devagar. Ainda existe risco e o retorno não é garantido.',
+    label: 'Quero que o valor mude pouco',
+    detail: 'Quero poder retirar o dinheiro quando precisar. Mesmo assim, posso perder uma parte.',
   },
   {
     id: 'balanced',
-    label: 'Aceito alguma oscilação',
-    detail: 'Entendo que o valor pode subir ou cair no caminho e quero equilibrar objetivos e prazo.',
+    label: 'Tudo bem se o valor mudar um pouco',
+    detail: 'Se o valor cair, posso esperar para tentar recuperar. Isso pode não acontecer.',
   },
   {
     id: 'growth',
-    label: 'Aceito grandes oscilações',
-    detail: 'Aceito quedas importantes e a possibilidade de perder dinheiro. Um prazo curto pode não dar tempo para recuperar.',
+    label: 'Aceito que o valor mude bastante',
+    detail: 'O valor pode cair muito. Mesmo esperando, posso perder parte do dinheiro.',
   },
 ];
 
@@ -83,20 +93,20 @@ function InvestmentGoalDialog({
       await app.repository.save('goals', goal, null);
       await app.refresh();
       onCreated(goal);
-      app.toast('Meta criada. Agora você pode planejar o aporte.');
+      app.toast('Objetivo criado. Agora escolha quanto quer guardar por mês.');
     } catch {
-      setError('Confira o nome, os valores e a data da sua meta.');
+      setError('Confira o nome, os valores e a data do seu objetivo.');
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <Dialog title="Criar meta de investimento" onClose={() => !pending && onClose()}>
+    <Dialog title="Criar um objetivo" onClose={() => !pending && onClose()}>
       <form className="simple-form" onSubmit={(event) => void save(event)}>
         <fieldset className="simple-form" disabled={pending}>
           <label>
-            Nome da meta
+            O que você quer fazer?
             <input
               autoFocus
               data-dialog-autofocus
@@ -104,12 +114,12 @@ function InvestmentGoalDialog({
               maxLength={100}
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Ex.: completar minha reserva"
+              placeholder="Ex.: guardar para uma viagem"
               required
             />
           </label>
           <label>
-            Valor que quer alcançar (R$)
+            Quanto quer juntar? (R$)
             <input
               inputMode="decimal"
               value={target}
@@ -123,10 +133,10 @@ function InvestmentGoalDialog({
             <input inputMode="decimal" value={saved} onChange={(event) => setSaved(event.target.value)} required />
           </label>
           <label>
-            Data desejada
+            Até quando gostaria?
             <input type="date" min={today} value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
           </label>
-          <p className="muted">A data é um plano ajustável. Não representa prazo ou rendimento garantido.</p>
+          <p className="muted">Você pode mudar essa data. O dinheiro pode crescer mais ou menos do que o esperado.</p>
           {error && (
             <p className="error-message" role="alert">
               {error}
@@ -134,7 +144,7 @@ function InvestmentGoalDialog({
           )}
           <Button type="submit" disabled={pending}>
             <Check size={18} />
-            {pending ? 'Salvando…' : 'Salvar meta'}
+            {pending ? 'Salvando…' : 'Salvar objetivo'}
           </Button>
           <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
             Cancelar
@@ -204,9 +214,9 @@ export function InvestmentsPage() {
         null,
       );
       await app.refresh();
-      setNotice('Aporte mensal salvo como planejamento. Nenhum dinheiro foi movimentado.');
+      setNotice('Seu plano foi salvo. Nenhum dinheiro foi transferido.');
     } catch {
-      setError('Não foi possível salvar. Confira o valor do aporte e tente novamente.');
+      setError('Não foi possível salvar. Confira o valor e tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -221,19 +231,19 @@ export function InvestmentsPage() {
       if (app.demo) {
         setAdvice({
           answer:
-            'Na demonstração não consultamos a IA. Em uma conta real, o Nexo só explica o que encontrar em fontes verificadas; não indica um ativo nem garante rendimento.',
+            'Na demonstração, a IA não é consultada. Em uma conta real, o Nexo explica apenas o que encontra em fontes confiáveis. Ele não escolhe onde você vai investir nem promete ganhos.',
           sources: [],
           evidence_status: 'demo',
         });
         return;
       }
       const response = await invoke<AdviceReply>('ai-chat', {
-        question: `Explique em português muito simples quais perguntas uma pessoa deve fazer antes de investir para o objetivo "${selectedGoal.name}". O prazo informado é de ${months} meses e a preferência declarada é "${riskLabel}". Não indique produtos, ativos ou instituições, não estime rendimentos e explique que a resposta depende apenas de fontes verificadas na base.`,
+        question: `Explique de forma simples o que a pessoa deve conferir antes de escolher onde guardar dinheiro para "${selectedGoal.name}". Ela planeja usar esse dinheiro daqui a ${months} meses e disse: "${riskLabel}". Não recomende produtos, bancos, ações ou fundos. Não prometa ganhos. Use apenas informações de fontes confiáveis da base e diga se não encontrar informação suficiente.`,
         save_history: false,
       });
       setAdvice(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível consultar as evidências agora.');
+      setError(err instanceof Error ? err.message : 'Não foi possível buscar uma explicação agora.');
     } finally {
       setAsking(false);
     }
@@ -244,18 +254,18 @@ export function InvestmentsPage() {
       <PageHeader
         eyebrow="Seu dinheiro no futuro"
         title="Investir sem complicar"
-        description="Escolha um objetivo. Veja um plano claro, sem promessa de rendimento."
-        action={<Badge>Simulação educativa</Badge>}
+        description="Escolha algo que quer fazer e veja quanto guardar por mês. Não prometemos ganhos."
+        action={<Badge>Plano para avaliar</Badge>}
       />
       <div className="investment-grid">
         <div className="stack">
           <Card>
-            <SectionTitle action={<Target size={20} aria-hidden="true" />}>1. Escolha seu objetivo</SectionTitle>
+            <SectionTitle action={<Target size={20} aria-hidden="true" />}>1. O que você quer fazer?</SectionTitle>
             {app.data.goals.length ? (
               <div className="simple-form">
                 <label>
-                  Meta para este plano
-                  <select aria-label="Meta para este plano" value={goalId} onChange={(event) => selectGoal(event.target.value)}>
+                  Para que você quer guardar?
+                  <select aria-label="Para que você quer guardar?" value={goalId} onChange={(event) => selectGoal(event.target.value)}>
                     {app.data.goals.map((goal) => (
                       <option key={goal.id} value={goal.id}>
                         {goal.name} · {formatMoney(goal.target)}
@@ -264,20 +274,20 @@ export function InvestmentsPage() {
                   </select>
                 </label>
                 <Button variant="secondary" onClick={() => setCreating(true)}>
-                  <Plus size={18} /> Criar meta de investimento
+                  <Plus size={18} /> Criar objetivo
                 </Button>
               </div>
             ) : (
               <div className="stack-sm">
-                <p>Uma meta dá um destino ao dinheiro. Você pode começar com algo importante para você.</p>
+                <p>Escolha algo importante para você. Vamos calcular quanto guardar por mês.</p>
                 <Button onClick={() => setCreating(true)}>
-                  <Plus size={18} /> Criar meta de investimento
+                  <Plus size={18} /> Criar objetivo
                 </Button>
               </div>
             )}
             {selectedGoal && (
               <div className="investment-plan-result">
-                <span>Faltam para essa meta</span>
+                <span>Falta juntar para esse objetivo</span>
                 <strong>{formatMoney(Math.max(0, selectedGoal.target - selectedGoal.saved))}</strong>
                 <span className="muted">Data que você escolheu: {dateLabel(selectedGoal.deadline)}.</span>
               </div>
@@ -285,7 +295,7 @@ export function InvestmentsPage() {
           </Card>
 
           <Card>
-            <SectionTitle>2. Quanto cabe no seu plano?</SectionTitle>
+            <SectionTitle>2. Quanto você consegue guardar por mês?</SectionTitle>
             {selectedGoal ? (
               <>
                 <form
@@ -296,43 +306,43 @@ export function InvestmentsPage() {
                   }}
                 >
                   <label>
-                    Aporte mensal (R$)
+                    Quanto quer guardar por mês? (R$)
                     <input
                       inputMode="decimal"
                       value={monthlyInput}
                       onChange={(event) => setMonthlyInput(event.target.value)}
-                      aria-describedby="investment-aporte-note"
+                      aria-describedby="investment-monthly-saving-note"
                       aria-invalid={monthlyAmount === null}
                     />
-                    <small id="investment-aporte-note">Um valor que você pode ajustar a qualquer momento.</small>
+                    <small id="investment-monthly-saving-note">Você pode mudar esse valor quando quiser.</small>
                   </label>
                   {monthlyAmount === null && (
                     <p className="muted" role="status">
-                      Digite um valor válido para atualizar a simulação.
+                      Digite um valor para atualizar a conta.
                     </p>
                   )}
                   <Button type="submit" disabled={saving || monthlyAmount === null}>
-                    <Check size={18} /> {saving ? 'Salvando…' : 'Salvar aporte nesta meta'}
+                    <Check size={18} /> {saving ? 'Salvando…' : 'Salvar meu plano'}
                   </Button>
                 </form>
                 {projection && balanceWithoutReturns !== null ? (
                   <div className="investment-plan-result" aria-live="polite">
-                    <span>Para chegar na data escolhida, sem contar rendimento</span>
+                    <span>Sem contar possíveis ganhos, você teria de guardar</span>
                     <strong>{formatMoney(projection.required)} por mês</strong>
                     <span>
-                      Com o aporte informado, o plano acumularia cerca de {formatMoney(balanceWithoutReturns)} até lá.
+                      Guardando esse valor, você juntaria cerca de {formatMoney(balanceWithoutReturns)} até lá.
                     </span>
                     <Badge tone={projection.feasible ? 'green' : 'orange'}>
-                      {projection.feasible ? 'Aporte suficiente pelas contribuições' : 'Prazo ou aporte precisa de ajuste'}
+                      {projection.feasible ? 'Esse valor cobre o que falta' : 'Talvez precise guardar mais ou mudar a data'}
                     </Badge>
-                    <small className="muted">A conta considera apenas o valor guardado e os aportes, sem juros, taxas ou impostos.</small>
+                    <small className="muted">Somamos o que já está guardado ao valor mensal. Não incluímos possíveis ganhos, cobranças ou impostos.</small>
                   </div>
                 ) : (
-                  <p className="muted">A projeção aparece quando o aporte informado for válido.</p>
+                  <p className="muted">A conta aparece quando você digitar um valor válido.</p>
                 )}
               </>
             ) : (
-              <p className="muted">Crie ou escolha uma meta para ver o plano mensal.</p>
+              <p className="muted">Escolha ou crie um objetivo para ver seu plano mensal.</p>
             )}
             {notice && (
               <p className="notice" role="status">
@@ -347,9 +357,9 @@ export function InvestmentsPage() {
           </Card>
 
           <Card>
-            <SectionTitle action={<ShieldCheck size={20} aria-hidden="true" />}>3. Como você se sente com oscilações?</SectionTitle>
-            <p className="muted">Isso registra sua preferência; não é um teste de perfil nem uma recomendação de investimento.</p>
-            <div className="investment-risk-options" role="group" aria-label="Preferência por oscilação">
+            <SectionTitle action={<ShieldCheck size={20} aria-hidden="true" />}>3. Quanto você aceita que o valor mude?</SectionTitle>
+            <p className="muted">Escolha o que deixa você mais confortável. Nenhuma opção elimina o risco ou garante ganhos.</p>
+            <div className="investment-risk-options" role="group" aria-label="Quanto você aceita que o valor mude?">
               {riskChoices.map((choice) => (
                 <Button
                   key={choice.id}
@@ -369,8 +379,7 @@ export function InvestmentsPage() {
             </div>
             <Why title="Por que isso importa?">
               <p>
-                Um valor que pode cair no curto prazo pode não combinar com uma conta próxima ou com uma meta com data apertada.
-                A instituição financeira deve avaliar se cada produto combina com você antes da aplicação.
+                Se você precisar do dinheiro em breve, talvez tenha de retirar por menos do que colocou. O lugar onde você investir deve explicar os riscos antes da escolha.
               </p>
             </Why>
           </Card>
@@ -378,79 +387,117 @@ export function InvestmentsPage() {
 
         <div className="stack">
           <Card>
-            <SectionTitle>Seu momento, com os dados registrados</SectionTitle>
+            <SectionTitle>Seu dinheiro hoje</SectionTitle>
             <div className="stack-sm">
               <Stat
-                label="Saldo livre estimado hoje"
+                label="Dinheiro estimado depois das contas"
                 value={summary.free}
-                hint="Após contas próximas, reserva e aportes de outras metas registrados."
+                hint="Conta feita com o que você registrou. Pode faltar algum gasto ou entrada."
               />
-              <Stat label="Reserva registrada" value={summary.reserve} hint="Contas marcadas como poupança no Nexo." />
+              <Stat label="Dinheiro guardado para emergências" value={summary.reserve} hint="Contas que você marcou como reserva." />
               <Stat
-                label="Diferença informada no mês"
+                label="Renda menos contas fixas"
                 value={declaredMonthlyRoom}
-                hint="Renda menos despesas fixas cadastradas; ainda faltam gastos variáveis e imprevistos."
+                hint="Ainda não desconta mercado, remédios e outros gastos do dia a dia."
               />
             </div>
             {summary.free <= 0 && (
               <div className="investment-callout" role="note" style={{ marginTop: 18 }}>
                 <AlertTriangle size={20} aria-hidden="true" />
-                <p>Os registros de hoje não mostram saldo livre. Não conte com a reserva ou com dinheiro comprometido para fazer aportes.</p>
+                <p>Pelos dados que você anotou, hoje não aparece dinheiro livre. Não use a reserva nem o dinheiro separado para pagar contas.</p>
               </div>
             )}
             {monthlyAmount !== null && monthlyAmount > declaredMonthlyRoom && declaredMonthlyRoom > 0 && (
               <div className="investment-callout" role="note" style={{ marginTop: 18 }}>
                 <AlertTriangle size={20} aria-hidden="true" />
-                <p>O aporte informado supera a diferença entre renda e despesas fixas registradas. Confira os gastos variáveis antes de decidir.</p>
+                <p>Esse valor é maior que a diferença entre sua renda e suas contas fixas. Confira também os outros gastos antes de decidir.</p>
               </div>
             )}
-            <small className="muted">Os registros podem estar incompletos. Esta comparação não autoriza transferências.</small>
+            <small className="muted">Esses números podem estar incompletos e não transferem dinheiro.</small>
           </Card>
 
           <Card>
-            <SectionTitle action={<TrendingUp size={20} aria-hidden="true" />}>Uma explicação com evidências</SectionTitle>
+            <SectionTitle action={<Check size={20} aria-hidden="true" />}>Seu próximo passo</SectionTitle>
+            {projection ? (
+              <p>
+                Para essa meta, o plano calcula que você precisa guardar <strong>{formatMoney(projection.required)} por mês</strong>,
+                sem contar possíveis ganhos. Confira se esse valor cabe depois das suas contas.
+              </p>
+            ) : (
+              <p>Preencha o valor mensal acima para ver quanto guardar. Confira se esse valor cabe depois das suas contas.</p>
+            )}
+            <ol className="investment-next-steps">
+              <li>
+                <strong>Quando guardar:</strong> escolha um dia depois que receber e separar o dinheiro das contas. Não use
+                a reserva nem o dinheiro de que vai precisar em breve.
+              </li>
+              <li>
+                <strong>Onde procurar:</strong> no app do seu banco ou corretora, abra “Investimentos”. Para conhecer
+                títulos públicos, consulte o simulador oficial do Tesouro Direto.
+              </li>
+              <li>
+                <strong>Como escolher:</strong> informe seu objetivo e a data em que vai precisar do dinheiro. Antes de
+                confirmar, confira quando pode retirar, quanto paga em taxas e impostos e se pode perder dinheiro.
+              </li>
+            </ol>
+            <a
+              className="button button-secondary"
+              href="https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ExternalLink size={18} /> Ver opções no simulador oficial
+            </a>
+            <small className="muted">
+              Esse simulador mostra títulos do Tesouro Direto, não compara todos os bancos. O Nexo não vê as ofertas nem
+              os preços atuais da sua instituição.
+            </small>
+          </Card>
+
+          <Card>
+            <SectionTitle action={<TrendingUp size={20} aria-hidden="true" />}>Entenda antes de decidir</SectionTitle>
             <p className="muted">
-              O Nexo pode explicar perguntas sobre prazo e oscilação usando a base verificada. Se ela não sustentar uma resposta, ele vai dizer isso.
+              Peça uma explicação sobre o tempo e as mudanças no valor. O Nexo usa informações de fontes confiáveis; se não encontrar uma boa resposta, vai dizer.
             </p>
             <Button onClick={() => void askNexo()} disabled={!selectedGoal || asking}>
-              <ArrowUpRight size={18} /> {asking ? 'Conferindo fontes…' : 'Pedir explicação ao Nexo'}
+              <ArrowUpRight size={18} /> {asking ? 'Consultando informações…' : 'Explicar meu plano'}
             </Button>
             {advice && (
               <div className="verified-answer" aria-live="polite" style={{ marginTop: 18 }}>
                 <p>{advice.answer}</p>
                 {advice.sources.length > 0 ? (
                   <div className="investment-source-list">
-                    <strong>Fontes usadas</strong>
+                    <strong>Informações consultadas</strong>
                     {advice.sources.map((source) => (
                       <a key={source.id} href={source.url} target="_blank" rel="noreferrer">
-                        {source.title} · evidência {source.level}
+                        {source.title}
                       </a>
                     ))}
                   </div>
                 ) : (
-                  <p className="muted">Sem fontes verificadas para esta pergunta, não há recomendação específica.</p>
+                  <p className="muted">Ainda não encontramos informações confiáveis para orientar essa escolha.</p>
                 )}
               </div>
             )}
-            <small className="muted">A IA não escolhe ativos, movimenta dinheiro nem prevê rendimento. O histórico desta pergunta não é salvo.</small>
+            <small className="muted">A IA não escolhe onde você vai investir, não movimenta dinheiro e não promete ganhos. Sua pergunta não fica salva.</small>
           </Card>
 
           <Card>
-            <SectionTitle action={<BookOpen size={20} aria-hidden="true" />}>Fontes oficiais para conferir</SectionTitle>
+            <SectionTitle action={<BookOpen size={20} aria-hidden="true" />}>Onde saber mais</SectionTitle>
             <div className="investment-source-list">
               <a href="https://www.gov.br/investidor/pt-br/investir" target="_blank" rel="noreferrer">
-                Portal do Investidor da CVM: antes de investir
+                Portal do Investidor: dicas antes de investir
               </a>
               <a href="https://www.tesourodireto.com.br/conheca/conheca-o-tesouro-direto.htm" target="_blank" rel="noreferrer">
-                Tesouro Direto: conheça o programa e seus títulos
+                Tesouro Direto: como funciona
               </a>
               <a href="https://www.tesourodireto.com.br/titulos/tipos-de-tesouro.htm" target="_blank" rel="noreferrer">
-                Tesouro Direto: tipos de título
+                Tesouro Direto: opções disponíveis
               </a>
             </div>
             <div className="investment-callout" role="note" style={{ marginTop: 18 }}>
               <ShieldCheck size={20} aria-hidden="true" />
-              <p>Antes de aplicar, confira prazo de resgate, custos, impostos, risco de venda antecipada e garantias aplicáveis ao produto.</p>
+              <p>Antes de investir, confira quando pode retirar o dinheiro, quanto pode pagar em taxas e impostos e se existe alguma proteção contra perdas.</p>
             </div>
           </Card>
         </div>
