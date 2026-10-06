@@ -1,6 +1,13 @@
 {
-  "version": "2026.10.05.4",
+  "version": "2026.10.06.1",
   "changes": [
+    "Experiência: rail lateral discreto no desktop, cinco destinos no mobile, conteúdo com largura confortável e atalhos Anotar, olho e Proteção.",
+    "Início e Planejar: ações rápidas, contas próximas em lista, meta em destaque e planejamento em seções verticais.",
+    "Anotar: folha de ações no mobile, entrada manual em duas etapas e atalhos para Nexo, recibo, extrato e WhatsApp.",
+    "Registro manual: confirmação imediata com Desfazer; movimentos reais ainda pendentes offline não mostram undo.",
+    "Privacidade: valores financeiros podem ser ocultados nas principais telas; preferência fica salva neste aparelho.",
+    "Movimentos: filtro para registros pendentes, detalhe com origem/status e valores protegidos pelo olho.",
+    "Perfil: conta, integrações, Família, Proteção/MFA, privacidade e ajuda em grupos separados.",
     "Navegação: início, movimentos, planejar, Nexo e perfil; Anotar reúne os caminhos de entrada manual, Nexo, nota fiscal, extrato e WhatsApp.",
     "Movimentos: origem de cada registro visível e filtros para anotações no app, WhatsApp e arquivos importados.",
     "Início: demonstração identificada, insight calculado com evidências quando há dados suficientes e meta com passo, valor restante e data de revisão.",

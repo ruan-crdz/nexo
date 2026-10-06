@@ -99,11 +99,12 @@ export function SimpleSettings() {
   return (
     <>
       <header className="simple-heading">
-        <h1>Ajustes</h1>
-        <p>Deixe o Nexo confortável para você.</p>
+        <h1>Perfil</h1>
+        <p>Sua conta, suas preferências e sua proteção.</p>
       </header>
       <Card>
         <form className="simple-form" onSubmit={(e) => void save(e)}>
+          <h2>Minha conta</h2>
           <label>
             Como podemos chamar você?
             <input
@@ -127,7 +128,7 @@ export function SimpleSettings() {
       </Card>
       <Card>
         <div className="simple-form">
-          <h2>Aparência da tela</h2>
+          <h2>Aparência</h2>
           <label>
             Escolha o fundo
             <select value={theme} onChange={(e) => setTheme(e.target.value as 'system' | 'light' | 'dark')}>
@@ -160,7 +161,7 @@ export function SimpleSettings() {
                   .finally(() => setPending(false));
               }}
             />
-            Guardar uma cópia cifrada e permitir anotações pendentes neste aparelho.
+            Guardar uma cópia cifrada e permitir movimentos pendentes neste aparelho.
           </label>
           <p className="muted">
             Não ative em aparelho compartilhado. Desativar ou sair da conta remove a cópia e pendências
@@ -169,38 +170,29 @@ export function SimpleSettings() {
         </section>
       )}
       <Card className="simple-settings-links">
-        <Link to="/controle">
-          <span>Decidir, faturas, sugestões e histórico</span>
-          <ChevronRight />
-        </Link>
-        <Link to="/planejar">
-          <span>Contas, limites e metas</span>
-          <ChevronRight />
-        </Link>
-        <Link to="/perguntas">
-          <span>Perguntas com cálculos</span>
-          <ChevronRight />
-        </Link>
-        <Link to="/importar">
-          <span>Importar CSV ou OFX</span>
+        <h2>Integrações e compartilhamento</h2>
+        <Link to="/integracoes">
+          <MessageCircle />
+          <span>Nexo no WhatsApp</span>
           <ChevronRight />
         </Link>
         <Link to="/familia">
           <span>Permissões da família</span>
           <ChevronRight />
         </Link>
-        <Link to="/integracoes">
-          <MessageCircle />
-          <span>Meu WhatsApp</span>
-          <ChevronRight />
-        </Link>
-        <Link to="/ajuda">
-          <span>Como usar o Nexo</span>
+        <h2>Segurança e privacidade</h2>
+        <Link to="/seguranca">
+          <ShieldCheck />
+          <span>Proteção e autenticação</span>
           <ChevronRight />
         </Link>
         <Link to="/privacidade">
-          <ShieldCheck />
-          <span>Privacidade e meus dados</span>
+          <span>Meus dados e privacidade</span>
+          <ChevronRight />
+        </Link>
+        <h2>Ajuda</h2>
+        <Link to="/ajuda">
+          <span>Como usar o Nexo</span>
           <ChevronRight />
         </Link>
         <Button variant="secondary" onClick={() => setLeaving(true)}>
@@ -317,7 +309,7 @@ export function SimpleSettings() {
           }}
         >
           <div className="simple-form">
-            <p>Suas anotações continuam salvas. Para voltar, use seu e-mail e sua senha.</p>
+            <p>Seus movimentos continuam salvos. Para voltar, use seu e-mail e sua senha.</p>
             <p>
               Sincronize pendências offline antes de sair: dados ainda não enviados neste aparelho serão
               removidos.
@@ -353,7 +345,7 @@ export function SimpleHelp() {
           <h2>Para anotar um gasto</h2>
           <p>
             No início, toque em “Anotar gasto”. Digite o valor e com o que gastou, como “mercado”. Depois
-            toque em “Salvar anotação”.
+            toque em “Salvar movimento”.
           </p>
           <Link className="button button-secondary" to="/inicio">
             Ir para o início
@@ -378,18 +370,18 @@ export function SimpleHelp() {
         <Card>
           <h2>Anotou algo errado?</h2>
           <p>
-            Abra “Anotações” e toque em “Corrigir”. Para tirar uma anotação, toque em “Excluir”. O Nexo vai
+            Abra “Movimentos” e toque em “Corrigir”. Para tirar um movimento, toque em “Excluir”. O Nexo vai
             pedir sua confirmação.
           </p>
           <Link className="button button-secondary" to="/movimentos">
-            Ver minhas anotações
+            Ver meus movimentos
           </Link>
         </Card>
         <Card>
           <h2>De onde vem o resumo?</h2>
           <p>
             “Entrou” soma o que você recebeu no mês. “Saiu” soma o que pagou. A diferença mostra quanto sobrou
-            ou faltou, com base nas suas anotações. O Nexo não consulta seu banco.
+            ou faltou, com base nos seus movimentos. O Nexo não consulta seu banco.
           </p>
         </Card>
       </div>

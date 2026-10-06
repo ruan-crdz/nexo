@@ -16,9 +16,10 @@ import {
 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button, Dialog, Progress } from '../design-system/components';
+import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { goalSchema } from '../../shared/domain';
 import type { Goal } from '../../shared/domain';
-import { civilDate, formatMoney, parseMoney, shiftDays } from '../../shared/financial-engine';
+import { civilDate, parseMoney, shiftDays } from '../../shared/financial-engine';
 import { canAward, goalJourney, goalPresets, habitSummary } from '../../shared/journey';
 
 export function JourneyGoalForm({
@@ -31,6 +32,7 @@ export function JourneyGoalForm({
   onClose: () => void;
 }) {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
   const today = civilDate(new Date(), app.data.profile.timezone);
   const [id] = useState(() => existing?.id ?? crypto.randomUUID());
   const [name, setName] = useState(existing?.name ?? 'Minha primeira reserva');
@@ -115,7 +117,7 @@ export function JourneyGoalForm({
                 aria-pressed={value === Number(target.replace(',', '.')) * 100}
                 onClick={() => setTarget(String(value / 100))}
               >
-                {formatMoney(value)}
+                {displayMoney(value)}
               </button>
             ))}
           </div>
@@ -179,6 +181,7 @@ function GoalMovement({
   onClose: () => void;
 }) {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
   const [requestId] = useState(() => crypto.randomUUID());
   const [amount, setAmount] = useState(
     reason === 'saving' && goal.weekly_amount ? String(goal.weekly_amount / 100).replace('.', ',') : '',
@@ -230,7 +233,7 @@ function GoalMovement({
     >
       <form className="simple-form" onSubmit={(event) => void save(event)}>
         <p>
-          {goal.name} · guardado {formatMoney(goal.saved)}
+          {goal.name} · guardado {displayMoney(goal.saved)}
         </p>
         <label>
           Valor (R$)
@@ -325,6 +328,7 @@ function downloadAchievement(name: string, goal: Goal | null, points: number) {
 
 export function GoalJourney() {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
   const today = civilDate(new Date(), app.data.profile.timezone);
   const goal =
     app.data.goals.find((item) => item.id === app.data.profile.active_goal_id) ??
@@ -407,12 +411,12 @@ export function GoalJourney() {
           <div className="journey-main">
             <div>
               <div className="journey-amount">
-                <strong>{formatMoney(goal.saved)}</strong>
-                <span>de {formatMoney(goal.target)}</span>
+                <strong>{displayMoney(goal.saved)}</strong>
+                <span>de {displayMoney(goal.target)}</span>
               </div>
               <Progress
                 value={journey.milestonePercent}
-                label={`Progresso do marco de ${formatMoney(journey.milestone)}`}
+                label={`Progresso do marco de ${displayMoney(journey.milestone)}`}
               />
               <p className="journey-estimate muted">
                 {Math.round(journey.milestonePercent)}% deste marco. A barra representa o próximo passo, não o
@@ -420,8 +424,8 @@ export function GoalJourney() {
               </p>
               <p className="journey-next">
                 <Flag size={18} />
-                Próximo marco: {formatMoney(journey.milestone)} · faltam{' '}
-                {formatMoney(Math.max(0, journey.milestone - goal.saved))}
+                Próximo marco: {displayMoney(journey.milestone)} · faltam{' '}
+                {displayMoney(Math.max(0, journey.milestone - goal.saved))}
               </p>
               <p className="journey-coaching">
                 {paused
@@ -453,7 +457,7 @@ export function GoalJourney() {
             </div>
           </div>
           <div className="journey-foot">
-            <span>Já alcançou {formatMoney(journey.peak)} nesta meta.</span>
+            <span>Já alcançou {displayMoney(journey.peak)} nesta meta.</span>
             <span>
               {app.data.goal_events.filter((event) => event.goal_id === goal.id && event.delta > 0).length}{' '}
               passos registrados. O dinheiro atual é separado do histórico.
@@ -469,7 +473,7 @@ export function GoalJourney() {
           <div className="goal-presets">
             {goalPresets.map((value) => (
               <Button key={value} variant="secondary" onClick={() => setSetup({ preset: value })}>
-                {formatMoney(value)}
+                {displayMoney(value)}
               </Button>
             ))}
           </div>
@@ -721,7 +725,7 @@ export function GoalJourney() {
                 </p>
                 <p>
                   {journey
-                    ? `Seu maior progresso nesta meta foi ${formatMoney(journey.peak)}. O que precisou ser usado não apaga sua capacidade de retomar.`
+                    ? `Seu maior progresso nesta meta foi ${displayMoney(journey.peak)}. O que precisou ser usado não apaga sua capacidade de retomar.`
                     : 'Seu caminho pode começar com uma meta pequena.'}
                 </p>
                 <p>Seu próximo passo não precisa impressionar ninguém. Precisa caber na sua vida.</p>
@@ -734,7 +738,7 @@ export function GoalJourney() {
                   {summary.checkins} check-ins · nível {summary.level} ·{' '}
                   {app.data.goal_events.filter((event) => event.delta > 0).length} passos de reserva.
                 </p>
-                {journey && <p>Maior marco na meta atual: {formatMoney(journey.peak)}.</p>}
+                {journey && <p>Maior marco na meta atual: {displayMoney(journey.peak)}.</p>}
               </section>
             )}
             <p className="muted">

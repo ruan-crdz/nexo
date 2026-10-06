@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../data/context';
 import { invoke } from '../data/client';
 import { DEMO_KEY } from '../data/repository';
-import { Button, Card, Dialog } from '../design-system/components';
+import { Button, Dialog } from '../design-system/components';
 
 export function SimplePrivacy() {
   const app = useApp();
@@ -52,7 +52,7 @@ export function SimplePrivacy() {
         <h1>Seus dados</h1>
         <p>Você controla suas anotações.</p>
       </header>
-      <Card className="simple-form">
+      <section className="privacy-section simple-form">
         <h2>O que fica guardado?</h2>
         <p>
           Seu nome, suas anotações e o número de WhatsApp que você conectar. O Nexo não acessa sua conta
@@ -70,15 +70,15 @@ export function SimplePrivacy() {
         <Link className="button button-secondary" to="/integracoes">
           Gerenciar meu WhatsApp
         </Link>
-      </Card>
-      <Card className="simple-form">
+      </section>
+      <section className="privacy-section simple-form">
         <h2>Guardar uma cópia</h2>
         <p>Baixe um arquivo com seus dados e suas anotações.</p>
         <Button variant="secondary" disabled={pending} onClick={() => void exportData()}>
           Baixar meus dados
         </Button>
-      </Card>
-      <Card className="simple-form">
+      </section>
+      <section className="privacy-section simple-form">
         <h2>Excluir minha conta</h2>
         <p>
           Isso apaga sua conta e suas anotações permanentemente. Baixe uma cópia antes, se quiser guardar seus
@@ -93,7 +93,7 @@ export function SimplePrivacy() {
         >
           Quero excluir minha conta
         </Button>
-      </Card>
+      </section>
       {error && !deleting && (
         <p role="alert" className="error-message">
           {error}

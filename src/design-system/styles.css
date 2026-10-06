@@ -825,9 +825,10 @@ fieldset {
   margin-top: 12px;
   color: var(--muted);
 }
-.whatsapp-preview h2 {
-  margin: 8px 0 12px;
-  font-size: 26px;
+.whatsapp-preview > summary {
+  cursor: pointer;
+  list-style-position: inside;
+  color: var(--ink);
 }
 .chat-example {
   display: grid;
@@ -1339,6 +1340,12 @@ fieldset {
   padding: 35px 0;
   text-align: center;
 }
+.assistant-experience {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+}
 .chat-intro .brand {
   margin: 0 auto 20px;
 }
@@ -1367,20 +1374,36 @@ fieldset {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 820px;
-  margin: auto;
+  width: 100%;
+  max-width: 840px;
+  margin: 0 auto;
 }
 .chat-message {
-  padding: 20px 24px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  min-width: 0;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
   white-space: pre-wrap;
 }
 .chat-message.user {
   align-self: flex-end;
+  width: fit-content;
   background: var(--sand);
   max-width: 85%;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+}
+.chat-message.assistant {
+  width: 100%;
+  max-width: 840px;
+  align-self: center;
+  border-top: 1px solid var(--line);
+}
+.chat-message.assistant h2 {
+  max-width: 760px;
+  margin: 10px 0 16px;
+  font-size: 24px;
+  line-height: 1.35;
 }
 .chat-message p {
   line-height: 1.8;

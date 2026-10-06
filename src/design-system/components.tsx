@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { ArrowUpRight, X, Info, Plus } from 'lucide-react';
 import { formatMoney } from '../../shared/financial-engine';
+import { useFinancialVisibility } from './financial-visibility';
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -75,9 +76,18 @@ export function Stat({
   return (
     <div className={`stat ${accent ? 'stat-accent' : ''}`}>
       <span>{label}</span>
-      <strong>{typeof value === 'number' ? formatMoney(value) : value}</strong>
+      <strong>{typeof value === 'number' ? <MoneyValue value={value} /> : value}</strong>
       {hint && <small>{hint}</small>}
     </div>
+  );
+}
+export function MoneyValue({ value, className = '' }: { value: number; className?: string }) {
+  const { visible } = useFinancialVisibility();
+  const formatted = visible ? formatMoney(value) : 'R$ •••••';
+  return (
+    <span className={`money-value ${className}`} aria-label={visible ? formatted : 'Valor oculto'}>
+      {formatted}
+    </span>
   );
 }
 export function Progress({ value, label }: { value: number; label: string }) {
@@ -149,10 +159,12 @@ export function Dialog({
   title,
   children,
   onClose,
+  className = '',
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null),
     titleId = useId();
@@ -169,7 +181,7 @@ export function Dialog({
   }, []);
   return (
     <dialog
-      className="dialog"
+      className={`dialog ${className}`}
       ref={ref}
       aria-labelledby={titleId}
       onCancel={(event) => {

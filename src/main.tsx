@@ -11,6 +11,8 @@ import '@fontsource/manrope/latin-700.css';
 import './design-system/styles.css';
 import './design-system/simple.css';
 import { ThemeProvider } from './design-system/theme';
+import { FinancialVisibilityProvider } from './design-system/financial-visibility';
+import { CaptureFlowProvider } from './design-system/capture-flow';
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
   state = { error: false };
   static getDerivedStateFromError() {
@@ -41,9 +43,13 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <QueryClientProvider client={client}>
         <ThemeProvider>
-          <AppProvider>
-            <App />
-          </AppProvider>
+          <FinancialVisibilityProvider>
+            <CaptureFlowProvider>
+              <AppProvider>
+                <App />
+              </AppProvider>
+            </CaptureFlowProvider>
+          </FinancialVisibilityProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>

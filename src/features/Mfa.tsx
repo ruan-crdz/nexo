@@ -7,6 +7,7 @@ import { Button, Card } from '../design-system/components';
 export function MfaPage() {
   const app = useApp(),
     [factors, setFactors] = useState<{ id: string; friendly_name?: string; status: string }[]>([]),
+    [factorStatusReady, setFactorStatusReady] = useState(false),
     [factorId, setFactorId] = useState(''),
     [secret, setSecret] = useState(''),
     [qr, setQr] = useState(''),
@@ -21,7 +22,9 @@ export function MfaPage() {
           setFactors(data.totp);
           setFactorId(data.totp.find((f) => f.status === 'verified')?.id ?? '');
         }
+        setFactorStatusReady(true);
       });
+    else setFactorStatusReady(true);
   }, [app.user]);
   if (app.authReady && !app.user && !app.demo) return <Navigate to="/login" replace />;
   async function enroll() {
@@ -60,8 +63,16 @@ export function MfaPage() {
       <Link to="/">
         <Brand />
       </Link>
-      <h1>{app.mfaRequired ? 'Confirme que é você.' : 'Uma camada extra de proteção.'}</h1>
+      <h1>{app.mfaRequired ? 'Confirme que é você.' : 'Proteção'}</h1>
       <Card>
+        <h2>Autenticação em duas etapas</h2>
+        {!app.demo && !app.mfaRequired && factorStatusReady && (
+          <p role="status" className="notice">
+            {factors.some((factor) => factor.status === 'verified')
+              ? 'Autenticador TOTP ativo nesta conta.'
+              : 'Nenhum autenticador TOTP configurado.'}
+          </p>
+        )}
         <p className="muted">
           Use um aplicativo autenticador compatível com TOTP. O código protege o acesso aos seus dados, além
           da senha.

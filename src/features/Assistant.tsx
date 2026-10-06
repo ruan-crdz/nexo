@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Sparkles, Mic } from 'lucide-react';
+import { Send, Sparkles, Mic, Calculator } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../data/context';
+import {
+  redactFinancialText,
+  useFinancialVisibility,
+  useMoneyDisplay,
+} from '../design-system/financial-visibility';
 import { invoke } from '../data/client';
 import { personalSummary, weeklyPlan } from '../../shared/insights';
-import { formatMoney } from '../../shared/financial-engine';
-import { Badge, Brand, Button, Card, PageHeader, Why } from '../design-system/components';
+import { Badge, Brand, Button, PageHeader, Why } from '../design-system/components';
 
 type Reply = {
   answer: string;
@@ -35,6 +40,8 @@ const labels: Record<string, string> = {
 };
 export function AssistantPage() {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
+  const { visible } = useFinancialVisibility();
   const location = useLocation();
   const routeQuestion = (location.state as { question?: unknown } | null)?.question;
   const [input, setInput] = useState(typeof routeQuestion === 'string' ? routeQuestion : '');
@@ -60,9 +67,9 @@ export function AssistantPage() {
             .map((p, i) => `${i + 1}. ${p.title}`)
             .join('\n')}\n\nPara avaliar uma compra específica, abra “Futuro se…”.`,
           metrics: {
-            balance: formatMoney(s.balance),
-            free: formatMoney(s.free),
-            reserve: formatMoney(s.reserve),
+            balance: displayMoney(s.balance),
+            free: displayMoney(s.free),
+            reserve: displayMoney(s.reserve),
           },
           sources: [],
           evidence_status: 'demo',
@@ -105,21 +112,21 @@ export function AssistantPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Assistente Nexo"
-        title="Vamos pensar no seu próximo passo."
-        description="Seus números dão contexto. As evidências orientam a conversa."
+        eyebrow="Nexo"
+        title="O que você quer entender?"
+        description="Respostas claras, com cálculos e registros que você pode conferir."
         action={
           <Badge tone="green">
             {app.demo ? 'Explicação local · demo' : 'IA + motor financeiro + fontes'}
           </Badge>
         }
       />
-      <Card>
+      <section className="assistant-experience">
         {!messages.length && (
           <div className="chat-intro">
             <Brand compact />
-            <h2>O que está na sua cabeça hoje?</h2>
-            <p>Uma compra, uma meta ou só entender melhor seu momento. Podemos começar por aí.</p>
+            <h2>Escolha uma pergunta para começar</h2>
+            <p>Você também pode escrever ou falar do seu jeito.</p>
             <div className="suggestions">
               {['Como está meu mês?', 'Qual meu próximo passo?', 'Como construir minha reserva?'].map((q) => (
                 <Button key={q} variant="secondary" onClick={() => void send(q)}>
@@ -127,6 +134,10 @@ export function AssistantPage() {
                   {q}
                 </Button>
               ))}
+              <Link className="button button-secondary" to="/controle">
+                <Calculator size={14} />
+                Posso gastar?
+              </Link>
             </div>
           </div>
         )}
@@ -134,13 +145,17 @@ export function AssistantPage() {
           {messages.map((m) => (
             <div className={`chat-message ${m.role}`} key={m.id}>
               <small className="muted">{m.role === 'user' ? 'Você' : 'Nexo'}</small>
-              <p>{m.text}</p>
+              {m.role === 'assistant' && m.reply ? (
+                <h2>{visible ? m.text : redactFinancialText(m.text)}</h2>
+              ) : (
+                <p>{visible ? m.text : redactFinancialText(m.text)}</p>
+              )}
               {m.reply && (
                 <>
                   <div className="source-list">
                     {Object.entries(m.reply.metrics).map(([k, v]) => (
                       <div key={k}>
-                        <strong>{labels[k] ?? k}:</strong> {v}
+                        <strong>{labels[k] ?? k}:</strong> {visible ? v : redactFinancialText(v)}
                       </div>
                     ))}
                   </div>
@@ -234,7 +249,7 @@ export function AssistantPage() {
             Orientação educacional. Simulações dependem das premissas e não garantem resultados.
           </small>
         </div>
-      </Card>
+      </section>
     </>
   );
 }

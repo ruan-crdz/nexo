@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   MessageCircle,
@@ -14,16 +13,20 @@ import {
   Trash2,
   Camera,
   Mic,
+  Plus,
+  Target,
 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button, Card, Dialog } from '../design-system/components';
+import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { categories, transactionSchema } from '../../shared/domain';
 import type { Transaction } from '../../shared/domain';
-import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
+import { civilDate, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
 import { monthlyFlow } from '../../shared/insights';
 import { budgetUsage, weeklySummary } from '../../shared/planning';
 import { goalJourney } from '../../shared/journey';
 import { merchantKey } from '../../shared/financial-decisions';
+import { useCaptureFlow } from '../design-system/capture-flow';
 
 function monthLabel(month: string) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
@@ -68,7 +71,6 @@ export function MoneyForm({
   const [kind, setKind] = useState(type);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
   const [learnCategory, setLearnCategory] = useState(false);
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -97,17 +99,39 @@ export function MoneyForm({
       return;
     }
     setPending(true);
+    let preferenceFailed = false;
     try {
       await app.repository.save('transactions', value, null);
       if (learnCategory && merchantKey(description).length >= 3) {
         try {
           await app.repository.categoryPreference(merchantKey(description), category);
         } catch {
-          app.toast('A anotação foi salva, mas a preferência para próximos registros não foi atualizada.');
+          preferenceFailed = true;
         }
       }
-      setSaved(true);
       await app.refresh();
+      const pendingOffline = !app.demo && !navigator.onLine;
+      const canUndo = !existing && (app.demo || navigator.onLine);
+      app.toast(
+        preferenceFailed
+          ? 'Movimento salvo; a preferência para os próximos registros não foi atualizada.'
+          : pendingOffline
+            ? 'Movimento pendente neste aparelho.'
+            : existing
+              ? 'Movimento atualizado.'
+              : 'Movimento salvo.',
+        canUndo
+          ? {
+              label: 'Desfazer',
+              onClick: async () => {
+                await app.repository.remove('transactions', value.id, null);
+                await app.refresh();
+                app.toast('Movimento desfeito.');
+              },
+            }
+          : undefined,
+      );
+      onClose();
     } catch {
       setError('Não foi possível salvar. Confira sua conexão e tente novamente.');
     } finally {
@@ -116,135 +140,121 @@ export function MoneyForm({
   }
   return (
     <Dialog
-      title={
-        saved
-          ? 'Tudo certo!'
-          : existing
-            ? 'Corrigir anotação'
-            : kind === 'expense'
-              ? 'Anotar um gasto'
-              : 'Anotar uma entrada'
-      }
+      title={existing ? 'Corrigir movimento' : kind === 'expense' ? 'Anotar um gasto' : 'Anotar uma entrada'}
       onClose={() => {
         if (!pending) onClose();
       }}
     >
-      {saved ? (
-        <div className="money-success" role="status">
-          <CheckCircle2 size={48} />
-          <h3>{!app.demo && !navigator.onLine ? 'Anotação pendente neste aparelho.' : 'Anotação salva.'}</h3>
-          <p>
-            {description} · {formatMoney(parseMoney(amount))}
-          </p>
-          <p className="muted">Você pode corrigir depois em “Anotações”.</p>
-          <Button onClick={onClose}>Concluir</Button>
-        </div>
-      ) : (
-        <form className="simple-form" onSubmit={(event) => void save(event)}>
-          <fieldset disabled={pending} className="simple-form">
-            <label>
-              Quanto foi? (R$)
-              <input
-                autoFocus
-                data-dialog-autofocus
-                inputMode="decimal"
-                placeholder="0,00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-                className="money-input"
-              />
-            </label>
-            <label>
-              {kind === 'expense' ? 'Com o quê?' : 'De onde veio?'}
-              <input
-                placeholder={
-                  kind === 'expense' ? 'Ex.: mercado, farmácia, conta de luz' : 'Ex.: aposentadoria, salário'
-                }
-                maxLength={180}
-                minLength={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Quando?
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-              <small>{date === today ? 'Hoje' : 'Confira a data da anotação.'}</small>
-            </label>
-            <details className="simple-details">
-              <summary>Mais detalhes (opcional)</summary>
-              <div className="simple-form">
+      <form className="simple-form" onSubmit={(event) => void save(event)}>
+        <fieldset disabled={pending} className="simple-form">
+          <label>
+            Quanto foi? (R$)
+            <input
+              autoFocus
+              data-dialog-autofocus
+              inputMode="decimal"
+              placeholder="0,00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+              className="money-input"
+            />
+          </label>
+          <label>
+            {kind === 'expense' ? 'Com o quê?' : 'De onde veio?'}
+            <input
+              placeholder={
+                kind === 'expense' ? 'Ex.: mercado, farmácia, conta de luz' : 'Ex.: aposentadoria, salário'
+              }
+              maxLength={180}
+              minLength={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Quando?
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <small>{date === today ? 'Hoje' : 'Confira a data do movimento.'}</small>
+          </label>
+          <details className="simple-details">
+            <summary>Mais detalhes (opcional)</summary>
+            <div className="simple-form">
+              <label>
+                Gasto ou entrada?
+                <select value={kind} onChange={(e) => setKind(e.target.value as Transaction['type'])}>
+                  <option value="expense">Gasto</option>
+                  <option value="income">Entrada</option>
+                </select>
+              </label>
+              <label>
+                Categoria
+                <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  {!categories.some((c) => c === category) && <option>{category}</option>}
+                  {categories.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Já aconteceu?
+                <select value={status} onChange={(e) => setStatus(e.target.value as Transaction['status'])}>
+                  <option value="paid">Sim, já paguei ou recebi</option>
+                  <option value="planned">Ainda não aconteceu</option>
+                </select>
+              </label>
+              {app.data.financial_accounts.length > 0 && (
                 <label>
-                  Gasto ou entrada?
-                  <select value={kind} onChange={(e) => setKind(e.target.value as Transaction['type'])}>
-                    <option value="expense">Gasto</option>
-                    <option value="income">Entrada</option>
-                  </select>
-                </label>
-                <label>
-                  Categoria
-                  <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                    {!categories.some((c) => c === category) && <option>{category}</option>}
-                    {categories.map((c) => (
-                      <option key={c}>{c}</option>
+                  Onde movimentou o dinheiro?
+                  <select value={account} onChange={(e) => setAccount(e.target.value)}>
+                    <option value="">Não informar</option>
+                    {app.data.financial_accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
                     ))}
                   </select>
                 </label>
-                <label>
-                  Já aconteceu?
-                  <select value={status} onChange={(e) => setStatus(e.target.value as Transaction['status'])}>
-                    <option value="paid">Sim, já paguei ou recebi</option>
-                    <option value="planned">Ainda não aconteceu</option>
-                  </select>
-                </label>
-                {app.data.financial_accounts.length > 0 && (
-                  <label>
-                    Onde movimentou o dinheiro?
-                    <select value={account} onChange={(e) => setAccount(e.target.value)}>
-                      <option value="">Não informar</option>
-                      {app.data.financial_accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-              </div>
-            </details>
-            {existing && (
-              <label className="check-label">
-                <input
-                  type="checkbox"
-                  checked={learnCategory}
-                  onChange={(event) => setLearnCategory(event.target.checked)}
-                />
-                Usar esta categoria nos próximos registros deste estabelecimento. Não alterar registros
-                antigos.
-              </label>
-            )}
-            {error && (
-              <p role="alert" className="error-message">
-                {error}
-              </p>
-            )}
-            <Button type="submit" disabled={pending}>
-              {pending ? 'Salvando…' : 'Salvar anotação'}
-            </Button>
-            <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
-              Cancelar
-            </Button>
-          </fieldset>
-        </form>
-      )}
+              )}
+            </div>
+          </details>
+          {existing && (
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={learnCategory}
+                onChange={(event) => setLearnCategory(event.target.checked)}
+              />
+              Usar esta categoria nos próximos registros deste estabelecimento. Não alterar registros antigos.
+            </label>
+          )}
+          {error && (
+            <p role="alert" className="error-message">
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={pending}>
+            {pending ? 'Salvando…' : 'Salvar movimento'}
+          </Button>
+          <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
+            Cancelar
+          </Button>
+        </fieldset>
+      </form>
     </Dialog>
   );
 }
 
 export function CapturePage() {
-  const [adding, setAdding] = useState<Transaction['type'] | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const requestedType = (location.state as { entryType?: unknown } | null)?.entryType;
+  const initialType = requestedType === 'expense' || requestedType === 'income' ? requestedType : null;
+  const [adding, setAdding] = useState<Transaction['type'] | null>(initialType);
+  useEffect(() => {
+    if (initialType) navigate('/anotar', { replace: true, state: null });
+  }, [initialType, navigate]);
   return (
     <>
       <header className="simple-heading">
@@ -279,7 +289,7 @@ export function CapturePage() {
           </Link>
         </div>
       </section>
-      <p className="muted">Fotos, extratos e mensagens são conferidos antes de virar uma anotação salva.</p>
+      <p className="muted">Fotos, extratos e mensagens são conferidos antes de virar um movimento salvo.</p>
       {adding && <MoneyForm type={adding} onClose={() => setAdding(null)} />}
     </>
   );
@@ -287,6 +297,8 @@ export function CapturePage() {
 
 export function SimpleHome() {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
+  const { open: openCapture, chooseType } = useCaptureFlow();
   const [adding, setAdding] = useState<Transaction['type'] | null>(null);
   const today = civilDate(new Date(), app.data.profile.timezone);
   const currentMonth = today.slice(0, 7);
@@ -300,6 +312,16 @@ export function SimpleHome() {
       transaction.type === 'expense' &&
       transaction.date <= shiftDays(today, 3),
   );
+  const upcomingBills = app.data.transactions
+    .filter(
+      (transaction) =>
+        transaction.status === 'planned' &&
+        transaction.type === 'expense' &&
+        transaction.date >= today &&
+        transaction.date <= shiftDays(today, 30),
+    )
+    .sort((first, second) => first.date.localeCompare(second.date))
+    .slice(0, 5);
   const activeGoal =
     app.data.goals.find((goal) => goal.id === app.data.profile.active_goal_id) ??
     app.data.goals.find((goal) => goal.saved < goal.target) ??
@@ -352,22 +374,22 @@ export function SimpleHome() {
         summary: 'Confira essas contas antes de decidir quanto do dinheiro está livre.',
         evidence: due
           .slice(0, 5)
-          .map((item) => `${item.description} · ${dateLabel(item.date)} · ${formatMoney(item.amount)}`),
+          .map((item) => `${item.description} · ${dateLabel(item.date)} · ${displayMoney(item.amount)}`),
         destination: '/planejar',
         action: 'Conferir contas',
         question: '',
       }
     : meaningfulChange && latestComplete && previousComplete && expenseChange !== null
       ? {
-          title: `Você anotou ${formatMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'} em gastos`,
+          title: `Você anotou ${displayMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'} em gastos`,
           summary: `Comparando ${monthLabel(latestComplete.month)} com ${monthLabel(previousComplete.month)}.`,
           evidence: [
-            `${monthLabel(latestComplete.month)}: ${formatMoney(latestComplete.expenses)} em gastos pagos anotados.`,
-            `${monthLabel(previousComplete.month)}: ${formatMoney(previousComplete.expenses)} em gastos pagos anotados.`,
+            `${monthLabel(latestComplete.month)}: ${displayMoney(latestComplete.expenses)} em gastos pagos anotados.`,
+            `${monthLabel(previousComplete.month)}: ${displayMoney(previousComplete.expenses)} em gastos pagos anotados.`,
           ],
           destination: '/nexo',
           action: 'Entender a diferença',
-          question: `Compare meus gastos pagos anotados em ${monthLabel(latestComplete.month)} (${formatMoney(latestComplete.expenses)}) com ${monthLabel(previousComplete.month)} (${formatMoney(previousComplete.expenses)}). A diferença calculada é ${formatMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'}. Explique apenas o que os registros e as fontes disponíveis sustentarem; não invente causas.`,
+          question: `Compare os gastos pagos que anotei em ${monthLabel(latestComplete.month)} e ${monthLabel(previousComplete.month)}. Calcule a diferença pelos registros disponíveis e explique apenas o que as fontes sustentarem; não invente causas.`,
         }
       : null;
   return (
@@ -414,7 +436,7 @@ export function SimpleHome() {
           <div className="simple-section-title">
             <h2 id="monthly-summary-title">Seu mês até agora</h2>
             <span>
-              {flow.count} {flow.count === 1 ? 'anotação' : 'anotações'} · {monthLabel(month)}
+              {flow.count} {flow.count === 1 ? 'movimento' : 'movimentos'} · {monthLabel(month)}
             </span>
           </div>
           <div className="simple-totals" data-month={month}>
@@ -422,27 +444,64 @@ export function SimpleHome() {
               <span>
                 <ArrowDownLeft size={18} /> Entrou
               </span>
-              <strong className="positive">{formatMoney(flow.income)}</strong>
-              <small>Recebimentos do mês</small>
+              <strong className="positive">{displayMoney(flow.income)}</strong>
             </div>
             <div>
               <span>
                 <ArrowUpRight size={18} /> Saiu
               </span>
-              <strong>{formatMoney(flow.expenses)}</strong>
-              <small>Pagamentos do mês</small>
+              <strong>{displayMoney(flow.expenses)}</strong>
             </div>
             <div className="simple-net">
               <span>
-                <Wallet size={18} /> {flow.net < 0 ? 'Faltou no mês' : 'Sobrou no mês'}
+                <Wallet size={18} /> Resultado registrado
               </span>
-              <strong>{formatMoney(Math.abs(flow.net))}</strong>
-              <small>Entrou menos saiu</small>
+              <strong>{displayMoney(Math.abs(flow.net))}</strong>
             </div>
           </div>
-          <p className="muted">Pelas anotações deste mês. Esse valor não é o saldo da sua conta bancária.</p>
+          <p className="muted">
+            Com base no que você registrou no Nexo. Não é o saldo da sua conta bancária.
+          </p>
           {flow.count === 0 && <p>Comece anotando algo que recebeu ou gastou.</p>}
         </section>
+        <nav className="home-action-rail" aria-label="Ações rápidas">
+          <button className="home-quick-action" onClick={openCapture}>
+            <span>
+              <Plus size={22} />
+            </span>
+            <small>Anotar</small>
+          </button>
+          <button className="home-quick-action" onClick={() => chooseType('income')}>
+            <span>
+              <ArrowDownLeft size={22} />
+            </span>
+            <small>Receita</small>
+          </button>
+          <Link className="home-quick-action" to="/recibo">
+            <span>
+              <Camera size={22} />
+            </span>
+            <small>Recibo</small>
+          </Link>
+          <Link className="home-quick-action" to="/importar">
+            <span>
+              <FileUp size={22} />
+            </span>
+            <small>Extrato</small>
+          </Link>
+          <Link className="home-quick-action" to="/integracoes">
+            <span>
+              <MessageCircle size={22} />
+            </span>
+            <small>WhatsApp</small>
+          </Link>
+          <Link className="home-quick-action" to="/metas">
+            <span>
+              <Target size={22} />
+            </span>
+            <small>Meta</small>
+          </Link>
+        </nav>
         {insight && (
           <section className="home-insight" aria-labelledby="home-insight-title">
             <div>
@@ -456,7 +515,9 @@ export function SimpleHome() {
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
-                <small className="muted">São anotações do Nexo, não um extrato bancário completo.</small>
+                <small className="muted">
+                  São movimentos registrados no Nexo, não um extrato bancário completo.
+                </small>
               </details>
             </div>
             <Link
@@ -468,15 +529,25 @@ export function SimpleHome() {
             </Link>
           </section>
         )}
-        <section className="spending-allowance-link">
-          <div>
-            <h2>Uma compra em mente?</h2>
-            <p>Veja o que pode gastar antes de receber, com suas contas e reservas consideradas.</p>
-          </div>
-          <Link className="button button-secondary" to="/controle">
-            Posso gastar? <ChevronRight size={18} />
-          </Link>
-        </section>
+        {upcomingBills.length > 0 && (
+          <section className="home-upcoming" aria-labelledby="upcoming-bills-title">
+            <div className="simple-section-title">
+              <h2 id="upcoming-bills-title">Próximas contas</h2>
+              <Link className="text-link" to="/planejar">
+                Ver todas
+              </Link>
+            </div>
+            <ul className="home-upcoming-list">
+              {upcomingBills.map((bill) => (
+                <li key={bill.id}>
+                  <time dateTime={bill.date}>{dateLabel(bill.date)}</time>
+                  <span>{bill.description}</span>
+                  <strong>{displayMoney(bill.amount)}</strong>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section className="home-goal" aria-labelledby="home-goal-title">
           {activeGoal && goalProgress ? (
             <>
@@ -484,20 +555,20 @@ export function SimpleHome() {
                 <p className="eyebrow">Próximo passo da meta</p>
                 <h2 id="home-goal-title">{activeGoal.name}</h2>
                 <p>
-                  Guardado {formatMoney(activeGoal.saved)} de {formatMoney(activeGoal.target)} · faltam{' '}
-                  {formatMoney(goalProgress.remaining)}.
+                  Guardado {displayMoney(activeGoal.saved)} de {displayMoney(activeGoal.target)} · faltam{' '}
+                  {displayMoney(goalProgress.remaining)}.
                 </p>
                 <p>
                   {activeGoal.weekly_amount > 0
-                    ? `Passo planejado: ${formatMoney(goalProgress.nextStep)} nesta semana.`
+                    ? `Passo planejado: ${displayMoney(goalProgress.nextStep)} nesta semana.`
                     : 'Ritmo pausado; você pode ajustar quando quiser.'}{' '}
                   Revisar em {fullDateLabel(activeGoal.deadline)}.
                 </p>
                 <details>
                   <summary>Ver cálculo</summary>
                   <p>
-                    {formatMoney(activeGoal.target)} − {formatMoney(activeGoal.saved)} ={' '}
-                    {formatMoney(goalProgress.remaining)} restantes. O passo semanal é o valor que você
+                    {displayMoney(activeGoal.target)} − {displayMoney(activeGoal.saved)} ={' '}
+                    {displayMoney(goalProgress.remaining)} restantes. O passo semanal é o valor que você
                     cadastrou; esta conta não considera rendimentos.
                   </p>
                 </details>
@@ -522,7 +593,7 @@ export function SimpleHome() {
         <div className="money-dashboard">
           <section className="money-recent" aria-labelledby="recent-title">
             <div className="simple-section-title">
-              <h2 id="recent-title">Últimas anotações</h2>
+              <h2 id="recent-title">Movimentos recentes</h2>
               <Link className="text-link" to="/movimentos">
                 Ver todas <ChevronRight size={18} />
               </Link>
@@ -530,7 +601,7 @@ export function SimpleHome() {
             {recent.length ? (
               <MoneyRows rows={recent} />
             ) : (
-              <p className="muted">Ainda não há anotações. Use os botões acima para começar.</p>
+              <p className="muted">Ainda não há movimentos. Use Anotar para começar.</p>
             )}
           </section>
         </div>
@@ -552,15 +623,15 @@ export function SimpleHome() {
                   </span>
                 </div>
               </div>
-              <div className="flow-chart" aria-label="Evolução das anotações por mês">
+              <div className="flow-chart" aria-label="Evolução dos movimentos por mês">
                 {months.map((item) => (
                   <button
                     key={item.month}
                     data-month={item.month}
                     className={`flow-month${month === item.month ? ' selected' : ''}`}
                     aria-pressed={month === item.month}
-                    aria-label={`Ver ${monthLabel(item.month)}: entrou ${formatMoney(item.income)}, saiu ${formatMoney(item.expenses)}`}
-                    title={`${monthLabel(item.month)}: entrou ${formatMoney(item.income)} · saiu ${formatMoney(item.expenses)}`}
+                    aria-label={`Ver ${monthLabel(item.month)}: entrou ${displayMoney(item.income)}, saiu ${displayMoney(item.expenses)}`}
+                    title={`${monthLabel(item.month)}: entrou ${displayMoney(item.income)} · saiu ${displayMoney(item.expenses)}`}
                     onClick={() => setMonth(item.month)}
                   >
                     <span className="flow-bars" aria-hidden="true">
@@ -596,7 +667,7 @@ export function SimpleHome() {
                     <li key={category}>
                       <div>
                         <span>{category}</span>
-                        <strong>{formatMoney(amount)}</strong>
+                        <strong>{displayMoney(amount)}</strong>
                       </div>
                       <div className="category-track" aria-hidden="true">
                         <span style={{ width: `${(amount / flow.expenses) * 100}%` }} />
@@ -627,7 +698,7 @@ export function SimpleHome() {
             {due.length > 0 && <p>{due.length} contas pendentes, atrasadas ou vencendo em até três dias.</p>}
             {limits.map((budget) => (
               <p key={budget.id}>
-                {budget.category}: {formatMoney(-budget.remaining)} acima do limite.
+                {budget.category}: {displayMoney(-budget.remaining)} acima do limite.
               </p>
             ))}
             <Link className="text-link" to="/perguntas">
@@ -639,15 +710,15 @@ export function SimpleHome() {
           <section className="attention-band">
             <h2>Sua última semana completa</h2>
             <p>
-              {weekly.start} a {weekly.end} · entrou {formatMoney(weekly.income)}, saiu{' '}
-              {formatMoney(weekly.expenses)}; diferença {formatMoney(weekly.net)}.
+              {weekly.start} a {weekly.end} · entrou {displayMoney(weekly.income)}, saiu{' '}
+              {displayMoney(weekly.expenses)}; diferença {displayMoney(weekly.net)}.
             </p>
             <details>
               <summary>Registros usados</summary>
               <ul className="evidence-list">
                 {weekly.records.map((record) => (
                   <li key={record.id}>
-                    {record.description} · {record.date} · {formatMoney(record.amount)}
+                    {record.description} · {record.date} · {displayMoney(record.amount)}
                   </li>
                 ))}
               </ul>
@@ -662,8 +733,10 @@ export function SimpleHome() {
 
 function MoneyRows({ rows }: { rows: Transaction[] }) {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
+  const [details, setDetails] = useState<Transaction | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   async function remove() {
@@ -674,7 +747,7 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
       await app.repository.remove('transactions', deleting.id, null);
       setDeleting(null);
       await app.refresh();
-      app.toast('Anotação excluída.');
+      app.toast('Movimento excluído.');
     } catch {
       setError('Não foi possível excluir. Tente novamente.');
     } finally {
@@ -691,7 +764,11 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
                 {t.type === 'income' ? <ArrowDownLeft size={24} /> : <ArrowUpRight size={24} />}
               </span>
               <div className="money-description">
-                <h3>{t.description}</h3>
+                <h3>
+                  <button className="money-detail-trigger" onClick={() => setDetails(t)}>
+                    {t.description}
+                  </button>
+                </h3>
                 <p className="muted">
                   {new Intl.DateTimeFormat('pt-BR', {
                     day: '2-digit',
@@ -699,12 +776,12 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
                     year: 'numeric',
                     timeZone: 'UTC',
                   }).format(new Date(`${t.date}T12:00:00Z`))}
-                  · {sourceLabels[t.source]}
+                  · {t.category} · {sourceLabels[t.source]}
                 </p>
               </div>
               <strong className={t.type === 'income' ? 'positive' : ''}>
                 <span className="sr-only">{t.type === 'income' ? 'Entrada' : 'Gasto'}</span>
-                {t.type === 'income' ? '+' : '−'} {formatMoney(t.amount)}
+                {t.type === 'income' ? '+' : '−'} {displayMoney(t.amount)}
               </strong>
             </div>
             <div className="money-row-bottom">
@@ -712,6 +789,13 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
                 {t.status === 'planned' ? 'Ainda não aconteceu' : t.type === 'income' ? 'Recebido' : 'Pago'}
               </span>
               <div>
+                <Button
+                  variant="ghost"
+                  aria-label={`Ver detalhes de ${t.description}`}
+                  onClick={() => setDetails(t)}
+                >
+                  <ChevronRight size={16} /> Detalhes
+                </Button>
                 <Button
                   variant="ghost"
                   aria-label={`Corrigir ${t.description}`}
@@ -734,17 +818,75 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
           </li>
         ))}
       </ul>
+      {details && (
+        <Dialog title="Detalhes do movimento" onClose={() => setDetails(null)}>
+          <div className="movement-detail">
+            <h2>{details.description}</h2>
+            <strong className={details.type === 'income' ? 'positive' : ''}>
+              {details.type === 'income' ? '+' : '−'} {displayMoney(details.amount)}
+            </strong>
+            <dl>
+              <div>
+                <dt>Categoria</dt>
+                <dd>{details.category}</dd>
+              </div>
+              <div>
+                <dt>Data</dt>
+                <dd>{fullDateLabel(details.date)}</dd>
+              </div>
+              <div>
+                <dt>Origem</dt>
+                <dd>{sourceLabels[details.source]}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>
+                  {details.status === 'planned'
+                    ? 'Pendente'
+                    : details.type === 'income'
+                      ? 'Recebido'
+                      : 'Pago'}
+                </dd>
+              </div>
+              <div>
+                <dt>Conta</dt>
+                <dd>
+                  {details.account_id
+                    ? (app.data.financial_accounts.find((account) => account.id === details.account_id)
+                        ?.name ?? 'Conta não encontrada')
+                    : 'Sem conta vinculada'}
+                </dd>
+              </div>
+            </dl>
+            <p className="muted">
+              {details.source === 'whatsapp'
+                ? 'Registrado a partir de uma mensagem enviada pelo WhatsApp.'
+                : details.source === 'import'
+                  ? 'Registrado a partir de um arquivo importado.'
+                  : 'Registrado manualmente no app.'}
+            </p>
+            <Button
+              onClick={() => {
+                setEditing(details);
+                setDetails(null);
+              }}
+            >
+              <Pencil size={16} /> Corrigir movimento
+            </Button>
+          </div>
+        </Dialog>
+      )}
       {editing && <MoneyForm type={editing.type} existing={editing} onClose={() => setEditing(null)} />}
       {deleting && (
         <Dialog
-          title="Excluir esta anotação?"
+          title="Excluir este movimento?"
           onClose={() => {
             if (!pending) setDeleting(null);
           }}
         >
           <div className="simple-form">
             <p>
-              {deleting.description} · {formatMoney(deleting.amount)}
+              {deleting.description} · {displayMoney(deleting.amount)}
             </p>
             <p>Ela será retirada do seu resumo. Se precisar, você poderá anotar novamente.</p>
             {error && (
@@ -753,7 +895,7 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
               </p>
             )}
             <Button variant="danger" disabled={pending} onClick={() => void remove()}>
-              {pending ? 'Excluindo…' : 'Sim, excluir anotação'}
+              {pending ? 'Excluindo…' : 'Sim, excluir movimento'}
             </Button>
             <Button variant="secondary" disabled={pending} onClick={() => setDeleting(null)}>
               Não, voltar
@@ -769,14 +911,14 @@ export function SimpleHistory() {
   const app = useApp();
   const [month, setMonth] = useState(() => civilDate(new Date(), app.data.profile.timezone).slice(0, 7));
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState<'all' | 'expense' | 'income' | 'pending'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | Transaction['source']>('all');
   const [adding, setAdding] = useState<Transaction['type'] | null>(null);
   const rows = app.data.transactions
     .filter(
       (t) =>
         t.date.startsWith(month) &&
-        (filter === 'all' || t.type === filter) &&
+        (filter === 'pending' ? t.status === 'planned' : filter === 'all' || t.type === filter) &&
         (sourceFilter === 'all' || t.source === sourceFilter) &&
         t.description.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')),
     )
@@ -803,7 +945,7 @@ export function SimpleHistory() {
             <ChevronLeft />
           </Button>
           <label>
-            Mês das anotações
+            Mês dos movimentos
             <input
               type="month"
               value={month}
@@ -821,7 +963,7 @@ export function SimpleHistory() {
           </Button>
         </div>
         <label className="history-search">
-          Buscar uma anotação
+          Buscar movimentos
           <input
             type="search"
             placeholder="Ex.: mercado"
@@ -829,12 +971,15 @@ export function SimpleHistory() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <div className="history-filters" role="group" aria-label="Mostrar anotações">
-          {[
-            ['all', 'Todas'],
-            ['expense', 'Gastos'],
-            ['income', 'Entradas'],
-          ].map(([value, label]) => (
+        <div className="history-filters" role="group" aria-label="Filtrar movimentos">
+          {(
+            [
+              ['all', 'Todas'],
+              ['expense', 'Gastos'],
+              ['income', 'Entradas'],
+              ['pending', 'Pendentes'],
+            ] as const
+          ).map(([value, label]) => (
             <Button
               key={value}
               variant={filter === value ? 'primary' : 'secondary'}
@@ -868,7 +1013,7 @@ export function SimpleHistory() {
           <MoneyRows rows={rows} />
         ) : (
           <div className="simple-empty">
-            <h2>Nenhuma anotação por aqui.</h2>
+            <h2>Nenhum movimento por aqui.</h2>
             <p>Confira o mês e a busca, ou anote seu primeiro gasto.</p>
           </div>
         )}

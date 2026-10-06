@@ -234,6 +234,7 @@ export const demoRepository: Repository = {
     if (entity === 'financial_accounts' && data.transactions.some((t) => t.account_id === id))
       throw new Error('Esta conta possui movimentos. Reatribua os movimentos antes de excluí-la.');
     Object.assign(data, { [entity]: data[entity].filter((row) => row.id !== id) });
+    if (entity === 'transactions') data.habit_events = data.habit_events.filter((event) => event.id !== id);
     if (entity === 'goals') {
       data.goal_events = data.goal_events.filter((row) => row.goal_id !== id);
       if (data.profile.active_goal_id === id) data.profile.active_goal_id = null;

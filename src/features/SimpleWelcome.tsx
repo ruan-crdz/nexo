@@ -57,7 +57,7 @@ export function SimpleLanding() {
             <CheckCircle2 size={22} />
             <p>Anotado! Um gasto de R$ 30,00 na farmácia.</p>
           </div>
-          <p className="muted">Você pode conferir e corrigir as anotações no app.</p>
+          <p className="muted">Você pode conferir e corrigir os movimentos no app.</p>
         </Card>
       </main>
       <footer>Simples de anotar. Fácil de acompanhar.</footer>

@@ -4,7 +4,8 @@ import { Check, Copy, RefreshCw, Users, X } from 'lucide-react';
 import { useApp } from '../data/context';
 import { supabase } from '../data/client';
 import { Button, Dialog } from '../design-system/components';
-import { formatMoney, parseMoney } from '../../shared/financial-engine';
+import { useMoneyDisplay } from '../design-system/financial-visibility';
+import { parseMoney } from '../../shared/financial-engine';
 import { categories, transactionSchema } from '../../shared/domain';
 type Invite = {
   id: string;
@@ -41,6 +42,7 @@ async function rpc<Reply>(name: string, body: Record<string, unknown> = {}) {
 }
 export function FamilyPage() {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
   const [scope, setScope] = useState<'summary' | 'transactions'>('summary');
   const [consent, setConsent] = useState(false);
   const [code, setCode] = useState('');
@@ -338,8 +340,8 @@ export function FamilyPage() {
             <article className="verified-answer" key={item.id}>
               <h3>{item.proposed_data.description}</h3>
               <p>
-                Proposto por {item.proposer_id}: {formatMoney(Number(item.before_data.amount))} →{' '}
-                {formatMoney(Number(item.proposed_data.amount))} · {item.proposed_data.category}
+                Proposto por {item.proposer_id}: {displayMoney(Number(item.before_data.amount))} →{' '}
+                {displayMoney(Number(item.proposed_data.amount))} · {item.proposed_data.category}
               </p>
               <div className="simple-inline-actions">
                 <Button
@@ -394,15 +396,15 @@ export function FamilyPage() {
                 <div className="simple-totals">
                   <div>
                     <span>Entrou</span>
-                    <strong>{formatMoney(snapshot.data.income)}</strong>
+                    <strong>{displayMoney(snapshot.data.income)}</strong>
                   </div>
                   <div>
                     <span>Saiu</span>
-                    <strong>{formatMoney(snapshot.data.expenses)}</strong>
+                    <strong>{displayMoney(snapshot.data.expenses)}</strong>
                   </div>
                   <div>
                     <span>Diferença</span>
-                    <strong>{formatMoney(snapshot.data.net)}</strong>
+                    <strong>{displayMoney(snapshot.data.net)}</strong>
                   </div>
                 </div>
                 <p className="muted">Resumo das anotações, não saldo bancário. Somente consulta.</p>
@@ -416,7 +418,7 @@ export function FamilyPage() {
                           <span>
                             {record.description} · {record.date}
                           </span>
-                          <strong>{formatMoney(record.amount)}</strong>
+                          <strong>{displayMoney(record.amount)}</strong>
                           {snapshot.data?.can_propose && (
                             <Button
                               variant="secondary"

@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { Download, Upload, Check } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button } from '../design-system/components';
+import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { csvCandidates, csvTable, ofxCandidates, inferCsvMapping } from '../../shared/statement-import';
 import { merchantKey } from '../../shared/financial-decisions';
 import type { CsvMapping, ImportCandidate } from '../../shared/statement-import';
-import { formatMoney } from '../../shared/financial-engine';
 import { download } from './Resources';
 export function StatementImport() {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
   const [text, setText] = useState('');
   const [name, setName] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
@@ -283,7 +284,7 @@ export function StatementImport() {
                     {transaction.description}
                     <small>
                       {transaction.date} · {transaction.type === 'expense' ? 'Gasto' : 'Entrada'} ·{' '}
-                      {formatMoney(transaction.amount)}
+                      {displayMoney(transaction.amount)}
                       {duplicate === 'confirmed'
                         ? ' · Já importado'
                         : duplicate === 'possible'

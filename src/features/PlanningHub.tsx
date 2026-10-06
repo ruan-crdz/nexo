@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarClock, Check, Plus, Target, Trash2, Pencil, Wallet } from 'lucide-react';
+import { Check, Plus, Trash2, Pencil } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button, Dialog, Progress } from '../design-system/components';
+import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { categories, budgetSchema, goalSchema, recurringRuleSchema } from '../../shared/domain';
 import type { Budget, Goal, RecurringRule } from '../../shared/domain';
-import { civilDate, formatMoney, parseMoney } from '../../shared/financial-engine';
+import { civilDate, parseMoney, shiftDays } from '../../shared/financial-engine';
 import { budgetUsage } from '../../shared/planning';
 import { JourneyGoalForm } from './GoalJourney';
 
@@ -241,13 +242,23 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
 }
 export function PlanningHub() {
   const app = useApp();
-  const [tab, setTab] = useState<Kind>('recurring');
+  const displayMoney = useMoneyDisplay();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [removing, setRemoving] = useState<{ kind: Kind; id: string; name: string } | null>(null);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const today = civilDate(new Date(), app.data.profile.timezone);
   const usage = budgetUsage(app.data.budgets, app.data.transactions, today);
+  const upcomingBills = app.data.transactions
+    .filter(
+      (transaction) =>
+        transaction.status === 'planned' &&
+        transaction.type === 'expense' &&
+        transaction.date >= today &&
+        transaction.date <= shiftDays(today, 30),
+    )
+    .sort((first, second) => first.date.localeCompare(second.date))
+    .slice(0, 5);
   async function remove() {
     if (!removing) return;
     setPending(true);
@@ -286,63 +297,50 @@ export function PlanningHub() {
   return (
     <>
       <header className="simple-heading">
-        <h1>Seu planejamento</h1>
-        <p>Contas, limites e metas sem misturar previsão com dinheiro já pago.</p>
-        <Link className="text-link" to="/metas">
-          Acompanhar minha meta e conquistas
-        </Link>
+        <h1>Planejar</h1>
+        <p>O que está por vir, sem misturar previsão com dinheiro já pago.</p>
       </header>
-      <div className="feature-tabs" role="group" aria-label="Área do planejamento">
-        {(
-          [
-            { kind: 'recurring', label: 'Contas', icon: CalendarClock },
-            { kind: 'budget', label: 'Limites', icon: Wallet },
-            { kind: 'goal', label: 'Metas', icon: Target },
-          ] as const
-        ).map(({ kind, label, icon: Icon }) => (
-          <Button
-            key={kind}
-            variant={tab === kind ? 'primary' : 'secondary'}
-            aria-pressed={tab === kind}
-            onClick={() => setTab(kind)}
-          >
-            <Icon size={18} />
-            {label}
+      <section className="planning-section" aria-labelledby="planning-upcoming-title">
+        <div className="simple-section-title">
+          <h2 id="planning-upcoming-title">Próximas contas</h2>
+          <Button variant="secondary" onClick={() => setEditing({ kind: 'recurring' })}>
+            <Plus size={18} /> Adicionar
           </Button>
-        ))}
-      </div>
-      <div>
-        <Button onClick={() => setEditing({ kind: tab })}>
-          <Plus size={18} />
-          {tab === 'recurring' ? 'Nova conta recorrente' : tab === 'budget' ? 'Novo limite' : 'Nova meta'}
-        </Button>
-      </div>
-      <section className="plan-list">
-        {tab === 'recurring' &&
-          (app.data.recurring_rules.length ? (
-            app.data.recurring_rules.map((rule) => (
-              <article key={rule.id} className="plan-row">
-                <div>
-                  <h2>{rule.description}</h2>
-                  <p>
-                    {formatMoney(rule.amount)} · mensal · {rule.active ? 'Ativa' : 'Pausada'}
-                  </p>
-                  <small className="muted">Desde {rule.start_date.split('-').reverse().join('/')}</small>
-                </div>
-                {actions('recurring', rule, rule.description)}
-              </article>
-            ))
-          ) : (
-            <p>Nenhuma conta recorrente cadastrada.</p>
-          ))}
-        {tab === 'budget' &&
-          (usage.length ? (
-            usage.map((budget) => (
+        </div>
+        {upcomingBills.length ? (
+          <ul className="home-upcoming-list">
+            {upcomingBills.map((bill) => (
+              <li key={bill.id}>
+                <time dateTime={bill.date}>
+                  {bill.date.slice(8, 10)}/{bill.date.slice(5, 7)}
+                </time>
+                <span>{bill.description}</span>
+                <strong>{displayMoney(bill.amount)}</strong>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">Nenhuma conta prevista para os próximos 30 dias.</p>
+        )}
+        <Link className="text-link" to="/movimentos">
+          Ver movimentos previstos
+        </Link>
+      </section>
+      <section className="planning-section" aria-labelledby="planning-budgets-title">
+        <div className="simple-section-title">
+          <h2 id="planning-budgets-title">Limites do mês</h2>
+          <Button variant="secondary" onClick={() => setEditing({ kind: 'budget' })}>
+            <Plus size={18} /> Novo limite
+          </Button>
+        </div>
+        {usage.length ? (
+          <div className="plan-list">
+            {usage.map((budget) => (
               <article key={budget.id} className="plan-row">
                 <div>
-                  <h2>{budget.category}</h2>
+                  <h3>{budget.category}</h3>
                   <p>
-                    {formatMoney(budget.spent)} de {formatMoney(budget.limit_amount)} neste mês
+                    {displayMoney(budget.spent)} de {displayMoney(budget.limit_amount)} neste mês
                   </p>
                   <Progress
                     value={
@@ -356,36 +354,83 @@ export function PlanningHub() {
                   />
                   <p className={budget.remaining < 0 ? 'error-message' : 'muted'}>
                     {budget.remaining < 0 ? 'Acima do limite: ' : 'Disponível: '}
-                    {formatMoney(Math.abs(budget.remaining))}
+                    {displayMoney(Math.abs(budget.remaining))}
                   </p>
                 </div>
                 {actions('budget', budget, budget.category)}
               </article>
-            ))
-          ) : (
-            <p>Nenhum limite definido para este mês.</p>
-          ))}
-        {tab === 'goal' &&
-          (app.data.goals.length ? (
-            app.data.goals.map((goal) => (
+            ))}
+          </div>
+        ) : (
+          <p className="muted">
+            Sem limites definidos. Você pode planejar uma categoria quando fizer sentido.
+          </p>
+        )}
+      </section>
+      <section className="planning-section" aria-labelledby="planning-goals-title">
+        <div className="simple-section-title">
+          <h2 id="planning-goals-title">Metas</h2>
+          <Button variant="secondary" onClick={() => setEditing({ kind: 'goal' })}>
+            <Plus size={18} /> Nova meta
+          </Button>
+        </div>
+        {app.data.goals.length ? (
+          <div className="plan-list">
+            {app.data.goals.map((goal) => (
               <article key={goal.id} className="plan-row">
                 <div>
-                  <h2>{goal.name}</h2>
+                  <h3>{goal.name}</h3>
                   <p>
-                    {formatMoney(goal.saved)} de {formatMoney(goal.target)}
+                    {displayMoney(goal.saved)} de {displayMoney(goal.target)}
                   </p>
                   <Progress value={(goal.saved / goal.target) * 100} label={`Progresso de ${goal.name}`} />
                   <p className="muted">
-                    Faltam {formatMoney(Math.max(0, goal.target - goal.saved))} · prazo{' '}
+                    Faltam {displayMoney(Math.max(0, goal.target - goal.saved))} · revisar em{' '}
                     {goal.deadline.split('-').reverse().join('/')}
                   </p>
                 </div>
                 {actions('goal', goal, goal.name)}
               </article>
-            ))
-          ) : (
-            <p>Nenhuma meta cadastrada.</p>
-          ))}
+            ))}
+          </div>
+        ) : (
+          <p className="muted">Nenhuma meta cadastrada.</p>
+        )}
+        <Link className="text-link" to="/metas">
+          Acompanhar meta e conquistas
+        </Link>
+      </section>
+      <section className="planning-section" aria-labelledby="planning-recurring-title">
+        <div className="simple-section-title">
+          <h2 id="planning-recurring-title">Contas recorrentes</h2>
+          <Button variant="secondary" onClick={() => setEditing({ kind: 'recurring' })}>
+            <Plus size={18} /> Nova recorrência
+          </Button>
+        </div>
+        {app.data.recurring_rules.length ? (
+          <div className="plan-list">
+            {app.data.recurring_rules.map((rule) => (
+              <article key={rule.id} className="plan-row">
+                <div>
+                  <h3>{rule.description}</h3>
+                  <p>
+                    {displayMoney(rule.amount)} ·{' '}
+                    {rule.frequency === 'monthly'
+                      ? 'mensal'
+                      : rule.frequency === 'weekly'
+                        ? 'semanal'
+                        : 'anual'}{' '}
+                    · {rule.active ? 'Ativa' : 'Pausada'}
+                  </p>
+                  <small className="muted">Desde {rule.start_date.split('-').reverse().join('/')}</small>
+                </div>
+                {actions('recurring', rule, rule.description)}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">Nenhuma recorrência cadastrada.</p>
+        )}
       </section>
       {editing &&
         (editing.kind === 'goal' ? (

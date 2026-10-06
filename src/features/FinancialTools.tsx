@@ -4,8 +4,13 @@ import { Check, Calculator, History, Plus, Wallet } from 'lucide-react';
 import { useApp } from '../data/context';
 import { supabase } from '../data/client';
 import { Button, Dialog } from '../design-system/components';
+import {
+  redactFinancialText,
+  useFinancialVisibility,
+  useMoneyDisplay,
+} from '../design-system/financial-visibility';
 import { accountSchema } from '../../shared/domain';
-import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
+import { civilDate, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
 import {
   invoiceFor,
   merchantKey,
@@ -15,6 +20,8 @@ import {
 type Tool = 'cash' | 'patterns' | 'cards' | 'history' | 'categories' | 'metrics';
 export function FinancialTools() {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
+  const { visible } = useFinancialVisibility();
   const today = civilDate(new Date(), app.data.profile.timezone);
   const [tool, setTool] = useState<Tool>('cash');
   const [error, setError] = useState('');
@@ -78,36 +85,53 @@ export function FinancialTools() {
     }
   }
   const signals = spendingSignals(app.data.transactions, today);
+  const tools = [
+    { key: 'cash', label: 'Posso gastar?' },
+    { key: 'patterns', label: 'Sugestões' },
+    { key: 'cards', label: 'Faturas' },
+    { key: 'history', label: 'Histórico' },
+    { key: 'categories', label: 'Preferências' },
+    { key: 'metrics', label: 'Operação' },
+  ] as const;
+  const secondaryTools = tool === 'history' || tool === 'categories' || tool === 'metrics';
+  const heading = tools.find((item) => item.key === tool)?.label ?? 'Posso gastar?';
+  const activate = (key: Tool) => {
+    setTool(key);
+    setError('');
+  };
   return (
     <>
       <header className="simple-heading">
-        <h1>Mais controle</h1>
-        <p>Decisões e revisões com dados e premissas visíveis.</p>
+        <h1>{heading}</h1>
+        <p>Decisões com seus dados e premissas visíveis.</p>
       </header>
-      <div className="simple-inline-actions" role="group" aria-label="Ferramentas">
-        {(
-          [
-            { key: 'cash', label: 'Decidir' },
-            { key: 'patterns', label: 'Sugestões' },
-            { key: 'cards', label: 'Faturas' },
-            { key: 'history', label: 'Histórico' },
-            { key: 'categories', label: 'Preferências' },
-            { key: 'metrics', label: 'Operação' },
-          ] as const
-        ).map((item) => (
+      <div className="simple-inline-actions" role="group" aria-label="Decisão financeira">
+        {tools.slice(0, 3).map((item) => (
           <Button
             key={item.key}
             variant={tool === item.key ? 'primary' : 'secondary'}
             aria-pressed={tool === item.key}
-            onClick={() => {
-              setTool(item.key);
-              setError('');
-            }}
+            onClick={() => activate(item.key)}
           >
             {item.label}
           </Button>
         ))}
       </div>
+      <details className="financial-more" open={secondaryTools}>
+        <summary>Mais ferramentas</summary>
+        <div className="simple-inline-actions" role="group" aria-label="Outras ferramentas">
+          {tools.slice(3).map((item) => (
+            <Button
+              key={item.key}
+              variant={tool === item.key ? 'primary' : 'secondary'}
+              aria-pressed={tool === item.key}
+              onClick={() => activate(item.key)}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
+      </details>
       {tool === 'cash' && (
         <form
           className="simple-form"
@@ -237,23 +261,23 @@ export function FinancialTools() {
               <h2>
                 {result.needs_confirmation
                   ? 'Confirme o saldo de hoje antes de usar o resultado'
-                  : `Limite calculado: ${formatMoney(result.allowed)}`}
+                  : `Limite calculado: ${displayMoney(result.allowed)}`}
               </h2>
               {result.shortfall > 0 && (
                 <p className="error-message">
-                  Faltam {formatMoney(result.shortfall)} para cobrir as premissas.
+                  Faltam {displayMoney(result.shortfall)} para cobrir as premissas.
                 </p>
               )}
               <ul>
                 {result.calculation.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{visible ? line : redactFinancialText(line)}</li>
                 ))}
               </ul>
               <h3>Contas consideradas</h3>
               <ul className="evidence-list">
                 {result.bills.map((row) => (
                   <li key={row.id}>
-                    {row.description} · {row.date} · {formatMoney(row.amount)}
+                    {row.description} · {row.date} · {displayMoney(row.amount)}
                   </li>
                 ))}
               </ul>
@@ -268,12 +292,12 @@ export function FinancialTools() {
           {signals.length ? (
             signals.map((signal, index) => (
               <article key={`${signal.kind}:${index}`} className="verified-answer">
-                <h3>{signal.title}</h3>
-                <p>{signal.explanation}</p>
+                <h3>{visible ? signal.title : redactFinancialText(signal.title)}</h3>
+                <p>{visible ? signal.explanation : redactFinancialText(signal.explanation)}</p>
                 <ul className="evidence-list">
                   {signal.records.map((row) => (
                     <li key={row.id}>
-                      {row.date} · {formatMoney(row.amount)}
+                      {row.date} · {displayMoney(row.amount)}
                     </li>
                   ))}
                 </ul>
@@ -351,15 +375,15 @@ export function FinancialTools() {
                   <p>
                     Fechamento: dia {account.closing_day} · vencimento: {invoice.due}
                   </p>
-                  <p>Compras e parcelas no ciclo: {formatMoney(invoice.total)}</p>
+                  <p>Compras e parcelas no ciclo: {displayMoney(invoice.total)}</p>
                   <p className="muted">
-                    Limite informado: {formatMoney(account.credit_limit ?? 0)}. Não é dinheiro disponível nem
+                    Limite informado: {displayMoney(account.credit_limit ?? 0)}. Não é dinheiro disponível nem
                     confirmação de pagamento da fatura.
                   </p>
                   <ul className="evidence-list">
                     {invoice.records.map((row) => (
                       <li key={row.id}>
-                        {row.description} · {row.date} · {formatMoney(row.amount)}
+                        {row.description} · {row.date} · {displayMoney(row.amount)}
                       </li>
                     ))}
                   </ul>
@@ -422,8 +446,8 @@ export function FinancialTools() {
                 </p>
                 <p>
                   Antes:{' '}
-                  {version.before_data ? formatMoney(Number(version.before_data.amount)) : 'Não existia'} ·
-                  depois: {version.after_data ? formatMoney(Number(version.after_data.amount)) : 'Excluído'}
+                  {version.before_data ? displayMoney(Number(version.before_data.amount)) : 'Não existia'} ·
+                  depois: {version.after_data ? displayMoney(Number(version.after_data.amount)) : 'Excluído'}
                 </p>
                 {version.before_data && (
                   <Button variant="secondary" disabled={pending} onClick={() => setRestoring(version.id)}>

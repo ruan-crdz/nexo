@@ -36,10 +36,10 @@ export function IntegrationsPage() {
     return () => window.clearInterval(timer);
   }, [link]);
   const connected = connection.data?.connected === true;
-    const deliveryNotice = whatsappDeliveryNotice(
-      connection.data?.delivery_status ?? null,
-      connection.data?.message_state ?? null,
-    );
+  const deliveryNotice = whatsappDeliveryNotice(
+    connection.data?.delivery_status ?? null,
+    connection.data?.message_state ?? null,
+  );
   const remaining = link ? Math.max(0, Math.ceil((Date.parse(link.expires_at) - now) / 1000)) : 0;
   const waiting = link && remaining > 0 && !connected;
 
@@ -223,8 +223,8 @@ export function IntegrationsPage() {
             </Button>
           )}
         </Card>
-        <Card className="whatsapp-preview">
-          <h2>O que posso mandar?</h2>
+        <details className="whatsapp-preview">
+          <summary>O que posso mandar?</summary>
           <p className="muted">Exemplo de conversa</p>
           <div className="chat-example">
             <div className="chat-example-user">Gastei 25 reais no almoço hoje.</div>
@@ -265,7 +265,7 @@ export function IntegrationsPage() {
               <span className="muted">Envie “ajuda” e receba o tutorial novamente.</span>
             </p>
           </div>
-        </Card>
+        </details>
       </div>
       {revoking && (
         <Dialog title="Desconectar WhatsApp?" onClose={() => setRevoking(false)}>

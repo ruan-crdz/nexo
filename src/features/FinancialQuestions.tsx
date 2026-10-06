@@ -2,11 +2,18 @@ import { useState } from 'react';
 import { Search, Calculator } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button } from '../design-system/components';
-import { civilDate, formatMoney } from '../../shared/financial-engine';
+import {
+  redactFinancialText,
+  useFinancialVisibility,
+  useMoneyDisplay,
+} from '../design-system/financial-visibility';
+import { civilDate } from '../../shared/financial-engine';
 import { answerFinancialQuestion } from '../../shared/financial-questions';
 import { Link } from 'react-router-dom';
 export function FinancialQuestions() {
   const app = useApp();
+  const displayMoney = useMoneyDisplay();
+  const { visible } = useFinancialVisibility();
   const [question, setQuestion] = useState('');
   const [submitted, setSubmitted] = useState('');
   const reply = answerFinancialQuestion(
@@ -18,7 +25,7 @@ export function FinancialQuestions() {
     <>
       <header className="simple-heading">
         <h1>Pergunte ao seu dinheiro</h1>
-        <p>Respostas calculadas com suas anotações, não estimativas inventadas.</p>
+        <p>Respostas calculadas com seus movimentos, não estimativas inventadas.</p>
       </header>
       <Link className="button button-secondary" to="/controle">
         Quanto posso gastar? · Faturas e sugestões
@@ -60,7 +67,11 @@ export function FinancialQuestions() {
       {submitted && (
         <section className="verified-answer" aria-live="polite">
           <h2>
-            {reply ? reply.answer : 'Ainda não interpreto esta pergunta. Escolha uma das perguntas acima.'}
+            {reply
+              ? visible
+                ? reply.answer
+                : redactFinancialText(reply.answer)
+              : 'Ainda não interpreto esta pergunta. Escolha uma das perguntas acima.'}
           </h2>
           {reply && (
             <>
@@ -69,7 +80,7 @@ export function FinancialQuestions() {
               </h3>
               <ul>
                 {reply.calculation.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{visible ? line : redactFinancialText(line)}</li>
                 ))}
               </ul>
               <h3>Registros usados</h3>
@@ -80,7 +91,7 @@ export function FinancialQuestions() {
                       <span>
                         {record.description} · {record.date.split('-').reverse().join('/')}
                       </span>
-                      <strong>{formatMoney(record.amount)}</strong>
+                      <strong>{displayMoney(record.amount)}</strong>
                     </li>
                   ))}
                 </ul>
@@ -89,7 +100,7 @@ export function FinancialQuestions() {
               )}
               {reply.goals.map((goal) => (
                 <p key={goal.id}>
-                  {goal.name}: objetivo {formatMoney(goal.target)}, guardado {formatMoney(goal.saved)}.
+                  {goal.name}: objetivo {displayMoney(goal.target)}, guardado {displayMoney(goal.saved)}.
                 </p>
               ))}
             </>

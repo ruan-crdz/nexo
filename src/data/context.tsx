@@ -25,8 +25,9 @@ interface AppContextValue {
   refresh: () => Promise<void>;
   organizationId: string | null;
   selectOrganization: (id: string | null) => void;
-  toast: (message: string) => void;
+  toast: (message: string, action?: { label: string; onClick: () => void | Promise<void> }) => void;
 }
+type Toast = { message: string; action?: { label: string; onClick: () => void | Promise<void> } };
 const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [demo, setDemo] = useState(() => sessionStorage.getItem('nexo.mode') === 'demo');
@@ -34,8 +35,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [authReady, setAuthReady] = useState(!supabase);
   const [mfaReady, setMfaReady] = useState(!supabase),
     [mfaRequired, setMfaRequired] = useState(false);
-  const [organizationId, setOrganizationId] = useState<string | null>(null),
-    [message, setMessage] = useState('');
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [toastState, setToastState] = useState<Toast | null>(null);
   const client = useQueryClient();
   useEffect(() => {
     const online = () => {
@@ -78,11 +79,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [user, demo]);
   useEffect(() => {
-    if (message) {
-      const timeout = setTimeout(() => setMessage(''), 5000);
+    if (toastState) {
+      const timeout = setTimeout(() => setToastState(null), 5000);
       return () => clearTimeout(timeout);
     }
-  }, [message]);
+  }, [toastState]);
   const repository = useMemo(() => (demo || !user ? demoRepository : cloudRepository(user.id)), [demo, user]);
   const query = useQuery({
     queryKey: ['dataset', demo ? 'demo' : user?.id, organizationId],
@@ -139,7 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh,
     organizationId,
     selectOrganization: setOrganizationId,
-    toast: setMessage,
+    toast: (message, action) => setToastState({ message, ...(action ? { action } : {}) }),
     enterDemo: () => {
       client.clear();
       sessionStorage.setItem('nexo.mode', 'demo');
@@ -162,9 +163,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={value}>
       {children}
-      {message && (
+      {toastState && (
         <div className="toast" role="status">
-          {message}
+          <span>{toastState.message}</span>
+          {toastState.action && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                const action = toastState.action!;
+                setToastState(null);
+                void Promise.resolve(action.onClick()).catch(() =>
+                  setToastState({ message: 'Não foi possível desfazer. Confira o movimento em Movimentos.' }),
+                );
+              }}
+            >
+              {toastState.action.label}
+            </button>
+          )}
         </div>
       )}
     </AppContext.Provider>

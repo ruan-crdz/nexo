@@ -1,10 +1,31 @@
 import { NavLink, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
-import { Home, NotebookPen, CalendarClock, Sparkles, Settings, CircleHelp, Plus } from 'lucide-react';
+import {
+  Home,
+  NotebookPen,
+  CalendarClock,
+  Sparkles,
+  Settings,
+  CircleHelp,
+  Plus,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Camera,
+  Mic,
+  MessageCircle,
+  FileUp,
+  PenLine,
+  ArrowUpRight,
+  ArrowDownLeft,
+} from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
-import { Brand, Button } from '../design-system/components';
+import { Brand, Button, Dialog } from '../design-system/components';
 import { ThemeToggle } from '../design-system/theme';
 import { OfflineStatus } from './OfflineStatus';
+import { useFinancialVisibility } from '../design-system/financial-visibility';
+import { MoneyForm } from './SimpleMoney';
+import { useCaptureFlow } from '../design-system/capture-flow';
 export { Brand } from '../design-system/components';
 
 const navigation = [
@@ -16,6 +37,8 @@ const navigation = [
 ];
 export function Shell() {
   const app = useApp();
+  const { visible, toggle } = useFinancialVisibility();
+  const { sheetOpen, choosingType, entryType, open, close, chooseType, closeEntry } = useCaptureFlow();
   const { pathname } = useLocation();
   const main = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -44,17 +67,42 @@ export function Shell() {
         Pular para o conteúdo
       </a>
       <header className="simple-topbar">
-        <Link to="/inicio" aria-label="Nexo início">
+        <Link className="simple-mobile-brand" to="/inicio" aria-label="Nexo início">
           <Brand />
         </Link>
         <span className="workspace-label">Finanças pessoais</span>
         <div className="simple-topbar-actions">
-          <Link to="/anotar" className="button button-primary topbar-capture" aria-label="Anotar agora">
+          <Link
+            to="/anotar"
+            className="button button-primary topbar-capture"
+            aria-label="Anotar agora"
+            onClick={(event) => {
+              event.preventDefault();
+              open();
+            }}
+          >
             <Plus size={20} />
             <span>Anotar</span>
           </Link>
+          <Button
+            variant="ghost"
+            className="topbar-icon"
+            aria-label={visible ? 'Ocultar valores' : 'Mostrar valores'}
+            title={visible ? 'Ocultar valores' : 'Mostrar valores'}
+            onClick={toggle}
+          >
+            {visible ? <Eye size={20} /> : <EyeOff size={20} />}
+          </Button>
+          <Link
+            to="/seguranca"
+            className="button button-ghost topbar-icon"
+            aria-label="Abrir Proteção"
+            title="Proteção"
+          >
+            <ShieldCheck size={20} />
+          </Link>
           <ThemeToggle />
-          <Link to="/ajuda" className="button button-ghost" title="Preciso de ajuda">
+          <Link to="/ajuda" className="button button-ghost topbar-help" title="Preciso de ajuda">
             <CircleHelp size={20} />
             <span>Preciso de ajuda</span>
           </Link>
@@ -64,8 +112,11 @@ export function Shell() {
         </div>
       </header>
       <nav className="simple-nav" aria-label="Principal">
+        <Link className="simple-nav-brand" to="/inicio" aria-label="Nexo início">
+          <Brand />
+        </Link>
         {navigation.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end>
+          <NavLink key={to} to={to} end className={to === '/perfil' ? 'profile-nav-link' : undefined}>
             <Icon size={24} />
             <span>{label}</span>
           </NavLink>
@@ -91,6 +142,48 @@ export function Shell() {
           <Outlet />
         )}
       </main>
+      {sheetOpen && (
+        <Dialog
+          title={choosingType ? 'O que quer anotar?' : 'Como quer adicionar?'}
+          className="capture-sheet"
+          onClose={close}
+        >
+          <div className="capture-options">
+            {choosingType ? (
+              <>
+                <Button variant="secondary" onClick={() => chooseType('expense')}>
+                  <ArrowUpRight size={20} /> Um gasto
+                </Button>
+                <Button variant="secondary" onClick={() => chooseType('income')}>
+                  <ArrowDownLeft size={20} /> Uma entrada
+                </Button>
+                <Button variant="ghost" onClick={() => chooseType()}>
+                  Voltar
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => chooseType()}>
+                  <PenLine size={20} /> Digitar
+                </Button>
+                <Link className="button button-secondary" to="/nexo" onClick={close}>
+                  <Mic size={20} /> Falar com o Nexo
+                </Link>
+                <Link className="button button-secondary" to="/recibo" onClick={close}>
+                  <Camera size={20} /> Fotografar recibo
+                </Link>
+                <Link className="button button-secondary" to="/importar" onClick={close}>
+                  <FileUp size={20} /> Importar extrato
+                </Link>
+                <Link className="button button-secondary" to="/integracoes" onClick={close}>
+                  <MessageCircle size={20} /> Usar WhatsApp
+                </Link>
+              </>
+            )}
+          </div>
+        </Dialog>
+      )}
+      {entryType && <MoneyForm type={entryType} onClose={closeEntry} />}
     </div>
   );
 }
