@@ -106,16 +106,15 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
   await expect(page.locator('.simple-totals')).toHaveText(totals, { useInnerText: true });
 });
 
-test('navegação contém os cinco destinos principais e caminhos antigos voltam ao início', async ({ page }) => {
+test('navegação contém os quatro destinos principais e caminhos antigos voltam ao início', async ({ page }) => {
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.getByRole('link')).toHaveCount(5);
+  await expect(nav.getByRole('link')).toHaveCount(4);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Anotações');
-  await expect(nav).toContainText('Investir');
   await expect(nav).toContainText('WhatsApp');
   await expect(nav).toContainText('Ajustes');
   await expect(page.getByText('Nexo Score')).not.toBeVisible();
-  for (const path of ['empresa', 'futuro', 'patrimonio']) {
+  for (const path of ['empresa', 'futuro', 'patrimonio', 'investimentos']) {
     await page.goto(`/#/${path}`);
     await expect(page).toHaveURL(/#\/inicio$/);
     await expect(page.getByRole('heading', { name: 'Seu mês até agora' })).toBeVisible();
@@ -169,7 +168,6 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
       'privacidade',
       'planejar',
       'metas',
-      'investimentos',
       'perguntas',
       'importar',
       'familia',
@@ -201,7 +199,6 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
       'privacidade',
       'planejar',
       'metas',
-      'investimentos',
       'perguntas',
       'importar',
       'familia',
@@ -226,116 +223,6 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
     })
     .toBeLessThanOrEqual(768);
   expect(errors).toEqual([]);
-});
-
-test('plano de investimento calcula quanto guardar sem prometer ganhos', async ({ page }) => {
-  await page.goto('/#/investimentos');
-  await expect(page.getByRole('heading', { name: 'Investir sem complicar' })).toBeVisible();
-  const selectedGoalId = await page.getByLabel('Para que você quer guardar?').inputValue();
-  await page.getByLabel('Quanto quer guardar por mês? (R$)').fill('100,00');
-  await page.getByRole('button', { name: 'Em 1 ano', exact: true }).click();
-  await page.getByRole('button', { name: 'Sim', exact: true }).click();
-  await page.getByRole('button', { name: 'Precisaria retirar esse dinheiro', exact: true }).click();
-  await page.getByRole('button', { name: 'Estou começando', exact: true }).click();
-  const planTab = page.getByRole('button', { name: 'Meu plano', exact: true });
-  if (await planTab.isVisible()) await planTab.click();
-  await expect(page.getByText('Sem contar possíveis ganhos, você teria de guardar')).toBeVisible();
-  await page.getByRole('button', { name: 'Salvar meu plano' }).click();
-  await expect
-    .poll(() =>
-      page.evaluate((goalId) => {
-        const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
-        return data.goals.find((goal: { id: string }) => goal.id === goalId).monthly_contribution;
-      }, selectedGoalId),
-    )
-    .toBe(10000);
-});
-
-test('plano explica quando guardar, onde procurar e o que conferir', async ({ page }) => {
-  await page.goto('/#/investimentos');
-  await page.getByRole('button', { name: 'Em 1 ano', exact: true }).click();
-  await page.getByRole('button', { name: 'Sim', exact: true }).click();
-  await page.getByRole('button', { name: 'Precisaria retirar esse dinheiro', exact: true }).click();
-  await page.getByRole('button', { name: 'Estou começando', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Orientação para você' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Você pode precisar desse dinheiro antes' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'CVM: quando você pode retirar o dinheiro' })).toHaveAttribute(
-    'href',
-    'https://www.gov.br/investidor/pt-br/investir/antes-de-investir/entenda-as-caracteristicas-dos-investimentos/liquidez',
-  );
-  const visibleCopy = await page.locator('main').innerText();
-  expect(visibleCopy).not.toMatch(/\baporte\b|\boscilação\b|\brendimento\b|\bativos\b|\bliquidez\b|\bresgate\b/i);
-});
-
-test('orientação considera prazo, acesso, reação a perdas e experiência', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.evaluate(() => {
-    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
-    const [year, month, day] = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Sao_Paulo',
-    })
-      .format(new Date())
-      .split('-');
-    data.goals[0].deadline = `${Number(year) + 5}-${month}-${day}`;
-    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
-  });
-  await page.reload();
-  await page.goto('/#/investimentos');
-  await expect(page.getByRole('heading', { name: 'Investir sem complicar' })).toBeVisible();
-  const initialGuidanceTab = page.getByRole('button', { name: 'Minha orientação', exact: true });
-  if (await initialGuidanceTab.isVisible()) await initialGuidanceTab.click();
-  await expect(page.getByRole('button', { name: 'Explicar meu plano' })).toBeDisabled();
-  const initialPlanTab = page.getByRole('button', { name: 'Meu plano', exact: true });
-  if (await initialPlanTab.isVisible()) await initialPlanTab.click();
-  await expect(page.getByRole('button', { name: 'Ver minha orientação', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Em 5 anos ou mais', exact: true }).click();
-  await page.getByRole('button', { name: 'Não', exact: true }).click();
-  await page.getByRole('button', { name: 'Manteria o plano mesmo com a queda', exact: true }).click();
-  await page.getByRole('button', { name: 'Tenho experiência', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Você tem tempo e aceita esperar' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Explicar meu plano' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Explicar meu plano' }).click();
-  await expect(page.locator('.investment-ai-section')).toContainText('Na demonstração, a IA não é consultada');
-  await expect(page.locator('a[href*="tesourodireto.com.br"]')).toHaveCount(0);
-  await expect(page.locator('a[href*="gov.br/investidor"]')).toBeVisible();
-  await page.getByRole('button', { name: 'Meu plano', exact: true }).click();
-  await page.getByRole('button', { name: 'Em até 3 meses', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Sua resposta e a data da meta são diferentes' })).toBeVisible();
-  await page.getByRole('button', { name: 'Meu plano', exact: true }).click();
-  await page.getByRole('button', { name: 'Em 5 anos ou mais', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Você tem tempo e aceita esperar' })).toBeVisible();
-  await expect(page.locator('a[href*="tesourodireto.com.br"]')).toHaveCount(0);
-});
-
-test('campo para guardar por mês permanece disponível durante a edição', async ({ page }) => {
-  await page.goto('/#/investimentos');
-  const contribution = page.getByLabel('Quanto quer guardar por mês? (R$)');
-  await contribution.fill('');
-  await expect(contribution).toBeVisible();
-  await contribution.fill('350,00');
-  await expect(contribution).toHaveValue('350,00');
-  await expect(page.getByRole('button', { name: 'Salvar meu plano' })).toBeEnabled();
-});
-
-test('página de investimentos permite criar uma meta própria e apresenta fontes oficiais', async ({ page }) => {
-  await page.goto('/#/investimentos');
-  await page.getByRole('button', { name: 'Criar objetivo' }).click();
-  await page.getByLabel('O que você quer fazer?').fill('Reformar a casa');
-  await page.getByLabel('Quanto quer juntar? (R$)').fill('12000,00');
-  await page.getByLabel('Quanto já está guardado? (R$)').fill('1000,00');
-  await page.getByLabel('Até quando gostaria?').fill('2027-10-05');
-  await page.getByRole('button', { name: 'Salvar objetivo' }).click();
-  await expect(page.getByLabel('Para que você quer guardar?')).toContainText('Reformar a casa');
-  const guidanceTab = page.getByRole('button', { name: 'Minha orientação', exact: true });
-  if (await guidanceTab.isVisible()) await guidanceTab.click();
-  await expect(page.getByRole('link', { name: 'CVM: o que avaliar antes de investir' })).toHaveAttribute(
-    'href',
-    'https://www.gov.br/investidor/pt-br/investir/antes-de-investir',
-  );
 });
 
 test('formulário tem foco, Escape cancela e campos são acessíveis', async ({ page }) => {
@@ -443,9 +330,6 @@ test('notas de versão do PWA descrevem mudanças recentes', async ({ request })
   const response = await request.get('/release-notes.json');
   expect(response.ok()).toBe(true);
   const notes = await response.json();
-  expect(notes.changes).toContain(
-    'Investimentos: quatro perguntas sobre prazo, necessidade do dinheiro, reação a perdas e experiência deixam a orientação mais pessoal.',
-  );
   expect(notes.changes).toContain(
     'Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.',
   );

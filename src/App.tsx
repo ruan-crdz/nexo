@@ -28,9 +28,6 @@ const ReceiptImport = lazy(async () => ({
   default: (await import('./features/ReceiptImport')).ReceiptImport,
 }));
 const GoalsPage = lazy(async () => ({ default: (await import('./features/GoalsPage')).GoalsPage }));
-const InvestmentsPage = lazy(async () => ({
-  default: (await import('./features/InvestmentsPage')).InvestmentsPage,
-}));
 
 export default function App() {
   return (
@@ -61,7 +58,6 @@ export default function App() {
               <Route path="/privacidade" element={<SimplePrivacy />} />
               <Route path="/planejar" element={<PlanningHub />} />
               <Route path="/metas" element={<GoalsPage />} />
-              <Route path="/investimentos" element={<InvestmentsPage />} />
               <Route path="/perguntas" element={<FinancialQuestions />} />
               <Route path="/importar" element={<StatementImport />} />
               <Route path="/familia" element={<FamilyPage />} />
