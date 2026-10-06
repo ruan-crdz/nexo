@@ -2,11 +2,7 @@ import { NavLink, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
 import {
   Home,
   NotebookPen,
-  CalendarClock,
-  Sparkles,
   Settings,
-  CircleHelp,
-  Plus,
   Eye,
   EyeOff,
   ShieldCheck,
@@ -21,7 +17,6 @@ import {
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
 import { Brand, Button, Dialog } from '../design-system/components';
-import { ThemeToggle } from '../design-system/theme';
 import { OfflineStatus } from './OfflineStatus';
 import { useFinancialVisibility } from '../design-system/financial-visibility';
 import { MoneyForm } from './SimpleMoney';
@@ -30,16 +25,17 @@ export { Brand } from '../design-system/components';
 
 const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
-  { to: '/movimentos', label: 'Movimentos', icon: NotebookPen },
-  { to: '/planejar', label: 'Planejar', icon: CalendarClock },
-  { to: '/nexo', label: 'Nexo', icon: Sparkles },
-  { to: '/perfil', label: 'Perfil', icon: Settings },
+  { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
+  { to: '/perfil', label: 'Você', icon: Settings },
 ];
 export function Shell() {
   const app = useApp();
   const { visible, toggle } = useFinancialVisibility();
-  const { sheetOpen, choosingType, entryType, open, close, chooseType, closeEntry } = useCaptureFlow();
-  const { pathname } = useLocation();
+  const { sheetOpen, choosingType, entryType, close, chooseType, closeEntry } = useCaptureFlow();
+  const location = useLocation();
+  const { pathname } = location;
+  const onboardingConnection =
+    pathname === '/integracoes' && new URLSearchParams(location.search).get('onboarding') === '1';
   const main = useRef<HTMLElement>(null);
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -53,7 +49,8 @@ export function Shell() {
     );
   if (!app.demo && !app.user) return <Navigate to="/login" replace />;
   if (!app.demo && app.mfaRequired) return <Navigate to="/seguranca" replace />;
-  if (!app.data.profile.onboarded && !app.error) return <Navigate to="/onboarding" replace />;
+  if (!app.data.profile.onboarded && !app.error && !onboardingConnection)
+    return <Navigate to="/onboarding" replace />;
   return (
     <div className="simple-shell">
       <a
@@ -67,23 +64,13 @@ export function Shell() {
         Pular para o conteúdo
       </a>
       <header className="simple-topbar">
-        <Link className="simple-mobile-brand" to="/inicio" aria-label="Nexo início">
-          <Brand />
-        </Link>
-        <span className="workspace-label">Finanças pessoais</span>
-        <div className="simple-topbar-actions">
-          <Link
-            to="/anotar"
-            className="button button-primary topbar-capture"
-            aria-label="Anotar agora"
-            onClick={(event) => {
-              event.preventDefault();
-              open();
-            }}
-          >
-            <Plus size={20} />
-            <span>Anotar</span>
+        <div className="topbar-greeting">
+          <Link className="simple-profile" to="/perfil" aria-label="Abrir seu perfil">
+            {app.data.profile.name.slice(0, 1).toUpperCase()}
           </Link>
+          <span>Olá, {app.data.profile.name.split(' ')[0]}</span>
+        </div>
+        <div className="simple-topbar-actions">
           <Button
             variant="ghost"
             className="topbar-icon"
@@ -100,14 +87,6 @@ export function Shell() {
             title="Proteção"
           >
             <ShieldCheck size={20} />
-          </Link>
-          <ThemeToggle />
-          <Link to="/ajuda" className="button button-ghost topbar-help" title="Preciso de ajuda">
-            <CircleHelp size={20} />
-            <span>Preciso de ajuda</span>
-          </Link>
-          <Link to="/perfil" className="simple-profile" aria-label="Abrir meu perfil">
-            {app.data.profile.name.slice(0, 1).toUpperCase()}
           </Link>
         </div>
       </header>

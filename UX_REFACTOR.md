@@ -1,6 +1,6 @@
 # Refatoração de UX do Nexo
 
-Status: em andamento. Shell, Home, Anotar, filtro Pendentes, Planejar e agrupamento do Perfil já receberam uma primeira implementação. Integrações, recibos/extratos, família, autenticação e ajuda ainda precisam de refatoração visual própria; não considerar a iniciativa concluída.
+Status: em andamento. Shell, Home e mapa “Início/Histórico/Você” já foram simplificados; captura, movimentos e planejamento preservam seus fluxos. Integrações, recibos/extratos, família, autenticação e ajuda ainda precisam de revisão própria; não considerar a iniciativa concluída.
 
 ## Princípios e limites
 
@@ -16,7 +16,7 @@ Status: em andamento. Shell, Home, Anotar, filtro Pendentes, Planejar e agrupame
 - `AppProvider` fornece sessão, estado MFA, demo, dataset, repository e toast. `src/data/repository.ts` escolhe repositório local de demo ou Supabase por usuário.
 - `shared/` contém regras puras, dinheiro em centavos, datas civis, decisões, planejamento, importação e contratos. Edge Functions tratam IA, RAG, recibos, WhatsApp e direitos da conta.
 - A interface combina `src/design-system/styles.css` e `simple.css`; os tokens de marca ficam em `tokens.css`. Componentes existentes incluem `Brand`, `Button`, `PageHeader`, `Card`, `SectionTitle`, `Stat`, `Progress`, `Badge`, `Empty`, `Why` e `Dialog`.
-- O shell atual tem rail lateral desktop discreto, rodapé móvel de cinco destinos, marca/Perfil no rail desktop e ações Anotar, olho, Proteção e avatar no topo. Ações utilitárias são compactadas em tablet/mobile.
+- O shell atual tem rail lateral desktop discreto e três destinos principais: Início, Histórico e Você. Mobile usa rodapé de três itens. Cabeçalho mostra avatar/saudação, olho e Proteção; Anotar fica na Home.
 - Existem telas antigas em `Home.tsx`, `Settings.tsx`, `Planning.tsx`, `Resources.tsx` e `Business.tsx`. Elas não são rotas pessoais ativas em `App.tsx`; `Resources.tsx` ainda exporta utilitário usado pela importação. Não apagar sem rastrear dependências.
 
 ## Mapa de telas e rotas
@@ -28,8 +28,8 @@ Status: em andamento. Shell, Home, Anotar, filtro Pendentes, Planejar e agrupame
 | `/cadastro`                  | Criação de conta (`AuthPage`)                                                                                            | Perfil/entrada de conta                         | Preservar validação e auth.                                                                                                                   |
 | `/recuperar`                 | Recuperação de senha (`AuthPage`)                                                                                        | Perfil/segurança                                | Preservar fluxo.                                                                                                                              |
 | `/redefinir-senha`           | Redefinição de senha (`AuthPage`)                                                                                        | Perfil/segurança                                | Preservar fluxo.                                                                                                                              |
-| `/onboarding`                | Nome inicial e encaminhamento opcional ao WhatsApp (`SimpleOnboarding`)                                                  | Início/primeiro acesso                          | Reusar gravação de perfil e consentimentos existentes; não exigir integração para continuar.                                                  |
-| `/inicio`                    | Resumo do mês, insight, próximo objetivo, recentes e gráficos progressivos (`SimpleHome`)                                | Início: “Como está meu dinheiro?”               | Reorganizar o mesmo cálculo, dados e detalhes; manter aviso de demo e distinção entre resultado registrado e saldo bancário.                  |
+| `/onboarding`                | Três etapas: nome, WhatsApp opcional e objetivo (`SimpleOnboarding`)                                                     | Início/primeiro acesso                          | Persiste o nome antes da conexão; integração pode ser pulada; objetivo fica no perfil ao finalizar.                                           |
+| `/inicio`                    | Resultado do mês, CTA WhatsApp, dois atalhos, insight opcional, meta e até três movimentos (`SimpleHome`)                | Início: conferir em cinco segundos              | Gráficos, alertas e calendário saíram da tela inicial; cálculos continuam disponíveis em Histórico/Planejar. Resultado não é saldo bancário.  |
 | `/anotar`                    | Página de compatibilidade (`CapturePage`); ação global abre diálogo/folha com Digitar, Falar, Recibo, Extrato e WhatsApp | Ação global Anotar                              | A captura global e atalhos da Home usam `MoneyForm` e mantêm revisão. A URL antiga segue acessível.                                           |
 | `/movimentos`                | Busca, mês, filtros de entradas/gastos/origem/pendentes, detalhe e CRUD (`SimpleHistory`, `MoneyRows`)                   | Movimentos: “O que aconteceu?”                  | Detalhe mostra data, categoria, origem, status e conta quando existe; ledger e CRUD preservados.                                              |
 | `/planejar`                  | Próximas contas, limites, metas e recorrências em seções verticais (`PlanningHub`)                                       | Planejar: “O que vai acontecer?”                | Migração de tabs para lista vertical concluída; schemas e operações do repository preservados.                                                |
@@ -55,8 +55,8 @@ Status: em andamento. Shell, Home, Anotar, filtro Pendentes, Planejar e agrupame
 
 ## Navegação observada
 
-- Mobile lista Início, Movimentos, Planejar, Nexo e Perfil; Anotar abre uma folha inferior com ações grandes. Rótulos e alvos foram verificados em larguras estreitas.
-- Desktop usa rail lateral com Início, Movimentos, Planejar e Nexo; Perfil fica separado no fim. Conteúdo permanece com largura máxima confortável.
+- Mobile lista Início, Histórico e Você. Planejar, Nexo e demais capacidades ficam contextuais ou dentro de Você. Anotar abre a folha inferior a partir da Home.
+- Desktop usa rail lateral com Início, Histórico e Você; o conteúdo mantém largura máxima confortável.
 - Olho persiste a preferência localmente e mascara valores renderizados nas áreas pessoais ativas, respostas textuais do Nexo e dados familiares/financeiros. Campos editáveis continuam legíveis durante a digitação. E2E cobre mudança entre páginas e reload.
 - Escudo abre `/seguranca`, que mostra apenas estado/configuração TOTP confirmado. Não afirmar sessões, último acesso ou cobertura global.
 
@@ -64,8 +64,9 @@ Status: em andamento. Shell, Home, Anotar, filtro Pendentes, Planejar e agrupame
 
 | Área               | Antes                                                               | Depois planejado                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shell              | Cabeçalho com menu horizontal ou rodapé                             | Rail desktop, cinco destinos no mobile, ação global, olho persistente e Proteção baseada em TOTP. Implementado; ainda exige sweep final.                   |
-| Início             | Painel com blocos/cartões e prioridades difusas                     | Resumo em fluxo, ações horizontais, um insight, próximas contas, meta e recentes; gráficos progressivos. Implementado; precisa de validação final.         |
+| Shell              | Cabeçalho com menu horizontal ou rodapé                             | Rail desktop e três destinos (Início, Histórico, Você); avatar/saudação, olho e Proteção. Implementado; ainda exige sweep final.                           |
+| Início             | Painel com blocos/cartões e prioridades difusas                     | Seu mês, CTA WhatsApp, dois atalhos, um insight, uma meta e três movimentos. Gráficos/alertas fora da Home. Implementado; critérios E2E ativos.            |
+| Onboarding         | Formulário de nome que encerrava a configuração                     | Nome, WhatsApp opcional e objetivo principal em três passos. Implementado sem forçar conexão.                                                              |
 | Anotar             | Página separada que encaminha para vários fluxos                    | Bottom sheet/dialog, Digitar progressivo, Falar, Recibo, Extrato e WhatsApp. Implementado com `MoneyForm` existente.                                       |
 | Movimentos         | Histórico chamado de anotações                                      | Busca, mês, entradas/gastos/origem/pendentes, detalhe e CRUD. Implementado com origem explícita.                                                           |
 | Planejar           | Três tabs que escondiam contexto                                    | Próximas contas, limites, metas e recorrências em seções verticais. Implementado; precisa de validação final.                                              |
@@ -76,9 +77,9 @@ Status: em andamento. Shell, Home, Anotar, filtro Pendentes, Planejar e agrupame
 ## Plano de execução
 
 1. Mapeamento de rotas, arquitetura e contratos: concluído.
-2. Shell e navegação desktop/mobile: primeira implementação concluída.
+2. Shell e navegação desktop/mobile: três destinos concluídos.
 3. Design system: provider global de privacidade e formato monetário concluído; faltam padrões de skeleton, detalhe e seção.
-4. Home e captura: primeira implementação concluída.
+4. Home e captura: Home de conferência e ações comuns concluídas; fluxos menos usados seguem em telas próprias.
 5. Movimentos, filtro Pendentes, detalhe e desfazer da gravação manual: primeira implementação concluída. Undo não é oferecido para registro real ainda enfileirado offline.
 6. Planejar: tabs substituídas por seções; validação completa da fase pendente.
 7. Nexo: estrutura de sugestões e explicabilidade iniciada; revisão da resposta/decisão pendente.

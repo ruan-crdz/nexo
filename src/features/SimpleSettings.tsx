@@ -170,14 +170,41 @@ export function SimpleSettings() {
         </section>
       )}
       <section className="profile-links simple-settings-links">
-        <h2>Integrações e compartilhamento</h2>
+        <h2>Seu dinheiro</h2>
+        <Link to="/planejar">
+          <span>Planejamento</span>
+          <ChevronRight />
+        </Link>
+        <Link to="/metas">
+          <span>Metas</span>
+          <ChevronRight />
+        </Link>
+        <Link to="/controle">
+          <span>Posso gastar?</span>
+          <ChevronRight />
+        </Link>
+        <h2>Nexo</h2>
+        <Link to="/nexo">
+          <span>Perguntar ao Nexo</span>
+          <ChevronRight />
+        </Link>
+        <Link to="/importar">
+          <span>Importar extrato</span>
+          <ChevronRight />
+        </Link>
+        <Link to="/recibo">
+          <span>Recibos</span>
+          <ChevronRight />
+        </Link>
+        <h2>Pessoas</h2>
+        <Link to="/familia">
+          <span>Família</span>
+          <ChevronRight />
+        </Link>
+        <h2>Conexões</h2>
         <Link to="/integracoes">
           <MessageCircle />
           <span>Nexo no WhatsApp</span>
-          <ChevronRight />
-        </Link>
-        <Link to="/familia">
-          <span>Permissões da família</span>
           <ChevronRight />
         </Link>
         <h2>Segurança e privacidade</h2>

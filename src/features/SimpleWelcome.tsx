@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MessageCircle, Mic, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Brand, Button, Card } from '../design-system/components';
@@ -68,7 +68,13 @@ export function SimpleLanding() {
 export function SimpleOnboarding() {
   const app = useApp();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
+  const location = useLocation();
+  const initialStep = new URLSearchParams(location.search).get('step');
+  const [step, setStep] = useState<'name' | 'whatsapp' | 'objective'>(
+    initialStep === 'objective' ? 'objective' : initialStep === 'whatsapp' ? 'whatsapp' : 'name',
+  );
+  const [name, setName] = useState(app.data.profile.name);
+  const [objective, setObjective] = useState(app.data.profile.objective);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   if (!app.authReady || app.loading || !app.mfaReady)
@@ -80,43 +86,112 @@ export function SimpleOnboarding() {
   if (!app.user && !app.demo) return <Navigate to="/login" replace />;
   if (!app.demo && app.mfaRequired) return <Navigate to="/seguranca" replace />;
   if (app.data.profile.onboarded) return <Navigate to="/inicio" replace />;
-  async function start(event: React.FormEvent) {
+  async function saveName(event: React.FormEvent) {
     event.preventDefault();
+    if (!name.trim()) return;
     setPending(true);
     setError('');
     try {
-      await app.repository.profile({ ...app.data.profile, name: name.trim(), onboarded: true });
+      await app.repository.profile({ ...app.data.profile, name: name.trim(), onboarded: false });
       await app.refresh();
-      navigate('/integracoes');
+      setStep('whatsapp');
+      navigate('/onboarding?step=whatsapp', { replace: true });
     } catch {
       setError('Não foi possível salvar seu nome. Confira a conexão e tente novamente.');
     } finally {
       setPending(false);
     }
   }
+  async function finish(event: React.FormEvent) {
+    event.preventDefault();
+    if (!objective) return;
+    setPending(true);
+    setError('');
+    try {
+      await app.repository.profile({ ...app.data.profile, name: name.trim(), objective, onboarded: true });
+      await app.refresh();
+      navigate('/inicio', { replace: true });
+    } catch {
+      setError('Não foi possível salvar sua preferência. Tente novamente.');
+    } finally {
+      setPending(false);
+    }
+  }
+  function continueWithoutWhatsApp() {
+    setStep('objective');
+    navigate('/onboarding?step=objective', { replace: true });
+  }
   return (
     <main className="simple-onboarding">
       <Brand />
-      <h1>Como podemos chamar você?</h1>
-      <p>Só precisamos do seu nome para começar. Depois, vamos conectar seu WhatsApp.</p>
-      <form className="simple-form" onSubmit={(e) => void start(e)}>
-        <label>
-          Seu nome
-          <input
-            required
-            maxLength={80}
-            autoComplete="given-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        {error && (
-          <p role="alert" className="error-message">
-            {error}
-          </p>
-        )}
-        <Button disabled={pending}>{pending ? 'Salvando…' : 'Continuar'}</Button>
-      </form>
+      <p className="onboarding-progress">
+        {step === 'name' ? '1 de 3' : step === 'whatsapp' ? '2 de 3' : '3 de 3'}
+      </p>
+      {step === 'name' && (
+        <>
+          <h1>Como podemos chamar você?</h1>
+          <p>Organizar seu dinheiro pode ser simples. Você fala. O Nexo organiza.</p>
+          <form className="simple-form" onSubmit={(event) => void saveName(event)}>
+            <label>
+              Seu nome
+              <input
+                required
+                maxLength={80}
+                autoComplete="given-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            {error && (
+              <p role="alert" className="error-message">
+                {error}
+              </p>
+            )}
+            <Button disabled={pending}>{pending ? 'Salvando…' : 'Continuar'}</Button>
+          </form>
+        </>
+      )}
+      {step === 'whatsapp' && (
+        <section className="onboarding-step">
+          <h1>Use pelo WhatsApp</h1>
+          <p>Envie gastos, entradas ou áudios normalmente.</p>
+          <div className="chat-example-user">“gastei 10 na coxinha”</div>
+          <div className="chat-example-nexo">
+            <strong>Nexo</strong>
+            <p>R$ 10 · Alimentação</p>
+          </div>
+          <Link className="button button-primary" to="/integracoes?onboarding=1">
+            Conectar WhatsApp
+          </Link>
+          <Button variant="secondary" onClick={continueWithoutWhatsApp}>
+            Conectar depois
+          </Button>
+        </section>
+      )}
+      {step === 'objective' && (
+        <form className="simple-form" onSubmit={(event) => void finish(event)}>
+          <h1>O que você mais quer melhorar?</h1>
+          <div className="onboarding-objectives" role="group" aria-label="Seu objetivo principal">
+            {['Sair das dívidas', 'Guardar dinheiro', 'Me organizar', 'Conquistar algo'].map((option) => (
+              <Button
+                key={option}
+                type="button"
+                variant={objective === option ? 'primary' : 'secondary'}
+                aria-pressed={objective === option}
+                onClick={() => setObjective(option)}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+          {error && (
+            <p role="alert" className="error-message">
+              {error}
+            </p>
+          )}
+          <Button disabled={pending || !objective}>{pending ? 'Salvando…' : 'Continuar'}</Button>
+        </form>
+      )}
     </main>
   );
 }

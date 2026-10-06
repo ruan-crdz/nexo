@@ -89,6 +89,22 @@ label {
   gap: 12px;
   margin-left: auto;
 }
+.topbar-greeting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+.topbar-greeting > span {
+  overflow-wrap: anywhere;
+}
+.topbar-greeting .simple-profile {
+  width: 48px;
+  height: 48px;
+  background: var(--sand);
+}
 .topbar-icon {
   display: grid;
   place-items: center;
@@ -789,6 +805,25 @@ label {
   flex-direction: column;
   gap: 28px;
 }
+.onboarding-progress {
+  color: var(--muted);
+  font-size: 14px;
+}
+.onboarding-step,
+.onboarding-objectives {
+  display: grid;
+  gap: 16px;
+}
+.onboarding-step > .button,
+.onboarding-objectives > .button {
+  width: 100%;
+  min-height: 56px;
+  justify-content: flex-start;
+}
+.onboarding-step .chat-example-user,
+.onboarding-step .chat-example-nexo {
+  max-width: 100%;
+}
 .auth-form-inner {
   width: min(100%, 460px);
 }
@@ -855,8 +890,60 @@ label {
 .home-layout {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   min-width: 0;
+}
+.simple-summary > .eyebrow {
+  margin-bottom: 4px;
+}
+.home-month-result {
+  display: grid;
+  gap: 2px;
+  margin: 12px 0 8px;
+}
+.home-month-result strong {
+  font-size: 40px;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.home-month-result > span {
+  color: var(--muted);
+  font-size: 16px;
+}
+.home-flow-line {
+  margin: 8px 0 2px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.home-whatsapp-cta {
+  width: fit-content;
+  min-height: 56px;
+  gap: 12px;
+}
+.home-goal {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+  padding-block: 20px;
+  border-block: 1px solid var(--line);
+}
+.home-goal-amount {
+  margin-top: 8px;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.home-recent {
+  min-width: 0;
+}
+.home-recent .simple-section-title {
+  margin-bottom: 4px;
+}
+.home-empty {
+  padding: 16px 0;
+}
+.home-empty span {
+  color: var(--muted);
+  font-size: 14px;
 }
 .home-layout .simple-totals strong {
   font-size: 30px;
@@ -1712,6 +1799,13 @@ label {
   }
   .home-layout {
     gap: 18px;
+  }
+  .home-month-result strong {
+    font-size: 38px;
+  }
+  .home-whatsapp-cta {
+    width: 100%;
+    justify-content: center;
   }
   .home-layout .simple-totals {
     grid-template-columns: minmax(0, 1fr);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowDownLeft,
@@ -6,24 +7,21 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageCircle,
-  ChartNoAxesColumnIncreasing,
-  Wallet,
   FileUp,
   Pencil,
   Trash2,
   Camera,
   Mic,
   Plus,
-  Target,
 } from 'lucide-react';
 import { useApp } from '../data/context';
-import { Button, Card, Dialog } from '../design-system/components';
+import { invoke } from '../data/client';
+import { Button, Card, Dialog, Progress } from '../design-system/components';
 import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { categories, transactionSchema } from '../../shared/domain';
 import type { Transaction } from '../../shared/domain';
-import { civilDate, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
+import { civilDate, parseMoney, shiftDays, shiftMonths, sum } from '../../shared/financial-engine';
 import { monthlyFlow } from '../../shared/insights';
-import { budgetUsage, weeklySummary } from '../../shared/planning';
 import { goalJourney } from '../../shared/journey';
 import { merchantKey } from '../../shared/financial-decisions';
 import { useCaptureFlow } from '../design-system/capture-flow';
@@ -298,30 +296,24 @@ export function CapturePage() {
 export function SimpleHome() {
   const app = useApp();
   const displayMoney = useMoneyDisplay();
-  const { open: openCapture, chooseType } = useCaptureFlow();
-  const [adding, setAdding] = useState<Transaction['type'] | null>(null);
+  const { open: openCapture } = useCaptureFlow();
+  const whatsapp = useQuery({
+    queryKey: ['whatsapp-connection', app.user?.id],
+    queryFn: () => invoke<{ connected: boolean; chat_url: string }>('whatsapp-link', { action: 'status' }),
+    enabled: !app.demo && Boolean(app.user),
+    retry: false,
+    staleTime: 30_000,
+  });
   const today = civilDate(new Date(), app.data.profile.timezone);
   const currentMonth = today.slice(0, 7);
-  const [month, setMonth] = useState(currentMonth);
   const posted = app.data.transactions.filter((transaction) => transaction.date <= today);
-  const flow = monthlyFlow(posted, month);
-  const weekly = weeklySummary(app.data.transactions, today);
+  const flow = monthlyFlow(posted, currentMonth);
   const due = app.data.transactions.filter(
     (transaction) =>
       transaction.status === 'planned' &&
       transaction.type === 'expense' &&
-      transaction.date <= shiftDays(today, 3),
+      transaction.date <= shiftDays(today, 7),
   );
-  const upcomingBills = app.data.transactions
-    .filter(
-      (transaction) =>
-        transaction.status === 'planned' &&
-        transaction.type === 'expense' &&
-        transaction.date >= today &&
-        transaction.date <= shiftDays(today, 30),
-    )
-    .sort((first, second) => first.date.localeCompare(second.date))
-    .slice(0, 5);
   const activeGoal =
     app.data.goals.find((goal) => goal.id === app.data.profile.active_goal_id) ??
     app.data.goals.find((goal) => goal.saved < goal.target) ??
@@ -329,36 +321,14 @@ export function SimpleHome() {
   const goalProgress = activeGoal
     ? goalJourney(activeGoal, activeGoal.weekly_amount, activeGoal.high_water)
     : null;
-  const limits = budgetUsage(app.data.budgets, app.data.transactions, today).filter(
-    (budget) => budget.remaining < 0,
-  );
-  const months = Array.from({ length: 6 }, (_, index) => {
-    const key = shiftMonths(`${currentMonth}-01`, index - 5).slice(0, 7);
-    return { month: key, ...monthlyFlow(posted, key) };
-  });
-  const chartMaximum = Math.max(1, ...months.flatMap((item) => [item.income, item.expenses]));
-  const categoryAmounts = new Map<string, number>();
-  for (const transaction of posted) {
-    if (transaction.status === 'paid' && transaction.type === 'expense' && transaction.date.startsWith(month))
-      categoryAmounts.set(
-        transaction.category,
-        (categoryAmounts.get(transaction.category) ?? 0) + transaction.amount,
-      );
-  }
-  const allSpending = [...categoryAmounts.entries()].sort((first, second) => second[1] - first[1]);
-  const spending = allSpending.slice(0, 4);
-  if (allSpending.length > 4)
-    spending.push([
-      'Outras categorias',
-      allSpending.slice(4).reduce((total, [, amount]) => total + amount, 0),
-    ]);
   const recent = app.data.transactions
     .filter((t) => t.date <= today)
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 5);
-  const completeMonths = months.filter((item) => item.month < currentMonth);
-  const latestComplete = completeMonths.at(-1);
-  const previousComplete = completeMonths.at(-2);
+    .slice(0, 3);
+  const latestMonth = shiftMonths(`${currentMonth}-01`, -1).slice(0, 7);
+  const previousMonth = shiftMonths(`${currentMonth}-01`, -2).slice(0, 7);
+  const latestComplete = { month: latestMonth, ...monthlyFlow(posted, latestMonth) };
+  const previousComplete = { month: previousMonth, ...monthlyFlow(posted, previousMonth) };
   const expenseChange =
     latestComplete && previousComplete ? latestComplete.expenses - previousComplete.expenses : null;
   const meaningfulChange =
@@ -370,22 +340,22 @@ export function SimpleHome() {
     Math.abs(expenseChange) >= Math.max(10_000, Math.round(previousComplete.expenses * 0.15));
   const insight = due.length
     ? {
-        title: `${due.length} conta${due.length === 1 ? '' : 's'} vencida${due.length === 1 ? '' : 's'} ou chegando`,
-        summary: 'Confira essas contas antes de decidir quanto do dinheiro está livre.',
+        title: `Há ${due.length} conta${due.length === 1 ? '' : 's'} prevista${due.length === 1 ? '' : 's'} nos próximos dias.`,
+        summary: `${displayMoney(sum(due.map((item) => item.amount)))} até o próximo vencimento.`,
         evidence: due
           .slice(0, 5)
           .map((item) => `${item.description} · ${dateLabel(item.date)} · ${displayMoney(item.amount)}`),
         destination: '/planejar',
-        action: 'Conferir contas',
+        action: 'Ver contas',
         question: '',
       }
     : meaningfulChange && latestComplete && previousComplete && expenseChange !== null
       ? {
-          title: `Você anotou ${displayMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'} em gastos`,
-          summary: `Comparando ${monthLabel(latestComplete.month)} com ${monthLabel(previousComplete.month)}.`,
+          title: `Você gastou ${displayMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'}.`,
+          summary: 'Comparado ao mês passado.',
           evidence: [
-            `${monthLabel(latestComplete.month)}: ${displayMoney(latestComplete.expenses)} em gastos pagos anotados.`,
-            `${monthLabel(previousComplete.month)}: ${displayMoney(previousComplete.expenses)} em gastos pagos anotados.`,
+            `${monthLabel(latestComplete.month)}: ${displayMoney(latestComplete.expenses)} em movimentos pagos.`,
+            `${monthLabel(previousComplete.month)}: ${displayMoney(previousComplete.expenses)} em movimentos pagos.`,
           ],
           destination: '/nexo',
           action: 'Entender a diferença',
@@ -395,75 +365,36 @@ export function SimpleHome() {
   return (
     <>
       <div className="home-layout">
-        <header className="simple-heading dashboard-heading">
-          <div>
-            <p className="muted">Visão geral</p>
-            <h1>Olá, {app.data.profile.name.split(' ')[0]}.</h1>
-            <p>Seu dinheiro com mais clareza.</p>
-          </div>
-          <div className="dashboard-period" role="group" aria-label="Navegar entre meses">
-            <Button
-              variant="ghost"
-              aria-label="Mês anterior do resumo"
-              title="Mês anterior"
-              onClick={() => setMonth(shiftMonths(`${month}-01`, -1).slice(0, 7))}
-            >
-              <ChevronLeft size={20} />
-            </Button>
-            <label>
-              <span className="sr-only">Mês do resumo</span>
-              <input
-                type="month"
-                value={month}
-                max={currentMonth}
-                onChange={(event) => {
-                  if (event.target.value && event.target.value <= currentMonth) setMonth(event.target.value);
-                }}
-              />
-            </label>
-            <Button
-              variant="ghost"
-              aria-label="Próximo mês do resumo"
-              title="Próximo mês"
-              disabled={month >= currentMonth}
-              onClick={() => setMonth(shiftMonths(`${month}-01`, 1).slice(0, 7))}
-            >
-              <ChevronRight size={20} />
-            </Button>
-          </div>
-        </header>
         <section className="simple-summary" aria-labelledby="monthly-summary-title">
-          <div className="simple-section-title">
-            <h2 id="monthly-summary-title">Seu mês até agora</h2>
+          <p className="eyebrow">{monthLabel(currentMonth)}</p>
+          <h1 id="monthly-summary-title">Seu mês</h1>
+          <div className="home-month-result" data-month={currentMonth}>
+            <strong>{displayMoney(Math.abs(flow.net))}</strong>
             <span>
-              {flow.count} {flow.count === 1 ? 'movimento' : 'movimentos'} · {monthLabel(month)}
+              {flow.net < 0 ? 'faltou nos movimentos deste mês' : 'sobrou nos movimentos deste mês'}
             </span>
           </div>
-          <div className="simple-totals" data-month={month}>
-            <div>
-              <span>
-                <ArrowDownLeft size={18} /> Entrou
-              </span>
-              <strong className="positive">{displayMoney(flow.income)}</strong>
-            </div>
-            <div>
-              <span>
-                <ArrowUpRight size={18} /> Saiu
-              </span>
-              <strong>{displayMoney(flow.expenses)}</strong>
-            </div>
-            <div className="simple-net">
-              <span>
-                <Wallet size={18} /> Resultado registrado
-              </span>
-              <strong>{displayMoney(Math.abs(flow.net))}</strong>
-            </div>
-          </div>
-          <p className="muted">
-            Com base no que você registrou no Nexo. Não é o saldo da sua conta bancária.
+          <p className="home-flow-line">
+            Entrou {displayMoney(flow.income)} · Saiu {displayMoney(flow.expenses)}
           </p>
-          {flow.count === 0 && <p>Comece anotando algo que recebeu ou gastou.</p>}
+          <small className="muted">Com base no que você registrou no Nexo.</small>
+          {flow.count === 0 && <p className="muted">Mande uma mensagem para começar.</p>}
         </section>
+        {whatsapp.data?.connected ? (
+          <a
+            className="button button-primary home-whatsapp-cta"
+            href={whatsapp.data.chat_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <MessageCircle size={20} /> Falar com o Nexo no WhatsApp <ArrowUpRight size={18} />
+          </a>
+        ) : (
+          <Link className="button button-primary home-whatsapp-cta" to="/integracoes">
+            <MessageCircle size={20} /> {app.demo ? 'Conhecer o Nexo no WhatsApp' : 'Conectar WhatsApp'}{' '}
+            <ChevronRight size={18} />
+          </Link>
+        )}
         <nav className="home-action-rail" aria-label="Ações rápidas">
           <button className="home-quick-action" onClick={openCapture}>
             <span>
@@ -471,35 +402,11 @@ export function SimpleHome() {
             </span>
             <small>Anotar</small>
           </button>
-          <button className="home-quick-action" onClick={() => chooseType('income')}>
-            <span>
-              <ArrowDownLeft size={22} />
-            </span>
-            <small>Receita</small>
-          </button>
           <Link className="home-quick-action" to="/recibo">
             <span>
               <Camera size={22} />
             </span>
-            <small>Recibo</small>
-          </Link>
-          <Link className="home-quick-action" to="/importar">
-            <span>
-              <FileUp size={22} />
-            </span>
-            <small>Extrato</small>
-          </Link>
-          <Link className="home-quick-action" to="/integracoes">
-            <span>
-              <MessageCircle size={22} />
-            </span>
-            <small>WhatsApp</small>
-          </Link>
-          <Link className="home-quick-action" to="/metas">
-            <span>
-              <Target size={22} />
-            </span>
-            <small>Meta</small>
+            <small>Escanear recibo</small>
           </Link>
         </nav>
         {insight && (
@@ -529,209 +436,69 @@ export function SimpleHome() {
             </Link>
           </section>
         )}
-        {upcomingBills.length > 0 && (
-          <section className="home-upcoming" aria-labelledby="upcoming-bills-title">
-            <div className="simple-section-title">
-              <h2 id="upcoming-bills-title">Próximas contas</h2>
-              <Link className="text-link" to="/planejar">
-                Ver todas
-              </Link>
-            </div>
-            <ul className="home-upcoming-list">
-              {upcomingBills.map((bill) => (
-                <li key={bill.id}>
-                  <time dateTime={bill.date}>{dateLabel(bill.date)}</time>
-                  <span>{bill.description}</span>
-                  <strong>{displayMoney(bill.amount)}</strong>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
         <section className="home-goal" aria-labelledby="home-goal-title">
           {activeGoal && goalProgress ? (
             <>
               <div>
-                <p className="eyebrow">Próximo passo da meta</p>
+                <p className="eyebrow">Seu próximo passo</p>
                 <h2 id="home-goal-title">{activeGoal.name}</h2>
-                <p>
-                  Guardado {displayMoney(activeGoal.saved)} de {displayMoney(activeGoal.target)} · faltam{' '}
-                  {displayMoney(goalProgress.remaining)}.
+                <p className="home-goal-amount">
+                  {displayMoney(activeGoal.saved)} de {displayMoney(activeGoal.target)}
                 </p>
-                <p>
-                  {activeGoal.weekly_amount > 0
-                    ? `Passo planejado: ${displayMoney(goalProgress.nextStep)} nesta semana.`
-                    : 'Ritmo pausado; você pode ajustar quando quiser.'}{' '}
-                  Revisar em {fullDateLabel(activeGoal.deadline)}.
-                </p>
-                <details>
-                  <summary>Ver cálculo</summary>
-                  <p>
-                    {displayMoney(activeGoal.target)} − {displayMoney(activeGoal.saved)} ={' '}
-                    {displayMoney(goalProgress.remaining)} restantes. O passo semanal é o valor que você
-                    cadastrou; esta conta não considera rendimentos.
-                  </p>
-                </details>
+                <Progress
+                  value={(activeGoal.saved / activeGoal.target) * 100}
+                  label={`Progresso de ${activeGoal.name}`}
+                />
+                <small>
+                  {Math.round((activeGoal.saved / activeGoal.target) * 100)}% · faltam{' '}
+                  {displayMoney(goalProgress.remaining)}
+                </small>
               </div>
               <Link className="button button-secondary" to="/metas">
-                Acompanhar meta <ChevronRight size={18} />
+                Ver meta <ChevronRight size={18} />
               </Link>
             </>
           ) : (
             <>
               <div>
-                <p className="eyebrow">Planejar no seu ritmo</p>
-                <h2 id="home-goal-title">Escolha um próximo passo</h2>
-                <p>Uma meta pode ter um valor, uma data para revisar e passos pequenos.</p>
+                <h2 id="home-goal-title">Escolha um objetivo</h2>
               </div>
               <Link className="button button-secondary" to="/metas">
-                Ver minhas metas <ChevronRight size={18} />
+                Escolher meta <ChevronRight size={18} />
               </Link>
             </>
           )}
         </section>
-        <div className="money-dashboard">
-          <section className="money-recent" aria-labelledby="recent-title">
-            <div className="simple-section-title">
-              <h2 id="recent-title">Movimentos recentes</h2>
-              <Link className="text-link" to="/movimentos">
-                Ver todas <ChevronRight size={18} />
-              </Link>
-            </div>
-            {recent.length ? (
-              <MoneyRows rows={recent} />
-            ) : (
-              <p className="muted">Ainda não há movimentos. Use Anotar para começar.</p>
-            )}
-          </section>
-        </div>
-        <details className="simple-details home-details">
-          <summary>Ver gráficos e categorias</summary>
-          <div className="money-dashboard">
-            <section className="money-evolution" aria-labelledby="evolution-title">
-              <div className="simple-section-title">
-                <div>
-                  <h2 id="evolution-title">Entradas e saídas</h2>
-                  <p className="muted">Últimos seis meses</p>
-                </div>
-                <div className="flow-legend">
-                  <span>
-                    <i className="income-swatch" /> Entrou
-                  </span>
-                  <span>
-                    <i className="expense-swatch" /> Saiu
-                  </span>
-                </div>
-              </div>
-              <div className="flow-chart" aria-label="Evolução dos movimentos por mês">
-                {months.map((item) => (
-                  <button
-                    key={item.month}
-                    data-month={item.month}
-                    className={`flow-month${month === item.month ? ' selected' : ''}`}
-                    aria-pressed={month === item.month}
-                    aria-label={`Ver ${monthLabel(item.month)}: entrou ${displayMoney(item.income)}, saiu ${displayMoney(item.expenses)}`}
-                    title={`${monthLabel(item.month)}: entrou ${displayMoney(item.income)} · saiu ${displayMoney(item.expenses)}`}
-                    onClick={() => setMonth(item.month)}
-                  >
-                    <span className="flow-bars" aria-hidden="true">
-                      <span
-                        className="income-bar"
-                        style={{ height: `${(item.income / chartMaximum) * 100}%` }}
-                      />
-                      <span
-                        className="expense-bar"
-                        style={{ height: `${(item.expenses / chartMaximum) * 100}%` }}
-                      />
-                    </span>
-                    <span>
-                      {new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
-                        .format(new Date(`${item.month}-01T12:00:00Z`))
-                        .replace('.', '')}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {!months.some((item) => item.count > 0) && (
-                <p className="muted">A evolução aparece quando você anota suas entradas e gastos.</p>
-              )}
-            </section>
-            <section className="money-breakdown" aria-labelledby="spending-title">
-              <div className="simple-section-title">
-                <h2 id="spending-title">Onde você gastou</h2>
-                <ChartNoAxesColumnIncreasing size={20} aria-hidden="true" />
-              </div>
-              {spending.length ? (
-                <ul className="category-list">
-                  {spending.map(([category, amount]) => (
-                    <li key={category}>
-                      <div>
-                        <span>{category}</span>
-                        <strong>{displayMoney(amount)}</strong>
-                      </div>
-                      <div className="category-track" aria-hidden="true">
-                        <span style={{ width: `${(amount / flow.expenses) * 100}%` }} />
-                      </div>
-                      <small className="muted">
-                        {Math.round((amount / flow.expenses) * 100)}% dos gastos
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="simple-empty">
-                  <p>Nenhum gasto pago em {monthLabel(month)}.</p>
-                  <Button variant="secondary" onClick={() => setAdding('expense')}>
-                    <ArrowUpRight size={18} /> Anotar gasto
-                  </Button>
-                </div>
-              )}
-            </section>
-          </div>
-        </details>
-        <Link to="/planejar" className="text-link">
-          Ver todos os planos
-        </Link>
-        {app.data.profile.reminders_enabled && (due.length > 0 || limits.length > 0) && (
-          <section className="attention-band" aria-label="Avisos consentidos">
-            <h2>Vale conferir</h2>
-            {due.length > 0 && <p>{due.length} contas pendentes, atrasadas ou vencendo em até três dias.</p>}
-            {limits.map((budget) => (
-              <p key={budget.id}>
-                {budget.category}: {displayMoney(-budget.remaining)} acima do limite.
-              </p>
-            ))}
-            <Link className="text-link" to="/perguntas">
-              Conferir registros
+        <section className="home-recent" aria-labelledby="recent-title">
+          <div className="simple-section-title">
+            <h2 id="recent-title">Últimos movimentos</h2>
+            <Link className="text-link" to="/movimentos">
+              Histórico <ChevronRight size={18} />
             </Link>
-          </section>
-        )}
-        {app.data.profile.weekly_digest && (
-          <section className="attention-band">
-            <h2>Sua última semana completa</h2>
-            <p>
-              {weekly.start} a {weekly.end} · entrou {displayMoney(weekly.income)}, saiu{' '}
-              {displayMoney(weekly.expenses)}; diferença {displayMoney(weekly.net)}.
-            </p>
-            <details>
-              <summary>Registros usados</summary>
-              <ul className="evidence-list">
-                {weekly.records.map((record) => (
-                  <li key={record.id}>
-                    {record.description} · {record.date} · {displayMoney(record.amount)}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </section>
-        )}
+          </div>
+          {recent.length ? (
+            <MoneyRows rows={recent} showMetadata={false} showActions={false} />
+          ) : (
+            <div className="home-empty">
+              <p>Ainda não tem movimentos por aqui.</p>
+              <span>Mande uma mensagem ao Nexo no WhatsApp para começar.</span>
+            </div>
+          )}
+        </section>
       </div>
-      {adding && <MoneyForm type={adding} onClose={() => setAdding(null)} />}
     </>
   );
 }
 
-function MoneyRows({ rows }: { rows: Transaction[] }) {
+export function MoneyRows({
+  rows,
+  showMetadata = true,
+  showActions = true,
+}: {
+  rows: Transaction[];
+  showMetadata?: boolean;
+  showActions?: boolean;
+}) {
   const app = useApp();
   const displayMoney = useMoneyDisplay();
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -776,7 +543,12 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
                     year: 'numeric',
                     timeZone: 'UTC',
                   }).format(new Date(`${t.date}T12:00:00Z`))}
-                  · {t.category} · {sourceLabels[t.source]}
+                  {showMetadata && (
+                    <>
+                      {' '}
+                      · {t.category} · {sourceLabels[t.source]}
+                    </>
+                  )}
                 </p>
               </div>
               <strong className={t.type === 'income' ? 'positive' : ''}>
@@ -784,37 +556,39 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
                 {t.type === 'income' ? '+' : '−'} {displayMoney(t.amount)}
               </strong>
             </div>
-            <div className="money-row-bottom">
-              <span className="muted">
-                {t.status === 'planned' ? 'Ainda não aconteceu' : t.type === 'income' ? 'Recebido' : 'Pago'}
-              </span>
-              <div>
-                <Button
-                  variant="ghost"
-                  aria-label={`Ver detalhes de ${t.description}`}
-                  onClick={() => setDetails(t)}
-                >
-                  <ChevronRight size={16} /> Detalhes
-                </Button>
-                <Button
-                  variant="ghost"
-                  aria-label={`Corrigir ${t.description}`}
-                  onClick={() => setEditing(t)}
-                >
-                  <Pencil size={16} /> Corrigir
-                </Button>
-                <Button
-                  variant="ghost"
-                  aria-label={`Excluir ${t.description}`}
-                  onClick={() => {
-                    setError('');
-                    setDeleting(t);
-                  }}
-                >
-                  <Trash2 size={16} /> Excluir
-                </Button>
+            {showActions && (
+              <div className="money-row-bottom">
+                <span className="muted">
+                  {t.status === 'planned' ? 'Ainda não aconteceu' : t.type === 'income' ? 'Recebido' : 'Pago'}
+                </span>
+                <div>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Ver detalhes de ${t.description}`}
+                    onClick={() => setDetails(t)}
+                  >
+                    <ChevronRight size={16} /> Detalhes
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Corrigir ${t.description}`}
+                    onClick={() => setEditing(t)}
+                  >
+                    <Pencil size={16} /> Corrigir
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Excluir ${t.description}`}
+                    onClick={() => {
+                      setError('');
+                      setDeleting(t);
+                    }}
+                  >
+                    <Trash2 size={16} /> Excluir
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </li>
         ))}
       </ul>

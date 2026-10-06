@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle2, Copy, ExternalLink, MessageCircle, Mic, RefreshCw } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke, supabase } from '../data/client';
@@ -18,6 +19,7 @@ type LinkCode = { code: string; message: string; expires_at: string; whatsapp_ur
 
 export function IntegrationsPage() {
   const app = useApp();
+  const onboarding = new URLSearchParams(useLocation().search).get('onboarding') === '1';
   const [link, setLink] = useState<LinkCode | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -221,6 +223,11 @@ export function IntegrationsPage() {
             >
               <RefreshCw size={14} /> Atualizar status
             </Button>
+          )}
+          {onboarding && (
+            <Link className="button button-secondary" to="/onboarding?step=objective">
+              {connected ? 'Continuar' : 'Continuar sem conectar'}
+            </Link>
           )}
         </Card>
         <details className="whatsapp-preview">
