@@ -1,0 +1,8 @@
+{
+  "version": "2026.10.05.2",
+  "changes": [
+    "Investimentos: controles reunidos, orientação que muda com seu prazo e preferência, e abas para editar sem rolar entre escolhas e resposta.",
+    "Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.",
+    "WhatsApp: o aviso agora distingue mensagem processada de resposta não entregue e recomenda conferir antes de reenviar."
+  ]
+}

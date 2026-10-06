@@ -2,9 +2,7 @@ import { useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
-  BookOpen,
   Check,
-  ExternalLink,
   Plus,
   ShieldCheck,
   Target,
@@ -19,11 +17,13 @@ import { civilDate, formatMoney, goalPlan, parseMoney, shiftMonths } from '../..
 import { personalSummary } from '../../shared/insights';
 
 type RiskPreference = 'steady' | 'balanced' | 'growth';
+type MobileView = 'plan' | 'guidance';
 type AdviceReply = {
   answer: string;
   sources: { id: string; title: string; url: string; level: string }[];
   evidence_status: string;
 };
+type Direction = { title: string; summary: string; nextStep: string; source: { title: string; url: string } };
 
 const riskChoices: { id: RiskPreference; label: string; detail: string }[] = [
   {
@@ -42,6 +42,56 @@ const riskChoices: { id: RiskPreference; label: string; detail: string }[] = [
     detail: 'O valor pode cair muito. Mesmo esperando, posso perder parte do dinheiro.',
   },
 ];
+
+function directionFor(risk: RiskPreference, months: number): Direction {
+  if (risk === 'growth' && months <= 24)
+    return {
+      title: 'Sua escolha e o prazo não combinam bem',
+      summary:
+        'Você aceita grandes mudanças no valor, mas planeja usar esse dinheiro em pouco tempo. Se ele cair, talvez não se recupere até a data.',
+      nextStep:
+        'Para este objetivo, compare opções com pouca mudança no valor. Deixe as opções que podem cair bastante para um objetivo distante, com dinheiro que você pode deixar investido.',
+      source: {
+        title: 'CVM: entenda os riscos antes de investir',
+        url: 'https://www.gov.br/investidor/pt-br/investir/antes-de-investir',
+      },
+    };
+  if (risk === 'growth')
+    return {
+      title: 'Você aceita grandes mudanças no valor',
+      summary:
+        'Com um prazo maior, você pode estudar opções que sobem e descem bastante. Ainda assim, pode perder dinheiro e não há garantia de recuperação.',
+      nextStep:
+        'Antes de escolher, aprenda como funcionam investimentos variados e não coloque todo o dinheiro em uma única opção. Não use dinheiro de contas ou da reserva.',
+      source: {
+        title: 'CVM: conheça diferentes tipos de investimento',
+        url: 'https://www.gov.br/investidor/pt-br/investir/tipos-de-investimentos',
+      },
+    };
+  if (risk === 'balanced')
+    return {
+      title: 'Você aceita algumas mudanças no valor',
+      summary:
+        'Seu plano pode comparar opções mais estáveis com outras que podem crescer mais, mas também cair. O prazo e o dinheiro que você pode deixar parado importam.',
+      nextStep:
+        'Compare as regras, os custos e quando pode retirar. Evite escolher só pelo ganho anunciado; entenda primeiro o que pode acontecer se o valor cair.',
+      source: {
+        title: 'CVM: compare tipos e riscos de investimento',
+        url: 'https://www.gov.br/investidor/pt-br/investir/tipos-de-investimentos',
+      },
+    };
+  return {
+    title: 'Você prefere que o valor mude pouco',
+    summary:
+      'Seu plano prioriza previsibilidade e acesso ao dinheiro. Isso pode significar ganhos menores; ainda assim, confira as regras e riscos de cada opção.',
+    nextStep:
+      'Comece comparando opções com pouca mudança no valor e veja se consegue retirar quando precisar. O simulador abaixo apresenta títulos públicos, mas não compara todos os bancos.',
+    source: {
+      title: 'Tesouro Direto: simulador de objetivos',
+      url: 'https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal',
+    },
+  };
+}
 
 function monthsUntil(deadline: string, today: string) {
   if (deadline <= today) return 0;
@@ -165,6 +215,7 @@ export function InvestmentsPage() {
     return (amount / 100).toFixed(2).replace('.', ',');
   });
   const [risk, setRisk] = useState<RiskPreference>('steady');
+  const [mobileView, setMobileView] = useState<MobileView>('plan');
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -193,6 +244,7 @@ export function InvestmentsPage() {
         )
       : null;
   const declaredMonthlyRoom = Math.max(0, app.data.profile.monthly_income - app.data.profile.fixed_expenses);
+  const direction = directionFor(risk, months);
 
   function selectGoal(id: string) {
     setGoalId(id);
@@ -215,6 +267,7 @@ export function InvestmentsPage() {
       );
       await app.refresh();
       setNotice('Seu plano foi salvo. Nenhum dinheiro foi transferido.');
+      setMobileView('guidance');
     } catch {
       setError('Não foi possível salvar. Confira o valor e tente novamente.');
     } finally {
@@ -238,7 +291,7 @@ export function InvestmentsPage() {
         return;
       }
       const response = await invoke<AdviceReply>('ai-chat', {
-        question: `Explique de forma simples o que a pessoa deve conferir antes de escolher onde guardar dinheiro para "${selectedGoal.name}". Ela planeja usar esse dinheiro daqui a ${months} meses e disse: "${riskLabel}". Não recomende produtos, bancos, ações ou fundos. Não prometa ganhos. Use apenas informações de fontes confiáveis da base e diga se não encontrar informação suficiente.`,
+        question: `Explique de forma curta e realmente ligada a esta pessoa, não dê uma resposta padrão. Objetivo: "${selectedGoal.name}"; valor desejado: ${formatMoney(selectedGoal.target)}; já guardado: ${formatMoney(selectedGoal.saved)}; quanto pretende guardar por mês: ${monthlyAmount === null ? 'ainda não informado' : formatMoney(monthlyAmount)}; prazo: ${months} meses; preferência escolhida exatamente: "${riskLabel}". Registros financeiros: dinheiro depois das contas ${formatMoney(summary.free)}, reserva ${formatMoney(summary.reserve)}, dívidas ${formatMoney(summary.debts)}. Primeiro explique se a preferência combina com o prazo e objetivo; adapte explicitamente a resposta se a pessoa aceita grandes variações. Não escolha Tesouro Direto como resposta padrão, nem indique que compre um produto, banco, ação ou fundo. Se não houver fonte confiável suficiente para dizer onde, diga isso claramente e explique o que comparar. Não prometa ganhos.`,
         save_history: false,
       });
       setAdvice(response);
@@ -257,9 +310,27 @@ export function InvestmentsPage() {
         description="Escolha algo que quer fazer e veja quanto guardar por mês. Não prometemos ganhos."
         action={<Badge>Plano para avaliar</Badge>}
       />
-      <div className="investment-grid">
-        <div className="stack">
-          <Card>
+      <div className="investment-mobile-tabs" role="group" aria-label="Área de investimentos">
+        <Button
+          type="button"
+          variant="secondary"
+          aria-pressed={mobileView === 'plan'}
+          onClick={() => setMobileView('plan')}
+        >
+          Meu plano
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          aria-pressed={mobileView === 'guidance'}
+          onClick={() => setMobileView('guidance')}
+        >
+          Minha orientação
+        </Button>
+      </div>
+      <div className="investment-grid" data-mobile-view={mobileView}>
+        <div className="investment-controls">
+          <Card className="investment-controls-card">
             <SectionTitle action={<Target size={20} aria-hidden="true" />}>1. O que você quer fazer?</SectionTitle>
             {app.data.goals.length ? (
               <div className="simple-form">
@@ -292,9 +363,7 @@ export function InvestmentsPage() {
                 <span className="muted">Data que você escolheu: {dateLabel(selectedGoal.deadline)}.</span>
               </div>
             )}
-          </Card>
-
-          <Card>
+            <div className="investment-control-divider" />
             <SectionTitle>2. Quanto você consegue guardar por mês?</SectionTitle>
             {selectedGoal ? (
               <>
@@ -310,7 +379,10 @@ export function InvestmentsPage() {
                     <input
                       inputMode="decimal"
                       value={monthlyInput}
-                      onChange={(event) => setMonthlyInput(event.target.value)}
+                      onChange={(event) => {
+                        setMonthlyInput(event.target.value);
+                        setAdvice(null);
+                      }}
                       aria-describedby="investment-monthly-saving-note"
                       aria-invalid={monthlyAmount === null}
                     />
@@ -354,9 +426,7 @@ export function InvestmentsPage() {
                 {error}
               </p>
             )}
-          </Card>
-
-          <Card>
+            <div className="investment-control-divider" />
             <SectionTitle action={<ShieldCheck size={20} aria-hidden="true" />}>3. Quanto você aceita que o valor mude?</SectionTitle>
             <p className="muted">Escolha o que deixa você mais confortável. Nenhuma opção elimina o risco ou garante ganhos.</p>
             <div className="investment-risk-options" role="group" aria-label="Quanto você aceita que o valor mude?">
@@ -370,6 +440,7 @@ export function InvestmentsPage() {
                   onClick={() => {
                     setRisk(choice.id);
                     setAdvice(null);
+                    setMobileView('guidance');
                   }}
                 >
                   <span>{choice.label}</span>
@@ -385,9 +456,9 @@ export function InvestmentsPage() {
           </Card>
         </div>
 
-        <div className="stack">
-          <Card>
-            <SectionTitle>Seu dinheiro hoje</SectionTitle>
+        <div className="investment-guidance">
+          <details className="investment-finances">
+            <summary>Ver os números usados neste plano</summary>
             <div className="stack-sm">
               <Stat
                 label="Dinheiro estimado depois das contas"
@@ -414,10 +485,10 @@ export function InvestmentsPage() {
               </div>
             )}
             <small className="muted">Esses números podem estar incompletos e não transferem dinheiro.</small>
-          </Card>
+          </details>
 
-          <Card>
-            <SectionTitle action={<Check size={20} aria-hidden="true" />}>Seu próximo passo</SectionTitle>
+          <Card className="investment-guidance-card">
+            <SectionTitle action={<Check size={20} aria-hidden="true" />}>Orientação para você</SectionTitle>
             {projection ? (
               <p>
                 Para essa meta, o plano calcula que você precisa guardar <strong>{formatMoney(projection.required)} por mês</strong>,
@@ -426,39 +497,21 @@ export function InvestmentsPage() {
             ) : (
               <p>Preencha o valor mensal acima para ver quanto guardar. Confira se esse valor cabe depois das suas contas.</p>
             )}
-            <ol className="investment-next-steps">
-              <li>
-                <strong>Quando guardar:</strong> escolha um dia depois que receber e separar o dinheiro das contas. Não use
-                a reserva nem o dinheiro de que vai precisar em breve.
-              </li>
-              <li>
-                <strong>Onde procurar:</strong> no app do seu banco ou corretora, abra “Investimentos”. Para conhecer
-                títulos públicos, consulte o simulador oficial do Tesouro Direto.
-              </li>
-              <li>
-                <strong>Como escolher:</strong> informe seu objetivo e a data em que vai precisar do dinheiro. Antes de
-                confirmar, confira quando pode retirar, quanto paga em taxas e impostos e se pode perder dinheiro.
-              </li>
-            </ol>
-            <a
-              className="button button-secondary"
-              href="https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <ExternalLink size={18} /> Ver opções no simulador oficial
-            </a>
+            <div className="investment-personal-guidance" aria-live="polite">
+              <h3>{direction.title}</h3>
+              <p>{direction.summary}</p>
+              <p>{direction.nextStep}</p>
+              <a href={direction.source.url} target="_blank" rel="noreferrer">
+                {direction.source.title}
+              </a>
+            </div>
             <small className="muted">
-              Esse simulador mostra títulos do Tesouro Direto, não compara todos os bancos. O Nexo não vê as ofertas nem
-              os preços atuais da sua instituição.
+              O Nexo não vê as ofertas atuais do seu banco. Confira as condições diretamente antes de decidir.
             </small>
-          </Card>
 
-          <Card>
-            <SectionTitle action={<TrendingUp size={20} aria-hidden="true" />}>Entenda antes de decidir</SectionTitle>
-            <p className="muted">
-              Peça uma explicação sobre o tempo e as mudanças no valor. O Nexo usa informações de fontes confiáveis; se não encontrar uma boa resposta, vai dizer.
-            </p>
+            <div className="investment-ai-section">
+              <SectionTitle action={<TrendingUp size={20} aria-hidden="true" />}>Explicação da IA</SectionTitle>
+              <p className="muted">A explicação considera seu objetivo, prazo, valor mensal e preferência.</p>
             <Button onClick={() => void askNexo()} disabled={!selectedGoal || asking}>
               <ArrowUpRight size={18} /> {asking ? 'Consultando informações…' : 'Explicar meu plano'}
             </Button>
@@ -480,24 +533,6 @@ export function InvestmentsPage() {
               </div>
             )}
             <small className="muted">A IA não escolhe onde você vai investir, não movimenta dinheiro e não promete ganhos. Sua pergunta não fica salva.</small>
-          </Card>
-
-          <Card>
-            <SectionTitle action={<BookOpen size={20} aria-hidden="true" />}>Onde saber mais</SectionTitle>
-            <div className="investment-source-list">
-              <a href="https://www.gov.br/investidor/pt-br/investir" target="_blank" rel="noreferrer">
-                Portal do Investidor: dicas antes de investir
-              </a>
-              <a href="https://www.tesourodireto.com.br/conheca/conheca-o-tesouro-direto.htm" target="_blank" rel="noreferrer">
-                Tesouro Direto: como funciona
-              </a>
-              <a href="https://www.tesourodireto.com.br/titulos/tipos-de-tesouro.htm" target="_blank" rel="noreferrer">
-                Tesouro Direto: opções disponíveis
-              </a>
-            </div>
-            <div className="investment-callout" role="note" style={{ marginTop: 18 }}>
-              <ShieldCheck size={20} aria-hidden="true" />
-              <p>Antes de investir, confira quando pode retirar o dinheiro, quanto pode pagar em taxas e impostos e se existe alguma proteção contra perdas.</p>
             </div>
           </Card>
         </div>

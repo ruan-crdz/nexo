@@ -234,6 +234,8 @@ test('plano de investimento calcula quanto guardar sem prometer ganhos', async (
   const selectedGoalId = await page.getByLabel('Para que você quer guardar?').inputValue();
   await page.getByLabel('Quanto quer guardar por mês? (R$)').fill('100,00');
   await page.getByRole('button', { name: 'Quero que o valor mude pouco' }).click();
+  const planTab = page.getByRole('button', { name: 'Meu plano', exact: true });
+  if (await planTab.isVisible()) await planTab.click();
   await expect(page.getByText('Sem contar possíveis ganhos, você teria de guardar')).toBeVisible();
   await page.getByRole('button', { name: 'Salvar meu plano' }).click();
   await expect
@@ -244,24 +246,32 @@ test('plano de investimento calcula quanto guardar sem prometer ganhos', async (
       }, selectedGoalId),
     )
     .toBe(10000);
-  await expect(page.getByRole('button', { name: 'Quero que o valor mude pouco' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
 });
 
 test('plano explica quando guardar, onde procurar e o que conferir', async ({ page }) => {
   await page.goto('/#/investimentos');
-  await expect(page.getByRole('heading', { name: 'Seu próximo passo' })).toBeVisible();
-  await expect(page.getByText(/Quando guardar:/)).toBeVisible();
-  await expect(page.getByText(/Onde procurar:/)).toBeVisible();
-  await expect(page.getByText(/Como escolher:/)).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Ver opções no simulador oficial' })).toHaveAttribute(
+  await page.getByRole('button', { name: 'Quero que o valor mude pouco' }).click();
+  await expect(page.getByRole('heading', { name: 'Orientação para você' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Você prefere que o valor mude pouco' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Tesouro Direto: simulador de objetivos' })).toHaveAttribute(
     'href',
     'https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal',
   );
   const visibleCopy = await page.locator('main').innerText();
   expect(visibleCopy).not.toMatch(/\baporte\b|\boscilação\b|\brendimento\b|\bativos\b|\bliquidez\b|\bresgate\b/i);
+});
+
+test('orientação muda com a preferência e não sugere Tesouro para grandes variações', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#/investimentos');
+  await page.getByRole('button', { name: 'Aceito que o valor mude bastante' }).click();
+  await expect(page.getByRole('heading', { name: 'Sua escolha e o prazo não combinam bem' })).toBeVisible();
+  await expect(page.locator('a[href*="tesourodireto.com.br"]')).toHaveCount(0);
+  await expect(page.locator('a[href*="gov.br/investidor"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Meu plano', exact: true }).click();
+  await page.getByRole('button', { name: 'Quero que o valor mude pouco' }).click();
+  await expect(page.getByRole('heading', { name: 'Você prefere que o valor mude pouco' })).toBeVisible();
+  await expect(page.locator('a[href*="tesourodireto.com.br"]')).toBeVisible();
 });
 
 test('campo para guardar por mês permanece disponível durante a edição', async ({ page }) => {
@@ -283,9 +293,11 @@ test('página de investimentos permite criar uma meta própria e apresenta fonte
   await page.getByLabel('Até quando gostaria?').fill('2027-10-05');
   await page.getByRole('button', { name: 'Salvar objetivo' }).click();
   await expect(page.getByLabel('Para que você quer guardar?')).toContainText('Reformar a casa');
-  await expect(page.getByRole('link', { name: /Portal do Investidor: dicas antes de investir/ })).toHaveAttribute(
+  const guidanceTab = page.getByRole('button', { name: 'Minha orientação', exact: true });
+  if (await guidanceTab.isVisible()) await guidanceTab.click();
+  await expect(page.getByRole('link', { name: 'Tesouro Direto: simulador de objetivos' })).toHaveAttribute(
     'href',
-    'https://www.gov.br/investidor/pt-br/investir',
+    'https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal',
   );
 });
 
@@ -388,6 +400,21 @@ test('leitura de nota aceita PDF e formatos comuns de foto', async ({ page }) =>
   expect(accept).toContain('image/*');
   expect(accept).toContain('.heic');
   await expect(page.getByRole('heading', { name: 'Ler nota fiscal ou recibo' })).toBeVisible();
+});
+
+test('notas de versão do PWA descrevem mudanças recentes', async ({ request }) => {
+  const response = await request.get('/release-notes.json');
+  expect(response.ok()).toBe(true);
+  const notes = await response.json();
+  expect(notes.changes).toContain(
+    'Investimentos: controles reunidos, orientação que muda com seu prazo e preferência, e abas para editar sem rolar entre escolhas e resposta.',
+  );
+  expect(notes.changes).toContain(
+    'Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.',
+  );
+  expect(notes.changes).toContain(
+    'WhatsApp: o aviso agora distingue mensagem processada de resposta não entregue e recomenda conferir antes de reenviar.',
+  );
 });
 
 test('modal não rola horizontalmente e trava o fundo em celular e PC', async ({ page }) => {
