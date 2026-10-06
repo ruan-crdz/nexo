@@ -137,7 +137,7 @@ test('navegação contém cinco destinos e caminhos antigos voltam ao início', 
 });
 
 test('Home identifica a demonstração e oferece a ferramenta Posso gastar?', async ({ page }) => {
-  await expect(page.getByText('Demonstração · dados de exemplo, separados da sua conta.')).toBeVisible();
+  await expect(page.locator('.simple-demo')).toContainText('dados de exemplo');
   await page.getByRole('link', { name: 'Posso gastar?' }).click();
   await expect(page).toHaveURL(/#\/controle$/);
   await expect(page.getByRole('heading', { name: 'Posso gastar?' })).toBeVisible();
@@ -366,6 +366,16 @@ test('resumo seleciona o mês e categorias conservam os gastos pagos', async ({ 
 });
 
 test('PC distribui os blocos e celular mantém o acesso a Anotar', async ({ page }) => {
+  for (const width of [1024, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const amountHeights = await page.locator('.simple-totals strong').evaluateAll((elements) =>
+      elements.map((element) => {
+        const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+        return element.getBoundingClientRect().height <= lineHeight + 1;
+      }),
+    );
+    expect(amountHeights, `Valores do resumo em ${width}px`).toEqual([true, true, true]);
+  }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.locator('.home-details > summary').click();
   const evolution = await page.locator('.money-evolution').boundingBox();
@@ -375,6 +385,7 @@ test('PC distribui os blocos e celular mantém o acesso a Anotar', async ({ page
   expect(Math.abs(breakdown!.y - evolution!.y)).toBeLessThan(2);
   await page.setViewportSize({ width: 320, height: 740 });
   await expect(page.getByRole('link', { name: 'Anotar agora' })).toBeVisible();
+  await expect(page.locator('.simple-totals .simple-net')).toHaveCSS('grid-row-start', '1');
 });
 
 test('início prioriza resumo e movimentos e mantém metas em uma tela opcional', async ({ page }) => {

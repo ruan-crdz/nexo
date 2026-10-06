@@ -672,6 +672,73 @@ label {
   gap: 20px;
   flex-wrap: wrap;
 }
+.home-layout {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: start;
+  gap: 24px;
+  min-width: 0;
+}
+.home-layout > .dashboard-heading,
+.home-layout > .simple-summary,
+.home-layout > .money-dashboard,
+.home-layout > .home-details,
+.home-layout > .text-link,
+.home-layout > .attention-band {
+  grid-column: 1 / -1;
+}
+.home-layout > .simple-summary {
+  grid-column: span 7;
+}
+.home-layout > .home-insight,
+.home-layout > .spending-allowance-link {
+  grid-column: span 5;
+}
+.home-layout > .home-goal {
+  grid-column: 1 / -1;
+}
+.home-layout .simple-totals strong {
+  font-size: 26px;
+}
+.home-insight,
+.spending-allowance-link,
+.home-goal {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.home-insight {
+  height: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.home-insight > div,
+.spending-allowance-link > div,
+.home-goal > div {
+  min-width: 0;
+}
+.home-insight h2,
+.spending-allowance-link h2,
+.home-goal h2 {
+  margin-bottom: 8px;
+}
+.home-insight p,
+.spending-allowance-link p,
+.home-goal p {
+  margin-top: 8px;
+}
+.home-layout > .money-dashboard {
+  display: block;
+}
+.home-layout > .money-dashboard > .money-recent {
+  width: 100%;
+}
 .goal-journey {
   --journey-accent: var(--moss);
   --journey-wash: var(--lime-soft);
@@ -1140,6 +1207,21 @@ label {
   flex: 0 0 44px;
   padding: 0;
 }
+@media (max-width: 1150px) {
+  .home-layout {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .home-layout > .simple-summary,
+  .home-layout > .home-insight,
+  .home-layout > .spending-allowance-link,
+  .home-layout > .home-goal {
+    grid-column: 1 / -1;
+  }
+  .home-insight {
+    height: auto;
+  }
+}
 .money-dashboard {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
@@ -1330,6 +1412,24 @@ label {
   }
 }
 @media (max-width: 700px) {
+  .home-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .home-insight,
+  .spending-allowance-link,
+  .home-goal {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+  }
+  .home-insight > .button,
+  .spending-allowance-link > .button,
+  .home-goal > .button {
+    width: 100%;
+    justify-content: center;
+  }
   .simple-topbar {
     padding: 16px;
     gap: 12px;
@@ -1433,8 +1533,12 @@ label {
   }
   .simple-totals .simple-net {
     grid-column: 1 / -1;
+    grid-row: 1;
   }
   .simple-totals strong {
+    font-size: 24px;
+  }
+  .home-layout .simple-totals strong {
     font-size: 24px;
   }
   .money-actions {
