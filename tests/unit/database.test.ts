@@ -355,6 +355,12 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
   });
   it('família respeita conta e período e proposta só muda dado após aprovação', async () => {
     await asUser(alice);
+    const today = (
+      await db.query<{ day: string }>(
+        'select (now() at time zone timezone)::date::text as day from profiles where id=$1',
+        [alice],
+      )
+    ).rows[0].day;
     const account = (
       await db.query<{ id: string }>(
         "insert into financial_accounts(user_id,name,kind) values($1,'Família filtro','checking') returning id",
@@ -363,14 +369,14 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
     ).rows[0].id;
     const record = (
       await db.query<{ id: string }>(
-        "insert into transactions(user_id,account_id,description,amount,type,category,date) values($1,$2,'Proposta segura',100,'expense','Outros',current_date) returning id",
-        [alice, account],
+        "insert into transactions(user_id,account_id,description,amount,type,category,date) values($1,$2,'Proposta segura',100,'expense','Outros',$3) returning id",
+        [alice, account, today],
       )
     ).rows[0].id;
     const invite = (
       await db.query<{ invite: { id: string; code: string } }>(
-        "select create_family_invite('transactions',$1,current_date,current_date,true) as invite",
-        [account],
+        "select create_family_invite('transactions',$1,$2,$2,true) as invite",
+        [account, today],
       )
     ).rows[0].invite;
     await asUser(bob);
