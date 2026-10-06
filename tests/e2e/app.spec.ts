@@ -107,12 +107,18 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
 });
 
 test('navegação contém os quatro destinos principais e caminhos antigos voltam ao início', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
   await expect(nav.getByRole('link')).toHaveCount(4);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Anotações');
   await expect(nav).toContainText('WhatsApp');
   await expect(nav).toContainText('Ajustes');
+  const linkWidths = await nav.getByRole('link').evaluateAll((links) =>
+    links.map((link) => link.getBoundingClientRect().width),
+  );
+  expect(Math.max(...linkWidths) - Math.min(...linkWidths)).toBeLessThan(1);
+  expect(await nav.evaluate((element) => getComputedStyle(element).display)).toBe('flex');
   await expect(page.getByText('Nexo Score')).not.toBeVisible();
   for (const path of ['empresa', 'futuro', 'patrimonio', 'investimentos']) {
     await page.goto(`/#/${path}`);

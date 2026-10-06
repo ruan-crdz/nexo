@@ -1367,8 +1367,9 @@ label {
     right: 0;
     width: 100vw;
     margin: 0;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
     z-index: 30;
     max-width: none;
     background: var(--paper);
@@ -1379,7 +1380,9 @@ label {
     box-shadow: 0 -4px 24px #0000000c;
   }
   .simple-nav a {
-    width: 100%;
+    flex: 1 1 0;
+    max-width: 132px;
+    min-width: 0;
     flex-direction: column;
     gap: 4px;
     font-size: 13px;
