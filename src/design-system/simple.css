@@ -612,6 +612,9 @@ label {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+  max-width: 820px;
+  margin-inline: auto;
 }
 .simple-settings-links > h2 {
   margin: 8px 0;
@@ -632,14 +635,35 @@ label {
 .simple-settings-links a > svg:last-child {
   margin-left: auto;
 }
+.profile-section {
+  width: 100%;
+  max-width: 820px;
+  padding: 24px 0;
+  margin-inline: auto;
+  border-top: 1px solid var(--line);
+}
 .help-steps {
   display: grid;
-  gap: 22px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  max-width: 820px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.help-steps .card {
-  display: flex;
-  flex-direction: column;
+.help-steps > li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
   gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+.help-steps > li > div {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 .help-number {
   display: grid;
@@ -1621,20 +1645,6 @@ label {
 .money-shortcuts .money-action small {
   font-size: 14px;
 }
-.simple-content[data-page='/perfil'] {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-}
-.simple-content[data-page='/perfil'] > .simple-heading,
-.simple-content[data-page='/perfil'] > .simple-demo,
-.simple-content[data-page='/perfil'] > .simple-settings-links,
-.simple-content[data-page='/perfil'] > .error-message {
-  grid-column: 1 / -1;
-}
-.help-steps {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 @media (min-width: 1001px) {
   .simple-content .whatsapp-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1821,10 +1831,6 @@ label {
   .simple-content {
     padding: 20px 16px 120px;
     gap: 24px;
-  }
-  .simple-content[data-page='/perfil'],
-  .help-steps {
-    grid-template-columns: 1fr;
   }
   .flow-chart {
     gap: 4px;

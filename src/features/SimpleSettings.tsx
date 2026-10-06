@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { MessageCircle, ShieldCheck, ChevronRight, LogOut } from 'lucide-react';
+import { MessageCircle, ShieldCheck, ChevronRight, LogOut, Pencil, Info } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke, supabase } from '../data/client';
 import { useTheme } from '../design-system/theme';
-import { Button, Card, Dialog } from '../design-system/components';
+import { Button, Dialog } from '../design-system/components';
 import { offlineEnabled, setOffline, cacheDataset } from '../data/offline';
 
 export function SimpleSettings() {
@@ -102,7 +102,7 @@ export function SimpleSettings() {
         <h1>Perfil</h1>
         <p>Sua conta, suas preferências e sua proteção.</p>
       </header>
-      <Card>
+      <section className="profile-section simple-form">
         <form className="simple-form" onSubmit={(e) => void save(e)}>
           <h2>Minha conta</h2>
           <label>
@@ -125,8 +125,8 @@ export function SimpleSettings() {
             </p>
           )}
         </form>
-      </Card>
-      <Card>
+      </section>
+      <section className="profile-section simple-form">
         <div className="simple-form">
           <h2>Aparência</h2>
           <label>
@@ -139,7 +139,7 @@ export function SimpleSettings() {
           </label>
           <p className="muted">Sua escolha fica guardada neste aparelho.</p>
         </div>
-      </Card>
+      </section>
       {!app.demo && app.user && (
         <section className="simple-form">
           <h2>Uso sem internet</h2>
@@ -169,7 +169,7 @@ export function SimpleSettings() {
           </p>
         </section>
       )}
-      <Card className="simple-settings-links">
+      <section className="profile-links simple-settings-links">
         <h2>Integrações e compartilhamento</h2>
         <Link to="/integracoes">
           <MessageCircle />
@@ -198,7 +198,7 @@ export function SimpleSettings() {
         <Button variant="secondary" onClick={() => setLeaving(true)}>
           <LogOut size={20} /> Sair da minha conta
         </Button>
-      </Card>
+      </section>
       <section className="simple-form">
         <h2>Avisos no app</h2>
         <label className="check-label">
@@ -339,52 +339,68 @@ export function SimpleHelp() {
         <h1>Vamos por partes.</h1>
         <p>Você só precisa anotar o que recebeu ou gastou.</p>
       </header>
-      <div className="help-steps">
-        <Card>
+      <ol className="help-steps">
+        <li>
           <span className="help-number">1</span>
-          <h2>Para anotar um gasto</h2>
-          <p>
-            No início, toque em “Anotar gasto”. Digite o valor e com o que gastou, como “mercado”. Depois
-            toque em “Salvar movimento”.
-          </p>
-          <Link className="button button-secondary" to="/inicio">
-            Ir para o início
-          </Link>
-        </Card>
-        <Card>
+          <div>
+            <h2>Para anotar um gasto</h2>
+            <p>
+              No início, toque em “Anotar gasto”. Digite o valor e com o que gastou, como “mercado”. Depois
+              toque em “Salvar movimento”.
+            </p>
+            <Link className="button button-secondary" to="/inicio">
+              Ir para o início
+            </Link>
+          </div>
+        </li>
+        <li>
           <span className="help-number">2</span>
-          <h2>Para anotar dinheiro recebido</h2>
-          <p>Toque em “Anotar entrada”. Pode ser aposentadoria, salário ou qualquer dinheiro que entrou.</p>
-        </Card>
-        <Card>
+          <div>
+            <h2>Para anotar dinheiro recebido</h2>
+            <p>Toque em “Anotar entrada”. Pode ser aposentadoria, salário ou qualquer dinheiro que entrou.</p>
+          </div>
+        </li>
+        <li>
           <span className="help-number">3</span>
-          <h2>Para usar sua voz</h2>
-          <p>
-            Abra a área “WhatsApp” e conecte seu número. Na conversa com o Nexo, envie um áudio dizendo, por
-            exemplo: “Gastei 30 reais na farmácia hoje”.
-          </p>
-          <Link className="button button-secondary" to="/integracoes">
-            Abrir área do WhatsApp
-          </Link>
-        </Card>
-        <Card>
-          <h2>Anotou algo errado?</h2>
-          <p>
-            Abra “Movimentos” e toque em “Corrigir”. Para tirar um movimento, toque em “Excluir”. O Nexo vai
-            pedir sua confirmação.
-          </p>
-          <Link className="button button-secondary" to="/movimentos">
-            Ver meus movimentos
-          </Link>
-        </Card>
-        <Card>
-          <h2>De onde vem o resumo?</h2>
-          <p>
-            “Entrou” soma o que você recebeu no mês. “Saiu” soma o que pagou. A diferença mostra quanto sobrou
-            ou faltou, com base nos seus movimentos. O Nexo não consulta seu banco.
-          </p>
-        </Card>
-      </div>
+          <div>
+            <h2>Para usar sua voz</h2>
+            <p>
+              Abra a área “WhatsApp” e conecte seu número. Na conversa com o Nexo, envie um áudio dizendo, por
+              exemplo: “Gastei 30 reais na farmácia hoje”.
+            </p>
+            <Link className="button button-secondary" to="/integracoes">
+              Abrir área do WhatsApp
+            </Link>
+          </div>
+        </li>
+        <li>
+          <span className="help-number" aria-hidden="true">
+            <Pencil size={18} />
+          </span>
+          <div>
+            <h2>Anotou algo errado?</h2>
+            <p>
+              Abra “Movimentos” e toque em “Corrigir”. Para tirar um movimento, toque em “Excluir”. O Nexo vai
+              pedir sua confirmação.
+            </p>
+            <Link className="button button-secondary" to="/movimentos">
+              Ver meus movimentos
+            </Link>
+          </div>
+        </li>
+        <li>
+          <span className="help-number" aria-hidden="true">
+            <Info size={18} />
+          </span>
+          <div>
+            <h2>De onde vem o resumo?</h2>
+            <p>
+              “Entrou” soma o que você recebeu no mês. “Saiu” soma o que pagou. A diferença mostra quanto
+              sobrou ou faltou, com base nos seus movimentos. O Nexo não consulta seu banco.
+            </p>
+          </div>
+        </li>
+      </ol>
     </>
   );
 }
