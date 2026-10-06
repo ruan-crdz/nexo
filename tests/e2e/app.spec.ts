@@ -233,7 +233,10 @@ test('plano de investimento calcula quanto guardar sem prometer ganhos', async (
   await expect(page.getByRole('heading', { name: 'Investir sem complicar' })).toBeVisible();
   const selectedGoalId = await page.getByLabel('Para que você quer guardar?').inputValue();
   await page.getByLabel('Quanto quer guardar por mês? (R$)').fill('100,00');
-  await page.getByRole('button', { name: 'Quero que o valor mude pouco' }).click();
+  await page.getByRole('button', { name: 'Em 1 ano', exact: true }).click();
+  await page.getByRole('button', { name: 'Sim', exact: true }).click();
+  await page.getByRole('button', { name: 'Precisaria retirar esse dinheiro', exact: true }).click();
+  await page.getByRole('button', { name: 'Estou começando', exact: true }).click();
   const planTab = page.getByRole('button', { name: 'Meu plano', exact: true });
   if (await planTab.isVisible()) await planTab.click();
   await expect(page.getByText('Sem contar possíveis ganhos, você teria de guardar')).toBeVisible();
@@ -250,28 +253,62 @@ test('plano de investimento calcula quanto guardar sem prometer ganhos', async (
 
 test('plano explica quando guardar, onde procurar e o que conferir', async ({ page }) => {
   await page.goto('/#/investimentos');
-  await page.getByRole('button', { name: 'Quero que o valor mude pouco' }).click();
+  await page.getByRole('button', { name: 'Em 1 ano', exact: true }).click();
+  await page.getByRole('button', { name: 'Sim', exact: true }).click();
+  await page.getByRole('button', { name: 'Precisaria retirar esse dinheiro', exact: true }).click();
+  await page.getByRole('button', { name: 'Estou começando', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Orientação para você' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Você prefere que o valor mude pouco' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Tesouro Direto: simulador de objetivos' })).toHaveAttribute(
+  await expect(page.getByRole('heading', { name: 'Você pode precisar desse dinheiro antes' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'CVM: quando você pode retirar o dinheiro' })).toHaveAttribute(
     'href',
-    'https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal',
+    'https://www.gov.br/investidor/pt-br/investir/antes-de-investir/entenda-as-caracteristicas-dos-investimentos/liquidez',
   );
   const visibleCopy = await page.locator('main').innerText();
   expect(visibleCopy).not.toMatch(/\baporte\b|\boscilação\b|\brendimento\b|\bativos\b|\bliquidez\b|\bresgate\b/i);
 });
 
-test('orientação muda com a preferência e não sugere Tesouro para grandes variações', async ({ page }) => {
+test('orientação considera prazo, acesso, reação a perdas e experiência', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    const [year, month, day] = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+    })
+      .format(new Date())
+      .split('-');
+    data.goals[0].deadline = `${Number(year) + 5}-${month}-${day}`;
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  });
+  await page.reload();
   await page.goto('/#/investimentos');
-  await page.getByRole('button', { name: 'Aceito que o valor mude bastante' }).click();
-  await expect(page.getByRole('heading', { name: 'Sua escolha e o prazo não combinam bem' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Investir sem complicar' })).toBeVisible();
+  const initialGuidanceTab = page.getByRole('button', { name: 'Minha orientação', exact: true });
+  if (await initialGuidanceTab.isVisible()) await initialGuidanceTab.click();
+  await expect(page.getByRole('button', { name: 'Explicar meu plano' })).toBeDisabled();
+  const initialPlanTab = page.getByRole('button', { name: 'Meu plano', exact: true });
+  if (await initialPlanTab.isVisible()) await initialPlanTab.click();
+  await expect(page.getByRole('button', { name: 'Ver minha orientação', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Em 5 anos ou mais', exact: true }).click();
+  await page.getByRole('button', { name: 'Não', exact: true }).click();
+  await page.getByRole('button', { name: 'Manteria o plano mesmo com a queda', exact: true }).click();
+  await page.getByRole('button', { name: 'Tenho experiência', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Você tem tempo e aceita esperar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Explicar meu plano' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Explicar meu plano' }).click();
+  await expect(page.locator('.investment-ai-section')).toContainText('Na demonstração, a IA não é consultada');
   await expect(page.locator('a[href*="tesourodireto.com.br"]')).toHaveCount(0);
   await expect(page.locator('a[href*="gov.br/investidor"]')).toBeVisible();
   await page.getByRole('button', { name: 'Meu plano', exact: true }).click();
-  await page.getByRole('button', { name: 'Quero que o valor mude pouco' }).click();
-  await expect(page.getByRole('heading', { name: 'Você prefere que o valor mude pouco' })).toBeVisible();
-  await expect(page.locator('a[href*="tesourodireto.com.br"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Em até 3 meses', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Sua resposta e a data da meta são diferentes' })).toBeVisible();
+  await page.getByRole('button', { name: 'Meu plano', exact: true }).click();
+  await page.getByRole('button', { name: 'Em 5 anos ou mais', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver minha orientação', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Você tem tempo e aceita esperar' })).toBeVisible();
+  await expect(page.locator('a[href*="tesourodireto.com.br"]')).toHaveCount(0);
 });
 
 test('campo para guardar por mês permanece disponível durante a edição', async ({ page }) => {
@@ -295,9 +332,9 @@ test('página de investimentos permite criar uma meta própria e apresenta fonte
   await expect(page.getByLabel('Para que você quer guardar?')).toContainText('Reformar a casa');
   const guidanceTab = page.getByRole('button', { name: 'Minha orientação', exact: true });
   if (await guidanceTab.isVisible()) await guidanceTab.click();
-  await expect(page.getByRole('link', { name: 'Tesouro Direto: simulador de objetivos' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'CVM: o que avaliar antes de investir' })).toHaveAttribute(
     'href',
-    'https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal',
+    'https://www.gov.br/investidor/pt-br/investir/antes-de-investir',
   );
 });
 
@@ -407,7 +444,7 @@ test('notas de versão do PWA descrevem mudanças recentes', async ({ request })
   expect(response.ok()).toBe(true);
   const notes = await response.json();
   expect(notes.changes).toContain(
-    'Investimentos: controles reunidos, orientação que muda com seu prazo e preferência, e abas para editar sem rolar entre escolhas e resposta.',
+    'Investimentos: quatro perguntas sobre prazo, necessidade do dinheiro, reação a perdas e experiência deixam a orientação mais pessoal.',
   );
   expect(notes.changes).toContain(
     'Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.',

@@ -4,19 +4,21 @@ import {
   ArrowUpRight,
   Check,
   Plus,
-  ShieldCheck,
   Target,
   TrendingUp,
 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke } from '../data/client';
-import { Badge, Button, Card, Dialog, PageHeader, SectionTitle, Stat, Why } from '../design-system/components';
+import { Badge, Button, Card, Dialog, PageHeader, SectionTitle, Stat } from '../design-system/components';
 import { goalSchema } from '../../shared/domain';
 import type { Goal } from '../../shared/domain';
 import { civilDate, formatMoney, goalPlan, parseMoney, shiftMonths } from '../../shared/financial-engine';
 import { personalSummary } from '../../shared/insights';
 
-type RiskPreference = 'steady' | 'balanced' | 'growth';
+type Horizon = 'three_months' | 'one_year' | 'three_years' | 'five_plus' | 'unsure';
+type EarlyAccess = 'yes' | 'maybe' | 'no';
+type LossResponse = 'withdraw' | 'wait' | 'stay';
+type Knowledge = 'beginner' | 'basic' | 'experienced';
 type MobileView = 'plan' | 'guidance';
 type AdviceReply = {
   answer: string;
@@ -24,71 +26,118 @@ type AdviceReply = {
   evidence_status: string;
 };
 type Direction = { title: string; summary: string; nextStep: string; source: { title: string; url: string } };
+type InvestmentAnswers = {
+  horizon: Horizon | null;
+  earlyAccess: EarlyAccess | null;
+  lossResponse: LossResponse | null;
+  knowledge: Knowledge | null;
+  months: number;
+};
 
-const riskChoices: { id: RiskPreference; label: string; detail: string }[] = [
-  {
-    id: 'steady',
-    label: 'Quero que o valor mude pouco',
-    detail: 'Quero poder retirar o dinheiro quando precisar. Mesmo assim, posso perder uma parte.',
-  },
-  {
-    id: 'balanced',
-    label: 'Tudo bem se o valor mudar um pouco',
-    detail: 'Se o valor cair, posso esperar para tentar recuperar. Isso pode não acontecer.',
-  },
-  {
-    id: 'growth',
-    label: 'Aceito que o valor mude bastante',
-    detail: 'O valor pode cair muito. Mesmo esperando, posso perder parte do dinheiro.',
-  },
+const horizonChoices: { id: Horizon; label: string }[] = [
+  { id: 'three_months', label: 'Em até 3 meses' },
+  { id: 'one_year', label: 'Em 1 ano' },
+  { id: 'three_years', label: 'Em 3 anos' },
+  { id: 'five_plus', label: 'Em 5 anos ou mais' },
+  { id: 'unsure', label: 'Ainda não sei' },
+];
+const earlyAccessChoices: { id: EarlyAccess; label: string }[] = [
+  { id: 'yes', label: 'Sim' },
+  { id: 'maybe', label: 'Talvez' },
+  { id: 'no', label: 'Não' },
+];
+const lossResponseChoices: { id: LossResponse; label: string }[] = [
+  { id: 'withdraw', label: 'Precisaria retirar esse dinheiro' },
+  { id: 'wait', label: 'Ficaria preocupado, mas poderia esperar' },
+  { id: 'stay', label: 'Manteria o plano mesmo com a queda' },
+];
+const knowledgeChoices: { id: Knowledge; label: string }[] = [
+  { id: 'beginner', label: 'Estou começando' },
+  { id: 'basic', label: 'Conheço o básico' },
+  { id: 'experienced', label: 'Tenho experiência' },
 ];
 
-function directionFor(risk: RiskPreference, months: number): Direction {
-  if (risk === 'growth' && months <= 24)
+function directionFor(answers: InvestmentAnswers): Direction {
+  if (!answers.horizon || !answers.earlyAccess || !answers.lossResponse || !answers.knowledge)
     return {
-      title: 'Sua escolha e o prazo não combinam bem',
-      summary:
-        'Você aceita grandes mudanças no valor, mas planeja usar esse dinheiro em pouco tempo. Se ele cair, talvez não se recupere até a data.',
+      title: 'Responda às perguntas para receber uma orientação',
+      summary: 'O mesmo investimento pode servir para um objetivo e não servir para outro.',
+      nextStep: 'Vamos considerar quando você usará o dinheiro, se pode precisar dele antes e como reagiria a uma queda.',
+      source: {
+        title: 'CVM: o que avaliar antes de investir',
+        url: 'https://www.gov.br/investidor/pt-br/investir/antes-de-investir',
+      },
+    };
+  const shortHorizon =
+    answers.horizon === 'three_months' || answers.horizon === 'one_year' || answers.months <= 12;
+  const mayNeedMoney = answers.earlyAccess !== 'no';
+  const dateMismatch =
+    (answers.horizon === 'three_months' && answers.months > 6) ||
+    (answers.horizon === 'one_year' && answers.months > 24) ||
+    (answers.horizon === 'three_years' && (answers.months < 18 || answers.months > 48)) ||
+    (answers.horizon === 'five_plus' && answers.months < 36);
+  if (dateMismatch)
+    return {
+      title: 'Sua resposta e a data da meta são diferentes',
+      summary: 'A data salva para esta meta não combina com quando você disse que pretende usar o dinheiro.',
+      nextStep: 'Confira a data da meta ou sua resposta sobre o prazo. A orientação muda quando essas informações combinam.',
+      source: {
+        title: 'CVM: escolha considerando seu objetivo e prazo',
+        url: 'https://www.gov.br/investidor/pt-br/investir/antes-de-investir',
+      },
+    };
+  if (answers.lossResponse === 'stay' && (shortHorizon || mayNeedMoney))
+    return {
+      title: 'Seu prazo e sua escolha entram em conflito',
+      summary: 'Você aceitaria uma queda grande, mas pode precisar do dinheiro antes de ele se recuperar.',
       nextStep:
-        'Para este objetivo, compare opções com pouca mudança no valor. Deixe as opções que podem cair bastante para um objetivo distante, com dinheiro que você pode deixar investido.',
+        'Para este objetivo, compare opções com pouca mudança no valor. Deixe opções que podem cair bastante para um objetivo distante e para dinheiro que pode ficar guardado.',
       source: {
         title: 'CVM: entenda os riscos antes de investir',
         url: 'https://www.gov.br/investidor/pt-br/investir/antes-de-investir',
       },
     };
-  if (risk === 'growth')
+  if (mayNeedMoney || answers.lossResponse === 'withdraw')
     return {
-      title: 'Você aceita grandes mudanças no valor',
-      summary:
-        'Com um prazo maior, você pode estudar opções que sobem e descem bastante. Ainda assim, pode perder dinheiro e não há garantia de recuperação.',
+      title: 'Você pode precisar desse dinheiro antes',
+      summary: 'Você disse que talvez precise retirar o dinheiro ou que uma queda faria você tirá-lo.',
       nextStep:
-        'Antes de escolher, aprenda como funcionam investimentos variados e não coloque todo o dinheiro em uma única opção. Não use dinheiro de contas ou da reserva.',
+        'Procure entender quando pode retirar e se existe espera. Um ganho anunciado não ajuda se o dinheiro não estiver disponível quando você precisar.',
+      source: {
+        title: 'CVM: quando você pode retirar o dinheiro',
+        url: 'https://www.gov.br/investidor/pt-br/investir/antes-de-investir/entenda-as-caracteristicas-dos-investimentos/liquidez',
+      },
+    };
+  if (answers.lossResponse === 'stay' && answers.horizon === 'five_plus' && answers.knowledge === 'experienced')
+    return {
+      title: 'Você tem tempo e aceita esperar',
+      summary: 'Você aceita ver o valor cair e tem um prazo longo para este objetivo. Ainda assim, uma perda pode não ser recuperada.',
+      nextStep:
+        'Você pode estudar opções com mais variação, comparar custos e evitar concentrar todo o dinheiro em uma só opção. Não use dinheiro de contas ou da reserva.',
       source: {
         title: 'CVM: conheça diferentes tipos de investimento',
         url: 'https://www.gov.br/investidor/pt-br/investir/tipos-de-investimentos',
       },
     };
-  if (risk === 'balanced')
+  if (answers.lossResponse === 'stay' && answers.horizon === 'five_plus')
     return {
-      title: 'Você aceita algumas mudanças no valor',
-      summary:
-        'Seu plano pode comparar opções mais estáveis com outras que podem crescer mais, mas também cair. O prazo e o dinheiro que você pode deixar parado importam.',
-      nextStep:
-        'Compare as regras, os custos e quando pode retirar. Evite escolher só pelo ganho anunciado; entenda primeiro o que pode acontecer se o valor cair.',
+      title: 'Seu prazo é longo; você ainda está aprendendo',
+      summary: 'Ter mais tempo ajuda, mas não elimina perdas. Como você está começando, entenda cada opção antes de aumentar a variação.',
+      nextStep: 'Compare opções diferentes e comece pelo que pode acontecer com seu dinheiro. Não coloque tudo em uma única opção.',
       source: {
-        title: 'CVM: compare tipos e riscos de investimento',
+        title: 'CVM: conheça diferentes tipos de investimento',
         url: 'https://www.gov.br/investidor/pt-br/investir/tipos-de-investimentos',
       },
     };
   return {
-    title: 'Você prefere que o valor mude pouco',
+    title: 'Para este objetivo, cuide primeiro do acesso ao dinheiro',
     summary:
-      'Seu plano prioriza previsibilidade e acesso ao dinheiro. Isso pode significar ganhos menores; ainda assim, confira as regras e riscos de cada opção.',
+      'Seu prazo, a chance de precisar do dinheiro antes ou sua reação a uma queda indicam comparar opções mais estáveis e fáceis de retirar.',
     nextStep:
-      'Comece comparando opções com pouca mudança no valor e veja se consegue retirar quando precisar. O simulador abaixo apresenta títulos públicos, mas não compara todos os bancos.',
+      'Compare quando pode retirar, os custos e os impostos. A opção com o maior ganho anunciado pode não combinar com a data em que você precisa do dinheiro.',
     source: {
-      title: 'Tesouro Direto: simulador de objetivos',
-      url: 'https://www.tesourodireto.com.br/simuladores/meu-titulo-ideal',
+      title: 'CVM: o que avaliar antes de investir',
+      url: 'https://www.gov.br/investidor/pt-br/investir/antes-de-investir',
     },
   };
 }
@@ -214,7 +263,10 @@ export function InvestmentsPage() {
     const amount = app.data.goals[0]?.monthly_contribution ?? 0;
     return (amount / 100).toFixed(2).replace('.', ',');
   });
-  const [risk, setRisk] = useState<RiskPreference>('steady');
+  const [horizon, setHorizon] = useState<Horizon | null>(null);
+  const [earlyAccess, setEarlyAccess] = useState<EarlyAccess | null>(null);
+  const [lossResponse, setLossResponse] = useState<LossResponse | null>(null);
+  const [knowledge, setKnowledge] = useState<Knowledge | null>(null);
   const [mobileView, setMobileView] = useState<MobileView>('plan');
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -223,7 +275,11 @@ export function InvestmentsPage() {
   const [notice, setNotice] = useState('');
   const [advice, setAdvice] = useState<AdviceReply | null>(null);
   const selectedGoal = app.data.goals.find((goal) => goal.id === goalId);
-  const riskLabel = riskChoices.find((choice) => choice.id === risk)?.label ?? riskChoices[0].label;
+  const answersComplete = Boolean(horizon && earlyAccess && lossResponse && knowledge);
+  const horizonLabel = horizonChoices.find((choice) => choice.id === horizon)?.label ?? 'ainda não respondido';
+  const earlyAccessLabel = earlyAccessChoices.find((choice) => choice.id === earlyAccess)?.label ?? 'ainda não respondido';
+  const lossResponseLabel = lossResponseChoices.find((choice) => choice.id === lossResponse)?.label ?? 'ainda não respondido';
+  const knowledgeLabel = knowledgeChoices.find((choice) => choice.id === knowledge)?.label ?? 'ainda não respondido';
   let monthlyAmount: number | null = null;
   try {
     monthlyAmount = parseMoney(monthlyInput);
@@ -244,7 +300,7 @@ export function InvestmentsPage() {
         )
       : null;
   const declaredMonthlyRoom = Math.max(0, app.data.profile.monthly_income - app.data.profile.fixed_expenses);
-  const direction = directionFor(risk, months);
+  const direction = directionFor({ horizon, earlyAccess, lossResponse, knowledge, months });
 
   function selectGoal(id: string) {
     setGoalId(id);
@@ -252,6 +308,11 @@ export function InvestmentsPage() {
     setMonthlyInput(((next?.monthly_contribution ?? 0) / 100).toFixed(2).replace('.', ','));
     setNotice('');
     setAdvice(null);
+    setHorizon(null);
+    setEarlyAccess(null);
+    setLossResponse(null);
+    setKnowledge(null);
+    setMobileView('plan');
   }
 
   async function saveContribution() {
@@ -276,7 +337,7 @@ export function InvestmentsPage() {
   }
 
   async function askNexo() {
-    if (!selectedGoal || asking) return;
+    if (!selectedGoal || !answersComplete || asking) return;
     setAsking(true);
     setError('');
     setAdvice(null);
@@ -291,7 +352,7 @@ export function InvestmentsPage() {
         return;
       }
       const response = await invoke<AdviceReply>('ai-chat', {
-        question: `Explique de forma curta e realmente ligada a esta pessoa, não dê uma resposta padrão. Objetivo: "${selectedGoal.name}"; valor desejado: ${formatMoney(selectedGoal.target)}; já guardado: ${formatMoney(selectedGoal.saved)}; quanto pretende guardar por mês: ${monthlyAmount === null ? 'ainda não informado' : formatMoney(monthlyAmount)}; prazo: ${months} meses; preferência escolhida exatamente: "${riskLabel}". Registros financeiros: dinheiro depois das contas ${formatMoney(summary.free)}, reserva ${formatMoney(summary.reserve)}, dívidas ${formatMoney(summary.debts)}. Primeiro explique se a preferência combina com o prazo e objetivo; adapte explicitamente a resposta se a pessoa aceita grandes variações. Não escolha Tesouro Direto como resposta padrão, nem indique que compre um produto, banco, ação ou fundo. Se não houver fonte confiável suficiente para dizer onde, diga isso claramente e explique o que comparar. Não prometa ganhos.`,
+        question: `Explique de forma curta e específica para esta pessoa, nunca dê uma resposta padrão. Objetivo: "${selectedGoal.name}"; valor desejado: ${formatMoney(selectedGoal.target)}; já guardado: ${formatMoney(selectedGoal.saved)}; quanto pretende guardar por mês: ${monthlyAmount === null ? 'ainda não informado' : formatMoney(monthlyAmount)}; quando pretende usar: "${horizonLabel}" (${months} meses pela data escolhida); pode precisar antes: "${earlyAccessLabel}"; diante de uma queda de 15%, faria: "${lossResponseLabel}"; conhecimento: "${knowledgeLabel}". Registros financeiros: dinheiro depois das contas ${formatMoney(summary.free)}, reserva ${formatMoney(summary.reserve)}, dívidas ${formatMoney(summary.debts)}. Explique quais respostas mudam sua conclusão e se prazo, acesso ao dinheiro e reação à perda combinam. Não escolha Tesouro Direto por padrão nem indique comprar banco, produto, título, ação ou fundo. Se as fontes não sustentarem uma opção específica, diga o que comparar e quais dados faltam. Não prometa ganhos.`,
         save_history: false,
       });
       setAdvice(response);
@@ -427,32 +488,88 @@ export function InvestmentsPage() {
               </p>
             )}
             <div className="investment-control-divider" />
-            <SectionTitle action={<ShieldCheck size={20} aria-hidden="true" />}>3. Quanto você aceita que o valor mude?</SectionTitle>
-            <p className="muted">Escolha o que deixa você mais confortável. Nenhuma opção elimina o risco ou garante ganhos.</p>
-            <div className="investment-risk-options" role="group" aria-label="Quanto você aceita que o valor mude?">
-              {riskChoices.map((choice) => (
-                <Button
-                  key={choice.id}
-                  type="button"
-                  variant="secondary"
-                  className="investment-risk-option"
-                  aria-pressed={risk === choice.id}
-                  onClick={() => {
-                    setRisk(choice.id);
-                    setAdvice(null);
-                    setMobileView('guidance');
-                  }}
-                >
-                  <span>{choice.label}</span>
-                  <small>{choice.detail}</small>
-                </Button>
-              ))}
+            <SectionTitle>3. Entenda o que combina com seu objetivo</SectionTitle>
+            <p className="muted">Não existe resposta certa. Suas respostas mudam a orientação para este objetivo.</p>
+            <div className="investment-question">
+              <h3>Quando pretende usar esse dinheiro?</h3>
+              <div className="investment-answer-options" role="group" aria-label="Quando pretende usar esse dinheiro?">
+                {horizonChoices.map((choice) => (
+                  <Button
+                    key={choice.id}
+                    type="button"
+                    variant="secondary"
+                    aria-pressed={horizon === choice.id}
+                    onClick={() => {
+                      setHorizon(choice.id);
+                      setAdvice(null);
+                    }}
+                  >
+                    {choice.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-            <Why title="Por que isso importa?">
-              <p>
-                Se você precisar do dinheiro em breve, talvez tenha de retirar por menos do que colocou. O lugar onde você investir deve explicar os riscos antes da escolha.
-              </p>
-            </Why>
+            <div className="investment-question">
+              <h3>Pode precisar desse dinheiro antes?</h3>
+              <div className="investment-answer-options" role="group" aria-label="Pode precisar desse dinheiro antes?">
+                {earlyAccessChoices.map((choice) => (
+                  <Button
+                    key={choice.id}
+                    type="button"
+                    variant="secondary"
+                    aria-pressed={earlyAccess === choice.id}
+                    onClick={() => {
+                      setEarlyAccess(choice.id);
+                      setAdvice(null);
+                    }}
+                  >
+                    {choice.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="investment-question">
+              <h3>Se R$ 10.000 virassem R$ 8.500 por um tempo, o que faria?</h3>
+              <div className="investment-answer-options" role="group" aria-label="O que faria se o valor caísse?">
+                {lossResponseChoices.map((choice) => (
+                  <Button
+                    key={choice.id}
+                    type="button"
+                    variant="secondary"
+                    aria-pressed={lossResponse === choice.id}
+                    onClick={() => {
+                      setLossResponse(choice.id);
+                      setAdvice(null);
+                    }}
+                  >
+                    {choice.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="investment-question">
+              <h3>Como você se sente sobre investimentos?</h3>
+              <div className="investment-answer-options" role="group" aria-label="Experiência com investimentos">
+                {knowledgeChoices.map((choice) => (
+                  <Button
+                    key={choice.id}
+                    type="button"
+                    variant="secondary"
+                    aria-pressed={knowledge === choice.id}
+                    onClick={() => {
+                      setKnowledge(choice.id);
+                      setAdvice(null);
+                    }}
+                  >
+                    {choice.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <Button type="button" disabled={!answersComplete} onClick={() => setMobileView('guidance')}>
+              Ver minha orientação
+            </Button>
+            <small className="muted">Essas respostas valem para este objetivo e não substituem a análise de adequação da instituição.</small>
           </Card>
         </div>
 
@@ -511,28 +628,29 @@ export function InvestmentsPage() {
 
             <div className="investment-ai-section">
               <SectionTitle action={<TrendingUp size={20} aria-hidden="true" />}>Explicação da IA</SectionTitle>
-              <p className="muted">A explicação considera seu objetivo, prazo, valor mensal e preferência.</p>
-            <Button onClick={() => void askNexo()} disabled={!selectedGoal || asking}>
-              <ArrowUpRight size={18} /> {asking ? 'Consultando informações…' : 'Explicar meu plano'}
-            </Button>
-            {advice && (
-              <div className="verified-answer" aria-live="polite" style={{ marginTop: 18 }}>
-                <p>{advice.answer}</p>
-                {advice.sources.length > 0 ? (
-                  <div className="investment-source-list">
-                    <strong>Informações consultadas</strong>
-                    {advice.sources.map((source) => (
-                      <a key={source.id} href={source.url} target="_blank" rel="noreferrer">
-                        {source.title}
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">Ainda não encontramos informações confiáveis para orientar essa escolha.</p>
-                )}
-              </div>
-            )}
-            <small className="muted">A IA não escolhe onde você vai investir, não movimenta dinheiro e não promete ganhos. Sua pergunta não fica salva.</small>
+              <p className="muted">A IA recebe suas respostas, objetivo, prazo e situação financeira registrada.</p>
+              <Button onClick={() => void askNexo()} disabled={!selectedGoal || !answersComplete || asking}>
+                <ArrowUpRight size={18} /> {asking ? 'Consultando informações…' : 'Explicar meu plano'}
+              </Button>
+              {!answersComplete && <small className="muted">Responda às quatro perguntas para liberar a explicação.</small>}
+              {advice && (
+                <div className="verified-answer" aria-live="polite" style={{ marginTop: 18 }}>
+                  <p>{advice.answer}</p>
+                  {advice.sources.length > 0 ? (
+                    <div className="investment-source-list">
+                      <strong>Informações consultadas</strong>
+                      {advice.sources.map((source) => (
+                        <a key={source.id} href={source.url} target="_blank" rel="noreferrer">
+                          {source.title}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">Ainda não encontramos informações confiáveis para orientar essa escolha.</p>
+                  )}
+                </div>
+              )}
+              <small className="muted">A IA não escolhe onde você vai investir, não movimenta dinheiro e não promete ganhos. Sua pergunta não fica salva.</small>
             </div>
           </Card>
         </div>

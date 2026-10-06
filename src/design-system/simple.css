@@ -1001,34 +1001,33 @@ label {
 .investment-finances[open] .stack-sm {
   margin-top: 12px;
 }
-.investment-risk-options {
+.investment-question {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.investment-risk-option {
-  display: flex;
-  min-height: 112px;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
   gap: 8px;
-  padding: 14px;
+  min-width: 0;
+}
+.investment-question h3 {
+  margin: 0;
+  font-size: 17px;
+}
+.investment-answer-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.investment-answer-options .button {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  justify-content: flex-start;
+  padding: 10px 12px;
   text-align: left;
   white-space: normal;
 }
-.investment-risk-option[aria-pressed='true'] {
+.investment-answer-options .button[aria-pressed='true'] {
   border-color: var(--moss);
   background: var(--lime-soft);
   box-shadow: inset 0 0 0 1px var(--moss);
-}
-.investment-risk-option span {
-  font-weight: 700;
-}
-.investment-risk-option small {
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.45;
 }
 .investment-callout {
   display: flex;
@@ -1230,8 +1229,7 @@ label {
   .feature-links {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .investment-grid,
-  .investment-risk-options {
+  .investment-grid {
     grid-template-columns: minmax(0, 1fr);
   }
   .investment-mobile-tabs {
@@ -1258,8 +1256,8 @@ label {
     max-height: none;
     overflow: visible;
   }
-  .investment-risk-option {
-    min-height: 0;
+  .investment-answer-options {
+    grid-template-columns: minmax(0, 1fr);
   }
   .import-mapping {
     grid-template-columns: 1fr;
