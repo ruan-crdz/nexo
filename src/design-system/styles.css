@@ -1391,6 +1391,13 @@ fieldset {
   max-width: 820px;
   margin: 24px auto;
 }
+.chat-composer > label {
+  position: relative;
+}
+.chat-composer > label > input.sr-only {
+  top: 0;
+  left: 0;
+}
 .chat-composer input {
   flex: 1;
   min-width: 0;

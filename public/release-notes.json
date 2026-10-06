@@ -1,6 +1,10 @@
 {
-  "version": "2026.10.05.3",
+  "version": "2026.10.05.4",
   "changes": [
+    "Navegação: início, movimentos, planejar, Nexo e perfil; Anotar reúne os caminhos de entrada manual, Nexo, nota fiscal, extrato e WhatsApp.",
+    "Movimentos: origem de cada registro visível e filtros para anotações no app, WhatsApp e arquivos importados.",
+    "Início: demonstração identificada, insight calculado com evidências quando há dados suficientes e meta com passo, valor restante e data de revisão.",
+    "Posso gastar?: acesso direto ao cálculo existente, com premissas confirmadas pela pessoa.",
     "Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.",
     "WhatsApp: o aviso agora distingue mensagem processada de resposta não entregue e recomenda conferir antes de reenviar."
   ]

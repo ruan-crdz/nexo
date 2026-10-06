@@ -8,6 +8,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('anota, persiste, corrige e exclui um gasto com confirmação', async ({ page }) => {
+  await page.getByRole('link', { name: 'Anotar agora' }).click();
   await page.getByRole('button', { name: 'Anotar gasto' }).click();
   await page.getByLabel('Quanto foi? (R$)', { exact: true }).fill('42,35');
   await page.getByLabel('Com o quê?', { exact: true }).fill('Farmácia teste');
@@ -15,7 +16,7 @@ test('anota, persiste, corrige e exclui um gasto com confirmação', async ({ pa
   await page.getByRole('button', { name: 'Salvar anotação', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Anotação salva.' })).toBeVisible();
   await page.getByRole('button', { name: 'Concluir', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Anotações' }).click();
+  await page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Movimentos' }).click();
   await page.getByLabel('Buscar uma anotação').fill('Farmácia teste');
   await expect(page.getByRole('heading', { name: 'Farmácia teste' })).toBeVisible();
   await page.reload();
@@ -43,6 +44,7 @@ test('entrada atualiza o resumo e filtros separam gastos de entradas', async ({ 
           t.date === new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()),
       ).length,
   );
+  await page.getByRole('link', { name: 'Anotar agora' }).click();
   await page.getByRole('button', { name: 'Anotar entrada' }).click();
   await page.getByLabel('Quanto foi? (R$)').fill('150,00');
   await page.getByLabel('De onde veio?').fill('Entrada de teste');
@@ -64,10 +66,16 @@ test('entrada atualiza o resumo e filtros separam gastos de entradas', async ({ 
   await expect(page.getByRole('heading', { name: 'Entrada de teste' })).not.toBeVisible();
   await page.getByRole('button', { name: 'Entradas', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Entrada de teste' })).toBeVisible();
+  await expect(page.getByText('Anotado no app')).toBeVisible();
+  await page.getByRole('button', { name: 'WhatsApp', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Entrada de teste' })).not.toBeVisible();
+  await page.getByRole('button', { name: 'No app', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Entrada de teste' })).toBeVisible();
 });
 
 test('rejeita valor inválido e não salva ao cancelar', async ({ page }) => {
   const before = await page.evaluate(() => localStorage.getItem('nexo.demo.v1'));
+  await page.getByRole('link', { name: 'Anotar agora' }).click();
   await page.getByRole('button', { name: 'Anotar gasto' }).click();
   await page.getByLabel('Quanto foi? (R$)').fill('0');
   await page.getByLabel('Com o quê?').fill('Não salvar');
@@ -106,17 +114,18 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
   await expect(page.locator('.simple-totals')).toHaveText(totals, { useInnerText: true });
 });
 
-test('navegação contém os quatro destinos principais e caminhos antigos voltam ao início', async ({ page }) => {
+test('navegação contém cinco destinos e caminhos antigos voltam ao início', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.getByRole('link')).toHaveCount(4);
+  await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav).toContainText('Início');
-  await expect(nav).toContainText('Anotações');
-  await expect(nav).toContainText('WhatsApp');
-  await expect(nav).toContainText('Ajustes');
-  const linkWidths = await nav.getByRole('link').evaluateAll((links) =>
-    links.map((link) => link.getBoundingClientRect().width),
-  );
+  await expect(nav).toContainText('Movimentos');
+  await expect(nav).toContainText('Planejar');
+  await expect(nav).toContainText('Nexo');
+  await expect(nav).toContainText('Perfil');
+  const linkWidths = await nav
+    .getByRole('link')
+    .evaluateAll((links) => links.map((link) => link.getBoundingClientRect().width));
   expect(Math.max(...linkWidths) - Math.min(...linkWidths)).toBeLessThan(1);
   expect(await nav.evaluate((element) => getComputedStyle(element).display)).toBe('flex');
   await expect(page.getByText('Nexo Score')).not.toBeVisible();
@@ -127,8 +136,78 @@ test('navegação contém os quatro destinos principais e caminhos antigos volta
   }
 });
 
+test('Home identifica a demonstração e oferece a ferramenta Posso gastar?', async ({ page }) => {
+  await expect(page.getByText('Demonstração · dados de exemplo, separados da sua conta.')).toBeVisible();
+  await page.getByRole('link', { name: 'Posso gastar?' }).click();
+  await expect(page).toHaveURL(/#\/controle$/);
+  await expect(page.getByRole('heading', { name: 'Posso gastar?' })).toBeVisible();
+});
+
+test('insight compara meses completos, mostra evidências e prepara a pergunta do Nexo', async ({ page }) => {
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    const currentMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
+      .format(new Date())
+      .slice(0, 7);
+    const [year, month] = currentMonth.split('-').map(Number);
+    const latestMonth = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+    const previousMonth = new Date(Date.UTC(year, month - 3, 1)).toISOString().slice(0, 7);
+    data.transactions = [
+      {
+        id: crypto.randomUUID(),
+        description: 'Mercado mês anterior',
+        amount: 100_000,
+        type: 'expense',
+        category: 'Alimentação',
+        date: `${previousMonth}-10`,
+        status: 'paid',
+        source: 'manual',
+        account_id: null,
+      },
+      {
+        id: crypto.randomUUID(),
+        description: 'Mercado mês recente',
+        amount: 130_000,
+        type: 'expense',
+        category: 'Alimentação',
+        date: `${latestMonth}-10`,
+        status: 'paid',
+        source: 'manual',
+        account_id: null,
+      },
+    ];
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: /Você anotou .* a mais/ })).toBeVisible();
+  await page.getByText('Ver registros usados').click();
+  await expect(page.getByText(/Mercado mês anterior/)).toBeVisible();
+  await expect(page.getByText(/Mercado mês recente/)).toBeVisible();
+  await page.getByRole('link', { name: 'Entender a diferença' }).click();
+  await expect(page.getByLabel('Sua pergunta para o Nexo')).toHaveValue(/Compare meus gastos pagos anotados/);
+  await expect(page.getByLabel('Sua pergunta para o Nexo')).toHaveValue(/300,00/);
+});
+
+test('Anotar reúne registro manual, Nexo, nota, extrato e WhatsApp', async ({ page }) => {
+  await page.goto('/#/anotar');
+  await expect(page.getByRole('heading', { name: 'Anotar', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Falar ou escrever para o Nexo' })).toHaveAttribute(
+    'href',
+    '#/nexo',
+  );
+  await expect(page.getByRole('link', { name: 'Fotografar ou enviar uma nota' })).toHaveAttribute(
+    'href',
+    '#/recibo',
+  );
+  await expect(page.getByRole('link', { name: 'Importar extrato' })).toHaveAttribute('href', '#/importar');
+  await expect(page.getByRole('link', { name: 'Usar WhatsApp' })).toHaveAttribute('href', '#/integracoes');
+  await page.getByRole('button', { name: 'Anotar gasto' }).click();
+  await expect(page.getByLabel('Quanto foi? (R$)')).toBeVisible();
+});
+
 test('demonstração explica WhatsApp sem fingir conexão ou envio', async ({ page }) => {
-  await page.getByRole('link', { name: 'Conhecer o WhatsApp' }).click();
+  await page.getByRole('link', { name: 'Anotar agora' }).click();
+  await page.getByRole('link', { name: 'Usar WhatsApp' }).click();
   await page.getByRole('button', { name: 'Conectar meu WhatsApp' }).click();
   await expect(page.getByRole('alert')).toContainText('Nenhuma mensagem foi enviada');
 });
@@ -167,7 +246,9 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
     await page.getByLabel('Escolha o fundo').selectOption(theme);
     for (const route of [
       'inicio',
+      'anotar',
       'movimentos',
+      'nexo',
       'integracoes',
       'perfil',
       'ajuda',
@@ -198,7 +279,9 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     for (const route of [
       'inicio',
+      'anotar',
       'movimentos',
+      'nexo',
       'integracoes',
       'perfil',
       'ajuda',
@@ -213,11 +296,24 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
     ]) {
       await page.goto(`/#/${route}`);
       await expect(page.locator('main h1').first()).toBeVisible();
-      await expect
-        .poll(() => page.evaluate(() => document.documentElement.scrollWidth), {
-          message: `${route} em ${width}px`,
-        })
-        .toBeLessThanOrEqual(width);
+      const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      const overflow = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('body *'))
+          .map((element) => {
+            const bounds = element.getBoundingClientRect();
+            return {
+              tag: element.tagName,
+              className: typeof element.className === 'string' ? element.className : '',
+              right: Math.round(bounds.right),
+            };
+          })
+          .filter((element) => element.right > window.innerWidth + 1)
+          .slice(-5),
+      );
+      expect(
+        documentWidth,
+        `${route} em ${width}px; overflow: ${JSON.stringify(overflow)}`,
+      ).toBeLessThanOrEqual(width);
     }
   }
   await page.setViewportSize({ width: 768, height: 844 });
@@ -232,6 +328,7 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
 });
 
 test('formulário tem foco, Escape cancela e campos são acessíveis', async ({ page }) => {
+  await page.getByRole('link', { name: 'Anotar agora' }).click();
   await page.getByRole('button', { name: 'Anotar gasto' }).click();
   await expect(page.getByLabel('Quanto foi? (R$)')).toBeFocused();
   const result = await new AxeBuilder({ page })
@@ -268,7 +365,7 @@ test('resumo seleciona o mês e categorias conservam os gastos pagos', async ({ 
   expect(total).toBe(expected);
 });
 
-test('PC distribui os blocos e celular mantém ações visíveis', async ({ page }) => {
+test('PC distribui os blocos e celular mantém o acesso a Anotar', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.locator('.home-details > summary').click();
   const evolution = await page.locator('.money-evolution').boundingBox();
@@ -277,21 +374,17 @@ test('PC distribui os blocos e celular mantém ações visíveis', async ({ page
   expect(breakdown!.x).toBeGreaterThan(evolution!.x + evolution!.width);
   expect(Math.abs(breakdown!.y - evolution!.y)).toBeLessThan(2);
   await page.setViewportSize({ width: 320, height: 740 });
-  await expect(page.getByRole('button', { name: 'Anotar gasto' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Anotar entrada' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Anotar agora' })).toBeVisible();
 });
 
-test('início prioriza dinheiro e WhatsApp e deixa metas em uma tela opcional', async ({ page }) => {
+test('início prioriza resumo e movimentos e mantém metas em uma tela opcional', async ({ page }) => {
   const summary = await page.locator('.simple-summary').boundingBox();
-  const whatsapp = await page.locator('.whatsapp-home').boundingBox();
   const recent = await page.locator('.money-recent').boundingBox();
-  expect(summary!.y).toBeLessThan(whatsapp!.y);
-  expect(whatsapp!.y).toBeLessThan(recent!.y);
-  await expect(page.locator('.goal-journey')).toHaveCount(0);
+  expect(summary!.y).toBeLessThan(recent!.y);
+  await expect(page.locator('.home-goal')).toContainText('Guardado');
+  await expect(page.locator('.home-goal')).toContainText('Revisar em');
   await expect(page.locator('.home-details')).not.toHaveAttribute('open');
-  const goalsLink = page.getByRole('link', { name: 'Minhas metas', exact: true });
-  await expect(goalsLink.locator('svg')).toHaveCount(1);
-  expect(await goalsLink.evaluate((element) => getComputedStyle(element).gridColumnEnd)).toBe('-1');
+  const goalsLink = page.getByRole('link', { name: 'Acompanhar meta', exact: false });
   await goalsLink.click();
   await expect(page.getByRole('heading', { name: 'Minhas metas', exact: true })).toBeVisible();
   await expect(page.locator('.goal-journey')).toBeVisible();
@@ -345,6 +438,7 @@ test('notas de versão do PWA descrevem mudanças recentes', async ({ request })
 });
 
 test('modal não rola horizontalmente e trava o fundo em celular e PC', async ({ page }) => {
+  await page.getByRole('link', { name: 'Anotar agora' }).click();
   for (const width of [320, 390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await page.getByRole('button', { name: 'Anotar gasto' }).click();

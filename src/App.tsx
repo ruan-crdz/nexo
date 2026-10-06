@@ -3,7 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Shell } from './features/Shell';
 import { AuthPage } from './features/Auth';
 import { SimpleLanding, SimpleOnboarding } from './features/SimpleWelcome';
-import { SimpleHome, SimpleHistory } from './features/SimpleMoney';
+import { SimpleHome, SimpleHistory, CapturePage } from './features/SimpleMoney';
 import { SimpleSettings, SimpleHelp } from './features/SimpleSettings';
 import { AppUpdate } from './features/AppUpdate';
 const SimplePrivacy = lazy(async () => ({
@@ -28,6 +28,7 @@ const ReceiptImport = lazy(async () => ({
   default: (await import('./features/ReceiptImport')).ReceiptImport,
 }));
 const GoalsPage = lazy(async () => ({ default: (await import('./features/GoalsPage')).GoalsPage }));
+const AssistantPage = lazy(async () => ({ default: (await import('./features/Assistant')).AssistantPage }));
 
 export default function App() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/seguranca" element={<MfaPage />} />
             <Route element={<Shell />}>
               <Route path="/inicio" element={<SimpleHome />} />
+              <Route path="/anotar" element={<CapturePage />} />
               <Route path="/movimentos" element={<SimpleHistory />} />
               <Route path="/integracoes" element={<IntegrationsPage />} />
               <Route path="/perfil" element={<SimpleSettings />} />
@@ -59,6 +61,7 @@ export default function App() {
               <Route path="/planejar" element={<PlanningHub />} />
               <Route path="/metas" element={<GoalsPage />} />
               <Route path="/perguntas" element={<FinancialQuestions />} />
+              <Route path="/nexo" element={<AssistantPage />} />
               <Route path="/importar" element={<StatementImport />} />
               <Route path="/familia" element={<FamilyPage />} />
               <Route path="/controle" element={<FinancialTools />} />

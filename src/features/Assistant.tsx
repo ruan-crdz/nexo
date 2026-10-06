@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Send, Sparkles, Mic } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke } from '../data/client';
@@ -33,9 +34,11 @@ const labels: Record<string, string> = {
   break_even: 'Ponto de equilíbrio',
 };
 export function AssistantPage() {
-  const app = useApp(),
-    [input, setInput] = useState(''),
-    [messages, setMessages] = useState<ChatMessage[]>([]),
+  const app = useApp();
+  const location = useLocation();
+  const routeQuestion = (location.state as { question?: unknown } | null)?.question;
+  const [input, setInput] = useState(typeof routeQuestion === 'string' ? routeQuestion : '');
+  const [messages, setMessages] = useState<ChatMessage[]>([]),
     [pending, setPending] = useState(false),
     [error, setError] = useState(''),
     [saveHistory, setSaveHistory] = useState(false),
@@ -192,12 +195,13 @@ export function AssistantPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-          <label className="button button-secondary" aria-label="Enviar áudio para transcrição">
+          <label className="button button-secondary">
             <Mic size={18} />
             <input
               type="file"
               accept="audio/*"
-              style={{ display: 'none' }}
+              className="sr-only"
+              aria-label="Enviar áudio para transcrição"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) void audio(file);

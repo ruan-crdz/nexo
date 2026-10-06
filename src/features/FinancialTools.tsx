@@ -140,7 +140,7 @@ export function FinancialTools() {
             }
           }}
         >
-          <h2>Quanto posso gastar antes de receber?</h2>
+          <h2>Posso gastar?</h2>
           <label>
             Dinheiro disponível confirmado (R$)
             <input

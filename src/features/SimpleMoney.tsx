@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   ArrowDownLeft,
@@ -10,22 +9,20 @@ import {
   MessageCircle,
   ChartNoAxesColumnIncreasing,
   Wallet,
-  CalendarClock,
-  MessagesSquare,
   FileUp,
-  Users,
   Pencil,
   Trash2,
-  Target,
+  Camera,
+  Mic,
 } from 'lucide-react';
 import { useApp } from '../data/context';
-import { invoke } from '../data/client';
 import { Button, Card, Dialog } from '../design-system/components';
 import { categories, transactionSchema } from '../../shared/domain';
 import type { Transaction } from '../../shared/domain';
 import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths } from '../../shared/financial-engine';
 import { monthlyFlow } from '../../shared/insights';
 import { budgetUsage, weeklySummary } from '../../shared/planning';
+import { goalJourney } from '../../shared/journey';
 import { merchantKey } from '../../shared/financial-decisions';
 
 function monthLabel(month: string) {
@@ -33,6 +30,22 @@ function monthLabel(month: string) {
     new Date(`${month}-01T12:00:00Z`),
   );
 }
+function dateLabel(date: string) {
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' }).format(
+    new Date(`${date}T12:00:00Z`),
+  );
+}
+function fullDateLabel(date: string) {
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+    new Date(`${date}T12:00:00Z`),
+  );
+}
+
+const sourceLabels: Record<Transaction['source'], string> = {
+  manual: 'Anotado no app',
+  whatsapp: 'WhatsApp',
+  import: 'Arquivo importado',
+};
 
 export function MoneyForm({
   type,
@@ -230,22 +243,50 @@ export function MoneyForm({
   );
 }
 
+export function CapturePage() {
+  const [adding, setAdding] = useState<Transaction['type'] | null>(null);
+  return (
+    <>
+      <header className="simple-heading">
+        <h1>Anotar</h1>
+        <p>Tudo que você adicionar aparece em Movimentos, com a origem identificada.</p>
+      </header>
+      <section className="capture-section" aria-labelledby="capture-manual-title">
+        <h2 id="capture-manual-title">Registrar agora</h2>
+        <div className="simple-inline-actions">
+          <Button onClick={() => setAdding('expense')}>
+            <ArrowUpRight size={18} /> Anotar gasto
+          </Button>
+          <Button variant="secondary" onClick={() => setAdding('income')}>
+            <ArrowDownLeft size={18} /> Anotar entrada
+          </Button>
+        </div>
+      </section>
+      <section className="capture-section" aria-labelledby="capture-other-title">
+        <h2 id="capture-other-title">Ou escolha como enviar</h2>
+        <div className="capture-sources">
+          <Link className="button button-secondary" to="/nexo">
+            <Mic size={18} /> Falar ou escrever para o Nexo
+          </Link>
+          <Link className="button button-secondary" to="/recibo">
+            <Camera size={18} /> Fotografar ou enviar uma nota
+          </Link>
+          <Link className="button button-secondary" to="/importar">
+            <FileUp size={18} /> Importar extrato
+          </Link>
+          <Link className="button button-secondary" to="/integracoes">
+            <MessageCircle size={18} /> Usar WhatsApp
+          </Link>
+        </div>
+      </section>
+      <p className="muted">Fotos, extratos e mensagens são conferidos antes de virar uma anotação salva.</p>
+      {adding && <MoneyForm type={adding} onClose={() => setAdding(null)} />}
+    </>
+  );
+}
+
 export function SimpleHome() {
   const app = useApp();
-  const connection = useQuery({
-    queryKey: ['whatsapp-connection', app.user?.id],
-    queryFn: () =>
-      invoke<{
-        connected: boolean;
-        chat_url: string;
-        delivery_status: string | null;
-        reply_error_code: number | null;
-        phone_last_four: string | null;
-      }>('whatsapp-link', { action: 'status' }),
-    enabled: !app.demo && Boolean(app.user),
-    retry: false,
-    staleTime: 30_000,
-  });
   const [adding, setAdding] = useState<Transaction['type'] | null>(null);
   const today = civilDate(new Date(), app.data.profile.timezone);
   const currentMonth = today.slice(0, 7);
@@ -259,6 +300,13 @@ export function SimpleHome() {
       transaction.type === 'expense' &&
       transaction.date <= shiftDays(today, 3),
   );
+  const activeGoal =
+    app.data.goals.find((goal) => goal.id === app.data.profile.active_goal_id) ??
+    app.data.goals.find((goal) => goal.saved < goal.target) ??
+    null;
+  const goalProgress = activeGoal
+    ? goalJourney(activeGoal, activeGoal.weekly_amount, activeGoal.high_water)
+    : null;
   const limits = budgetUsage(app.data.budgets, app.data.transactions, today).filter(
     (budget) => budget.remaining < 0,
   );
@@ -286,6 +334,42 @@ export function SimpleHome() {
     .filter((t) => t.date <= today)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
+  const completeMonths = months.filter((item) => item.month < currentMonth);
+  const latestComplete = completeMonths.at(-1);
+  const previousComplete = completeMonths.at(-2);
+  const expenseChange =
+    latestComplete && previousComplete ? latestComplete.expenses - previousComplete.expenses : null;
+  const meaningfulChange =
+    expenseChange !== null &&
+    latestComplete &&
+    previousComplete &&
+    latestComplete.count > 0 &&
+    previousComplete.count > 0 &&
+    Math.abs(expenseChange) >= Math.max(10_000, Math.round(previousComplete.expenses * 0.15));
+  const insight = due.length
+    ? {
+        title: `${due.length} conta${due.length === 1 ? '' : 's'} vencida${due.length === 1 ? '' : 's'} ou chegando`,
+        summary: 'Confira essas contas antes de decidir quanto do dinheiro está livre.',
+        evidence: due
+          .slice(0, 5)
+          .map((item) => `${item.description} · ${dateLabel(item.date)} · ${formatMoney(item.amount)}`),
+        destination: '/planejar',
+        action: 'Conferir contas',
+        question: '',
+      }
+    : meaningfulChange && latestComplete && previousComplete && expenseChange !== null
+      ? {
+          title: `Você anotou ${formatMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'} em gastos`,
+          summary: `Comparando ${monthLabel(latestComplete.month)} com ${monthLabel(previousComplete.month)}.`,
+          evidence: [
+            `${monthLabel(latestComplete.month)}: ${formatMoney(latestComplete.expenses)} em gastos pagos anotados.`,
+            `${monthLabel(previousComplete.month)}: ${formatMoney(previousComplete.expenses)} em gastos pagos anotados.`,
+          ],
+          destination: '/nexo',
+          action: 'Entender a diferença',
+          question: `Compare meus gastos pagos anotados em ${monthLabel(latestComplete.month)} (${formatMoney(latestComplete.expenses)}) com ${monthLabel(previousComplete.month)} (${formatMoney(previousComplete.expenses)}). A diferença calculada é ${formatMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'}. Explique apenas o que os registros e as fontes disponíveis sustentarem; não invente causas.`,
+        }
+      : null;
   return (
     <>
       <header className="simple-heading dashboard-heading">
@@ -325,6 +409,11 @@ export function SimpleHome() {
           </Button>
         </div>
       </header>
+      {app.demo && (
+        <p className="demo-notice" role="note">
+          Demonstração · dados de exemplo, separados da sua conta.
+        </p>
+      )}
       <section className="simple-summary" aria-labelledby="monthly-summary-title">
         <div className="simple-section-title">
           <h2 id="monthly-summary-title">Seu mês até agora</h2>
@@ -358,25 +447,80 @@ export function SimpleHome() {
         <p className="muted">Pelas anotações deste mês. Esse valor não é o saldo da sua conta bancária.</p>
         {flow.count === 0 && <p>Comece anotando algo que recebeu ou gastou.</p>}
       </section>
-      <section className="whatsapp-home">
-        <MessageCircle size={32} />
-        <div>
-          <h2>É só falar. O Nexo anota.</h2>
-          <p>Envie uma mensagem ou um áudio contando o que gastou ou recebeu.</p>
-        </div>
-        {connection.data?.connected ? (
-          <a
-            className="button button-primary"
-            href={connection.data.chat_url}
-            target="_blank"
-            rel="noopener noreferrer"
+      {insight && (
+        <section className="home-insight" aria-labelledby="home-insight-title">
+          <div>
+            <p className="eyebrow">O Nexo percebeu</p>
+            <h2 id="home-insight-title">{insight.title}</h2>
+            <p>{insight.summary}</p>
+            <details>
+              <summary>Ver registros usados</summary>
+              <ul className="evidence-list">
+                {insight.evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <small className="muted">São anotações do Nexo, não um extrato bancário completo.</small>
+            </details>
+          </div>
+          <Link
+            className="button button-secondary"
+            to={insight.destination}
+            state={insight.question ? { question: insight.question } : undefined}
           >
-            Abrir meu WhatsApp <ArrowUpRight size={20} />
-          </a>
-        ) : (
-          <Link className="button button-primary" to="/integracoes">
-            {app.demo ? 'Conhecer o WhatsApp' : 'Conectar meu WhatsApp'} <ChevronRight size={20} />
+            {insight.action} <ChevronRight size={18} />
           </Link>
+        </section>
+      )}
+      <section className="spending-allowance-link">
+        <div>
+          <h2>Uma compra em mente?</h2>
+          <p>Veja o que pode gastar antes de receber, com suas contas e reservas consideradas.</p>
+        </div>
+        <Link className="button button-secondary" to="/controle">
+          Posso gastar? <ChevronRight size={18} />
+        </Link>
+      </section>
+      <section className="home-goal" aria-labelledby="home-goal-title">
+        {activeGoal && goalProgress ? (
+          <>
+            <div>
+              <p className="eyebrow">Próximo passo da meta</p>
+              <h2 id="home-goal-title">{activeGoal.name}</h2>
+              <p>
+                Guardado {formatMoney(activeGoal.saved)} de {formatMoney(activeGoal.target)} · faltam{' '}
+                {formatMoney(goalProgress.remaining)}.
+              </p>
+              <p>
+                {activeGoal.weekly_amount > 0
+                  ? `Passo planejado: ${formatMoney(goalProgress.nextStep)} nesta semana.`
+                  : 'Ritmo pausado; você pode ajustar quando quiser.'}{' '}
+                Revisar em {fullDateLabel(activeGoal.deadline)}.
+              </p>
+              <details>
+                <summary>Ver cálculo</summary>
+                <p>
+                  {formatMoney(activeGoal.target)} − {formatMoney(activeGoal.saved)} ={' '}
+                  {formatMoney(goalProgress.remaining)} restantes. O passo semanal é o valor que você
+                  cadastrou; esta conta não considera rendimentos.
+                </p>
+              </details>
+            </div>
+            <Link className="button button-secondary" to="/metas">
+              Acompanhar meta <ChevronRight size={18} />
+            </Link>
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="eyebrow">Planejar no seu ritmo</p>
+              <h2 id="home-goal-title">Escolha um próximo passo</h2>
+              <p>Uma meta pode ter um valor, uma data para revisar e passos pequenos.</p>
+            </div>
+            <Link className="button button-secondary" to="/metas">
+              Ver minhas metas <ChevronRight size={18} />
+            </Link>
+          </>
         )}
       </section>
       <div className="money-dashboard">
@@ -392,27 +536,6 @@ export function SimpleHome() {
           ) : (
             <p className="muted">Ainda não há anotações. Use os botões acima para começar.</p>
           )}
-        </section>
-        <section className="money-shortcuts" aria-labelledby="quick-actions-title">
-          <h2 id="quick-actions-title" className="manual-title">
-            Anotar agora
-          </h2>
-          <div className="money-actions">
-            <button className="money-action expense-action" onClick={() => setAdding('expense')}>
-              <span>
-                <ArrowUpRight size={24} />
-              </span>
-              <strong>Anotar gasto</strong>
-              <small>Algo que você pagou</small>
-            </button>
-            <button className="money-action income-action" onClick={() => setAdding('income')}>
-              <span>
-                <ArrowDownLeft size={24} />
-              </span>
-              <strong>Anotar entrada</strong>
-              <small>Dinheiro que recebeu</small>
-            </button>
-          </div>
         </section>
       </div>
       <details className="simple-details home-details">
@@ -497,28 +620,9 @@ export function SimpleHome() {
           </section>
         </div>
       </details>
-      <div className="feature-links" aria-label="Mais controle">
-        <Link to="/planejar" className="button button-secondary">
-          <CalendarClock size={20} />
-          <span>Contas e limites</span>
-        </Link>
-        <Link to="/perguntas" className="button button-secondary">
-          <MessagesSquare size={20} />
-          <span>Perguntar ao Nexo</span>
-        </Link>
-        <Link to="/importar" className="button button-secondary">
-          <FileUp size={20} />
-          <span>Importar extrato</span>
-        </Link>
-        <Link to="/familia" className="button button-secondary">
-          <Users size={20} />
-          <span>Família</span>
-        </Link>
-        <Link to="/metas" className="button button-secondary feature-link-goals">
-          <Target size={20} />
-          Minhas metas
-        </Link>
-      </div>
+      <Link to="/planejar" className="text-link">
+        Ver todos os planos
+      </Link>
       {app.data.profile.reminders_enabled && (due.length > 0 || limits.length > 0) && (
         <section className="attention-band" aria-label="Avisos consentidos">
           <h2>Vale conferir</h2>
@@ -596,7 +700,7 @@ function MoneyRows({ rows }: { rows: Transaction[] }) {
                     year: 'numeric',
                     timeZone: 'UTC',
                   }).format(new Date(`${t.date}T12:00:00Z`))}
-                  {t.source === 'whatsapp' ? ' · WhatsApp' : ''}
+                  · {sourceLabels[t.source]}
                 </p>
               </div>
               <strong className={t.type === 'income' ? 'positive' : ''}>
@@ -667,20 +771,22 @@ export function SimpleHistory() {
   const [month, setMonth] = useState(() => civilDate(new Date(), app.data.profile.timezone).slice(0, 7));
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | Transaction['source']>('all');
   const [adding, setAdding] = useState<Transaction['type'] | null>(null);
   const rows = app.data.transactions
     .filter(
       (t) =>
         t.date.startsWith(month) &&
         (filter === 'all' || t.type === filter) &&
+        (sourceFilter === 'all' || t.source === sourceFilter) &&
         t.description.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')),
     )
     .sort((a, b) => b.date.localeCompare(a.date));
   return (
     <>
       <header className="simple-heading">
-        <h1>Suas anotações</h1>
-        <p>Veja o que entrou e saiu. Toque em “Corrigir” para mudar algo.</p>
+        <h1>Movimentos</h1>
+        <p>Tudo que entrou no Nexo, com a origem de cada registro. Toque em “Corrigir” para mudar algo.</p>
       </header>
       <div className="simple-inline-actions">
         <Button onClick={() => setAdding('expense')}>Anotar gasto</Button>
@@ -735,6 +841,25 @@ export function SimpleHistory() {
               variant={filter === value ? 'primary' : 'secondary'}
               aria-pressed={filter === value}
               onClick={() => setFilter(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <div className="history-filters" role="group" aria-label="Filtrar por origem">
+          {(
+            [
+              ['all', 'Todas as origens'],
+              ['manual', 'No app'],
+              ['whatsapp', 'WhatsApp'],
+              ['import', 'Arquivo'],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              variant={sourceFilter === value ? 'primary' : 'secondary'}
+              aria-pressed={sourceFilter === value}
+              onClick={() => setSourceFilter(value)}
             >
               {label}
             </Button>
