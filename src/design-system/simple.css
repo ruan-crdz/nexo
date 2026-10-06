@@ -136,7 +136,8 @@ label {
 .simple-nav a span {
   min-width: 0;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .simple-nav a.active {
   color: var(--moss);
@@ -375,6 +376,16 @@ label {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  margin-inline: auto;
+}
+.simple-form input[type='date'] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 .simple-form .button {
   width: 100%;
@@ -977,6 +988,21 @@ label {
   }
   .journey-actions {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 400px) {
+  .simple-shell .simple-nav a span {
+    font-size: 11px;
+  }
+}
+@media (max-width: 370px) {
+  .simple-shell .simple-nav a span {
+    font-size: 10px;
+  }
+}
+@media (max-width: 340px) {
+  .simple-shell .simple-nav a {
+    padding-inline: 0;
   }
 }
 .feature-links,

@@ -327,6 +327,45 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('Mais controle mantém campos alinhados e Movimentos cabe no menu mobile', async ({ page }) => {
+  for (const width of [320, 360, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 850 });
+    await page.goto('/#/controle');
+    await expect(page.getByRole('heading', { name: 'Posso gastar?' })).toBeVisible();
+    const metrics = await page.evaluate(() => {
+      const form = document.querySelector('form.simple-form')!;
+      const inputs = Array.from(form.querySelectorAll<HTMLInputElement>('input:not([type="checkbox"])'));
+      const label = Array.from(document.querySelectorAll('.simple-nav a span')).find(
+        (element) => element.textContent?.trim() === 'Movimentos',
+      )!;
+      const labelStyle = getComputedStyle(label);
+      return {
+        formWidth: form.getBoundingClientRect().width,
+        inputWidths: inputs.map((input) => input.getBoundingClientRect().width),
+        dateWidths: inputs
+          .filter((input) => input.type === 'date')
+          .map((input) => input.getBoundingClientRect().width),
+        documentWidth: document.documentElement.scrollWidth,
+        labelWidth: label.getBoundingClientRect().width,
+        labelScrollWidth: label.scrollWidth,
+        labelHeight: label.getBoundingClientRect().height,
+        labelLineHeight: Number.parseFloat(labelStyle.lineHeight),
+        labelWhiteSpace: labelStyle.whiteSpace,
+      };
+    });
+    expect(metrics.inputWidths).toHaveLength(6);
+    expect(Math.max(...metrics.inputWidths) - Math.min(...metrics.inputWidths)).toBeLessThanOrEqual(1);
+    expect(metrics.dateWidths).toEqual([metrics.inputWidths[1], metrics.inputWidths[2]]);
+    expect(metrics.documentWidth).toBeLessThanOrEqual(width);
+    if (width >= 1024) expect(metrics.formWidth).toBeLessThanOrEqual(760);
+    if (width <= 390) {
+      expect(metrics.labelWhiteSpace).toBe('nowrap');
+      expect(metrics.labelScrollWidth).toBeLessThanOrEqual(metrics.labelWidth);
+      expect(metrics.labelHeight).toBeLessThanOrEqual(metrics.labelLineHeight + 1);
+    }
+  }
+});
+
 test('formulário tem foco, Escape cancela e campos são acessíveis', async ({ page }) => {
   await page.getByRole('link', { name: 'Anotar agora' }).click();
   await page.getByRole('button', { name: 'Anotar gasto' }).click();
