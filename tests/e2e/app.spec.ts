@@ -380,6 +380,16 @@ test('recibo permite corrigir antes de confirmar e não aceita valor inválido',
   expect(saved).toMatchObject({ amount: 2790, category: 'Saúde', status: 'paid' });
 });
 
+test('leitura de nota aceita PDF e formatos comuns de foto', async ({ page }) => {
+  await page.goto('/#/recibo');
+  const input = page.getByLabel('Nota fiscal ou recibo');
+  const accept = await input.getAttribute('accept');
+  expect(accept).toContain('application/pdf');
+  expect(accept).toContain('image/*');
+  expect(accept).toContain('.heic');
+  await expect(page.getByRole('heading', { name: 'Ler nota fiscal ou recibo' })).toBeVisible();
+});
+
 test('modal não rola horizontalmente e trava o fundo em celular e PC', async ({ page }) => {
   for (const width of [320, 390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: 844 });

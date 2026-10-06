@@ -108,7 +108,7 @@ export async function deliverReply(messageId: string, phone: string, text: strin
     throw error;
   }
 }
-export async function downloadAudio(mediaId: string): Promise<File> {
+export async function downloadMedia(mediaId: string): Promise<File> {
   if (!/^\d+$/.test(mediaId)) throw new HttpError(400, 'Identificador de mídia inválido.');
   const metadata = await (
     await safeFetch(graphUrl(mediaId), {
@@ -121,13 +121,13 @@ export async function downloadAudio(mediaId: string): Promise<File> {
     !(url.hostname === 'lookaside.fbsbx.com' || url.hostname.endsWith('.fbcdn.net'))
   )
     throw new HttpError(400, 'Origem de mídia não permitida.');
-  if (metadata.file_size > 10_000_000) throw new HttpError(413, 'Áudio muito grande.');
+  if (metadata.file_size > 10_000_000) throw new HttpError(413, 'Arquivo muito grande.');
   const response = await safeFetch(url.href, {
     headers: { Authorization: `Bearer ${env('WHATSAPP_ACCESS_TOKEN')}` },
     redirect: 'error',
   });
   if (Number(response.headers.get('content-length') ?? 0) > 10_000_000)
-    throw new HttpError(413, 'Áudio muito grande.');
+    throw new HttpError(413, 'Arquivo muito grande.');
   const reader = response.body?.getReader();
   if (!reader) throw new HttpError(400, 'Mídia vazia.');
   const chunks: Uint8Array[] = [];
@@ -138,7 +138,7 @@ export async function downloadAudio(mediaId: string): Promise<File> {
     size += value.length;
     if (size > 10_000_000) {
       await reader.cancel();
-      throw new HttpError(413, 'Áudio muito grande.');
+      throw new HttpError(413, 'Arquivo muito grande.');
     }
     chunks.push(value);
   }
@@ -148,7 +148,21 @@ export async function downloadAudio(mediaId: string): Promise<File> {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
-  return new File([bytes], `audio.${metadata.mime_type?.includes('ogg') ? 'ogg' : 'mp4'}`, {
-    type: metadata.mime_type ?? 'audio/ogg',
+  const mime = String(metadata.mime_type ?? 'application/octet-stream');
+  const extension = mime.includes('ogg')
+    ? 'ogg'
+    : mime === 'audio/mp4' || mime === 'audio/x-m4a'
+      ? 'm4a'
+      : mime === 'audio/mpeg'
+        ? 'mp3'
+          : mime === 'audio/wav' || mime === 'audio/x-wav'
+            ? 'wav'
+        : mime === 'audio/webm'
+          ? 'webm'
+          : mime === 'application/pdf'
+            ? 'pdf'
+            : 'media';
+  return new File([bytes], `whatsapp.${extension}`, {
+    type: mime,
   });
 }

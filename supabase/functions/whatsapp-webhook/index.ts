@@ -5,7 +5,7 @@ import { merchantKey } from '../../../shared/financial-decisions.ts';
 import { readPages } from '../../../shared/pagination.ts';
 import { accountSchema } from '../../../shared/domain.ts';
 import { admin, env, HttpError, json } from '../_shared/http.ts';
-import { downloadAudio, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
+import { downloadMedia, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
 import { parseTransaction, transcribe, readReceipt } from '../_shared/openai.ts';
 import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
@@ -19,13 +19,15 @@ const messageSchema = z.object({
   type: z.string(),
   text: z.object({ body: z.string().max(4000) }).optional(),
   audio: z.object({ id: z.string(), mime_type: z.string().optional() }).optional(),
-  image: z.object({ id: z.string() }).optional(),
+  image: z.object({ id: z.string(), mime_type: z.string().optional() }).optional(),
+  document: z
+    .object({ id: z.string(), mime_type: z.string().optional(), filename: z.string().max(255).optional() })
+    .optional(),
 });
 const webhookSchema = z.object({
   object: z.literal('whatsapp_business_account'),
-  entry: z
-    .array(
-      z.object({
+  entry: z.array(
+    z.object({
         changes: z
           .array(
             z.object({
@@ -127,7 +129,7 @@ async function processMessage(message: Message) {
       .eq('id', userId)
       .single();
     if (profile.error) throw new Error('profile');
-    if (['text', 'audio', 'image'].includes(message.type)) {
+    if (['text', 'audio', 'image', 'document'].includes(message.type)) {
       const award = await db.rpc('award_habit_for', {
         owner: userId,
         event_kind: 'message',
@@ -138,10 +140,24 @@ async function processMessage(message: Message) {
       showPoints = profile.data.show_journey_points;
     }
     if (message.type === 'audio' && message.audio)
-      text = await transcribe(await downloadAudio(message.audio.id), userId);
-    if (message.type === 'image' && message.image) {
+      text = await transcribe(await downloadMedia(message.audio.id), userId);
+    const receiptMedia =
+      message.type === 'image' && message.image
+        ? await downloadMedia(message.image.id)
+        : message.type === 'document' && message.document
+          ? await downloadMedia(message.document.id)
+          : null;
+    if (receiptMedia) {
+      if (
+        message.type === 'document' &&
+        message.document?.mime_type?.split(';')[0] !== 'application/pdf' &&
+        !message.document?.filename?.toLowerCase().endsWith('.pdf')
+      ) {
+        await finish('Por WhatsApp, envie uma foto ou um PDF da nota fiscal.', userId);
+        return;
+      }
       const receipt = await readReceipt(
-        await downloadAudio(message.image.id),
+        receiptMedia,
         profile.data.timezone,
         userId,
         new Date(Number(message.timestamp) * 1000),
@@ -172,7 +188,11 @@ async function processMessage(message: Message) {
     }
     if (!text) {
       await finish(
-        'Nesta versão, envie texto ou áudio. Recibos em imagem ainda não são interpretados.',
+        message.type === 'image'
+          ? 'Não consegui abrir essa foto. Tente uma imagem mais nítida, uma foto da nota inteira ou envie um PDF.'
+          : message.type === 'document'
+            ? 'Por WhatsApp, envie um PDF da nota fiscal ou uma foto da nota inteira.'
+            : 'Nesta versão, envie texto ou áudio. Para uma nota fiscal, envie uma foto ou PDF.',
         userId,
       );
       return;

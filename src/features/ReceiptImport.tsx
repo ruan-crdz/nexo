@@ -18,6 +18,58 @@ type Preview = {
     status: 'paid' | 'planned';
   }[];
 };
+const maxReceiptBytes = 10_000_000;
+const supportedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+async function prepareReceiptFile(file: File): Promise<File> {
+  if (!file.size || file.size > 20_000_000)
+    throw new Error('Escolha uma nota ou foto de até 20 MB.');
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    if (file.size > maxReceiptBytes) throw new Error('O PDF deve ter até 10 MB.');
+    return new File([file], 'nota-fiscal.pdf', { type: 'application/pdf' });
+  }
+
+  const heic = /\.(?:heic|heif)$/i.test(file.name) || /image\/(?:heic|heif)/i.test(file.type);
+  let image = file;
+  if (heic) {
+    try {
+      const { default: heic2any } = await import('heic2any');
+      const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+      image = new File([Array.isArray(converted) ? converted[0] : converted], 'foto-da-nota.jpg', {
+        type: 'image/jpeg',
+      });
+    } catch {
+      throw new Error('Não consegui abrir esta foto do iPhone. Tente compartilhar como JPG ou PDF.');
+    }
+  }
+
+  const imageLike = image.type.startsWith('image/') || /\.(?:jpe?g|png|webp|gif|avif|bmp)$/i.test(image.name);
+  if (!imageLike) throw new Error('Escolha uma foto ou um PDF da nota.');
+  if (supportedImageTypes.has(image.type) && image.size <= 5_000_000) return image;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(image);
+  } catch {
+    throw new Error('Não consegui abrir esta foto. Tente enviar em JPG, PNG ou PDF.');
+  }
+  try {
+    const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Não foi possível preparar a foto.');
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+    if (!compressed || compressed.size > maxReceiptBytes)
+      throw new Error('A foto continua muito grande. Corte as bordas e tente novamente.');
+    return new File([compressed], 'foto-da-nota.jpg', { type: 'image/jpeg' });
+  } finally {
+    bitmap.close();
+  }
+}
+
 export function ReceiptImport() {
   const app = useApp();
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -46,15 +98,13 @@ export function ReceiptImport() {
     setError('');
     try {
       if (app.demo) throw new Error('Leitura de recibos exige conta real e modelo de visão configurado.');
-      if (file.size > 5_000_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
-        throw new Error('Escolha JPG, PNG ou WEBP de até 5 MB.');
       const bytes = await file.arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256', bytes);
       setFingerprint(
         [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join(''),
       );
       const form = new FormData();
-      form.set('file', file);
+      form.set('file', await prepareReceiptFile(file));
       const received = await invoke<Preview>('ai-receipt', form);
       for (const row of received.transactions) {
         const preference = app.data.category_preferences.find(
@@ -106,8 +156,11 @@ export function ReceiptImport() {
   return (
     <>
       <header className="simple-heading">
-        <h1>Ler recibo por foto</h1>
-        <p>Confira os dados legíveis antes de salvar. A imagem não cria uma anotação sozinha.</p>
+        <h1>Ler nota fiscal ou recibo</h1>
+        <p>
+          Envie uma foto ou PDF da nota. Fotos grandes e fotos do iPhone são preparadas automaticamente. Confira os
+          dados antes de salvar.
+        </p>
       </header>
       {app.demo && (
         <Button
@@ -139,13 +192,13 @@ export function ReceiptImport() {
         </Button>
       )}
       <label>
-        Foto do recibo
+        Nota fiscal ou recibo
         <input
           className="statement-file"
           type="file"
-          accept="image/jpeg,image/png,image/webp"
-          capture="environment"
+          accept="image/*,application/pdf,.heic,.heif,.pdf"
           disabled={pending}
+          aria-label="Nota fiscal ou recibo"
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) void read(file);

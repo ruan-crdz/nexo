@@ -172,7 +172,7 @@ Deno.test('áudio inválido é bloqueado antes de chamada externa', async () => 
   await assert.rejects(() => transcribe(new File(['script'], 'x.html', { type: 'text/html' })), /suportado/);
   await assert.rejects(() => transcribe(new File([], 'empty.ogg', { type: 'audio/ogg' })), /suportado/);
 });
-Deno.test('recibo envia imagem como conteúdo e retorna somente prévia', async () => {
+Deno.test('recibo envia foto ou PDF como conteúdo e retorna somente prévia', async () => {
   const originalFetch = globalThis.fetch;
   const oldModel = Deno.env.get('OPENAI_VISION_MODEL');
   Deno.env.set('OPENAI_VISION_MODEL', 'test-vision-model');
@@ -181,7 +181,15 @@ Deno.test('recibo envia imagem como conteúdo e retorna somente prévia', async 
       const body = JSON.parse(String(init?.body));
       assert.ok(Array.isArray(body.input));
       assert.equal(body.store, false);
-      assert.equal(body.input[0].content[1].type, 'input_image');
+      const attachment = body.input[0].content[1];
+      if (attachment.type === 'input_file') {
+        assert.equal(attachment.filename, 'nota-fiscal.pdf');
+        assert.equal(attachment.detail, 'high');
+        const pdfBytes = Uint8Array.from(atob(attachment.file_data.split(',')[1]), (char) => char.charCodeAt(0));
+        assert.equal(new TextDecoder().decode(pdfBytes.subarray(0, 5)), '%PDF-');
+      } else {
+        assert.equal(attachment.type, 'input_image');
+      }
       return new Response(
         JSON.stringify({
           status: 'completed',
@@ -225,10 +233,18 @@ Deno.test('recibo envia imagem como conteúdo e retorna somente prévia', async 
     );
     assert.equal(result.transactions[0].amount, 1234);
     assert.equal(result.transactions[0].status, 'planned');
+    const pdf = new File(['%PDF-1.7\nnota de teste'], 'nota.pdf', { type: 'application/pdf' });
+    const pdfResult = await readReceipt(
+      pdf,
+      'America/Sao_Paulo',
+      'test-user',
+      new Date('2026-10-05T15:00:00Z'),
+    );
+    assert.equal(pdfResult.transactions[0].amount, 1234);
     await assert.rejects(
       () =>
         readReceipt(new File(['script'], 'bad.png', { type: 'image/png' }), 'America/Sao_Paulo', 'test-user'),
-      /formato/,
+      /foto ou um PDF válido/,
     );
   } finally {
     globalThis.fetch = originalFetch;

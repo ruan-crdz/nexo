@@ -11,6 +11,14 @@ export function isSummaryRequest(text: string) {
     normalized,
   );
 }
+export function whatsappDeliveryNotice(status: string | null, messageState: string | null) {
+  if (status !== 'failed') return null;
+  if (messageState === 'complete')
+    return 'A mensagem foi processada, mas o WhatsApp não confirmou o envio da resposta. Confira “Anotações” no app antes de enviar de novo, para evitar duplicar.';
+  if (messageState === 'pending')
+    return 'A mensagem ainda precisa ser conferida, mas o WhatsApp não confirmou o envio da resposta. Não confirme sem ver os dados primeiro.';
+  return 'O WhatsApp não confirmou o envio da resposta. Confira “Anotações” no app antes de enviar de novo.';
+}
 
 export function whatsappMonthSummary(rows: Transaction[], today: string) {
   const flow = monthlyFlow(

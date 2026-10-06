@@ -4,12 +4,14 @@ import { CheckCircle2, Copy, ExternalLink, MessageCircle, Mic, RefreshCw } from 
 import { useApp } from '../data/context';
 import { invoke, supabase } from '../data/client';
 import { Badge, Button, Card, Dialog, PageHeader, SectionTitle } from '../design-system/components';
+import { whatsappDeliveryNotice } from '../../shared/whatsapp-summary';
 
 type Connection = {
   connected: boolean;
   phone_last_four: string | null;
   chat_url: string;
   delivery_status: string | null;
+  message_state: string | null;
   reply_error_code: number | null;
 };
 type LinkCode = { code: string; message: string; expires_at: string; whatsapp_url: string };
@@ -34,6 +36,10 @@ export function IntegrationsPage() {
     return () => window.clearInterval(timer);
   }, [link]);
   const connected = connection.data?.connected === true;
+    const deliveryNotice = whatsappDeliveryNotice(
+      connection.data?.delivery_status ?? null,
+      connection.data?.message_state ?? null,
+    );
   const remaining = link ? Math.max(0, Math.ceil((Date.parse(link.expires_at) - now) / 1000)) : 0;
   const waiting = link && remaining > 0 && !connected;
 
@@ -108,13 +114,9 @@ export function IntegrationsPage() {
               <div className="notice" role="status">
                 <CheckCircle2 size={20} /> Seu número está conectado à sua conta.
               </div>
-              {connection.data?.delivery_status === 'failed' && (
-                <div className="error-message" role="alert">
-                  {connection.data.reply_error_code === 131030
-                    ? 'Na última tentativa, a Meta informou que seu celular não estava autorizado como destinatário de teste. Se você já confirmou o número, envie “ajuda” na conversa e atualize o status.'
-                    : connection.data.reply_error_code === 131031
-                      ? 'A última resposta falhou por uma restrição da Meta. Se isso já foi resolvido, envie “ajuda” na conversa e atualize o status.'
-                      : 'Não conseguimos entregar a última resposta no WhatsApp. Confira seus movimentos no app antes de reenviar um lançamento. Para testar a conversa, envie “ajuda”.'}
+              {deliveryNotice && (
+                <div className="notice" role="status">
+                  {deliveryNotice}
                 </div>
               )}
               <a

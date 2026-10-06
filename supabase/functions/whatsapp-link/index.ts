@@ -11,7 +11,7 @@ serve(async (request) => {
     const connection = await service.from('whatsapp_connections').select('phone,consent_at')
       .eq('user_id', user.id).maybeSingle();
     const latest = await service.from('whatsapp_messages_metadata')
-      .select('sent_at,delivery_status,reply_error_code').eq('user_id', user.id)
+      .select('sent_at,state,delivery_status,reply_error_code').eq('user_id', user.id)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (connection.error || latest.error) throw new HttpError(503, 'Não foi possível conferir a conexão.');
     return json({
@@ -19,6 +19,7 @@ serve(async (request) => {
       phone_last_four: connection.data?.phone?.slice(-4) ?? null,
       chat_url: chatUrl,
       delivery_status: latest.data?.delivery_status ?? (latest.data?.sent_at ? 'accepted' : null),
+      message_state: latest.data?.state ?? null,
       reply_error_code: latest.data?.reply_error_code ?? null,
     });
   }

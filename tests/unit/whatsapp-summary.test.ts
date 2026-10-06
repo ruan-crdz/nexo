@@ -1,5 +1,9 @@
+import {
+  isSummaryRequest,
+  whatsappDeliveryNotice,
+  whatsappMonthSummary,
+} from '../../shared/whatsapp-summary';
 import { describe, expect, it } from 'vitest';
-import { isSummaryRequest, whatsappMonthSummary } from '../../shared/whatsapp-summary';
 import type { Transaction } from '../../shared/domain';
 
 const row = (overrides: Partial<Transaction>): Transaction => ({
@@ -47,5 +51,16 @@ describe('resumo simples no WhatsApp', () => {
       /Faltou no mês: R\$\s100,00/,
     );
     expect(whatsappMonthSummary([], '2026-10-05')).toContain('ainda não tem anotações');
+  });
+});
+
+describe('falha ao enviar resposta no WhatsApp', () => {
+  it('separa entrega da resposta do processamento da mensagem', () => {
+    expect(whatsappDeliveryNotice('accepted', 'complete')).toBeNull();
+    expect(whatsappDeliveryNotice('failed', 'complete')).toContain('A mensagem foi processada');
+    expect(whatsappDeliveryNotice('failed', 'complete')).toContain('antes de enviar de novo');
+  });
+  it('não orienta confirmar uma leitura pendente que não foi vista', () => {
+    expect(whatsappDeliveryNotice('failed', 'pending')).toContain('Não confirme sem ver os dados');
   });
 });
