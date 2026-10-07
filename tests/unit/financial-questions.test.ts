@@ -31,8 +31,8 @@ it('respeita mês nomeado, ano e estabelecimento sem trocar pelo mês atual', ()
   expect(
     answerFinancialQuestion(data, 'Quanto gastei em janeiro do ano passado?', '2026-10-05')?.records,
   ).toEqual([previous]);
-  expect(answerFinancialQuestion(data, 'Quanto gastei em janeiro?', '2026-10-05')?.calculation[0]).toContain(
-    '2026-01-01 a 2026-01-31',
+  expect(answerFinancialQuestion(data, 'Quanto gastei em janeiro?', '2026-10-05')?.answer).toContain(
+    'janeiro de 2026',
   );
 });
 it.each([
@@ -104,4 +104,14 @@ it('renda e conta são filtros explícitos e perguntas de caixa recusam inventar
     answerFinancialQuestion(data, 'Quanto recebi na Conta principal hoje?', '2026-10-04')?.records,
   ).toHaveLength(1);
   expect(answerFinancialQuestion(data, 'Quanto posso gastar?', '2026-10-05')?.answer).toContain('confirmado');
+});
+
+it('reconhece uma pergunta de compra e pede as premissas sem inventar disponibilidade', () => {
+  const data = { transactions: [row()], goals: [], financial_accounts: [] };
+  const answer = answerFinancialQuestion(data, 'Posso comprar um Play 5 por R$ 5.000?', '2026-10-07');
+
+  expect(answer?.answer).toContain('dinheiro disponível confirmado hoje');
+  expect(answer?.answer).toContain('contas até lá');
+  expect(answer?.records).toEqual([]);
+  expect(answer?.answer).not.toContain('Pode comprar');
 });

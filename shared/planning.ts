@@ -4,6 +4,15 @@ import { applyRate, formatMoney, shiftDays, shiftMonths, sum } from './financial
 import { goalJourney } from './journey.ts';
 
 const namespace = '9667e0ce-412e-47d9-a212-91d1d616f74b';
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
 export function recurringTransactions(
   rules: RecurringRule[],
   existing: Transaction[],
@@ -119,7 +128,7 @@ export function notificationCandidates(
       candidates.push({
         key: `bill:${record.id}:${record.date}`,
         kind: 'bill',
-        text: `Conta ainda não marcada como paga: ${record.description}, ${formatMoney(record.amount)}, vencimento ${record.date}. Confira no app antes de pagar.`,
+        text: `Lembrete: você anotou ${record.description}, de ${formatMoney(record.amount)}, com vencimento em ${formatDate(record.date)}. Ela ainda não está marcada como paga; confira no app antes de pagar.`,
       });
     for (const budget of budgetUsage(data.budgets, data.transactions, today).filter(
       (item) => item.remaining < 0,
@@ -127,7 +136,7 @@ export function notificationCandidates(
       candidates.push({
         key: `budget:${budget.id}:${budget.month}`,
         kind: 'budget',
-        text: `${budget.category}: ${formatMoney(budget.spent)} anotados para um limite de ${formatMoney(budget.limit_amount)}. Excesso de ${formatMoney(-budget.remaining)}.`,
+        text: `Seu limite de ${budget.category} passou ${formatMoney(-budget.remaining)}. Você anotou ${formatMoney(budget.spent)} para um limite de ${formatMoney(budget.limit_amount)}. Confira no app.`,
       });
   }
   if (data.profile.weekly_digest) {
@@ -136,7 +145,7 @@ export function notificationCandidates(
       candidates.push({
         key: `weekly:${weekly.start}`,
         kind: 'weekly',
-        text: `Resumo de ${weekly.start} a ${weekly.end}: entrou ${formatMoney(weekly.income)}, saiu ${formatMoney(weekly.expenses)}, diferença ${formatMoney(weekly.net)}. Valores das anotações, não saldo bancário.${focus && journey ? ` Meta ${focus.name}: ${formatMoney(focus.saved)} de ${formatMoney(focus.target)}. ${paused ? 'Seu ritmo está pausado, sem perda de conquistas.' : journey.message}` : ''}`,
+        text: `Resumo da semana, de ${formatDate(weekly.start)} a ${formatDate(weekly.end)}: entrou ${formatMoney(weekly.income)}, saiu ${formatMoney(weekly.expenses)}. Diferença nas anotações: ${formatMoney(weekly.net)}; não é saldo bancário.${focus && journey ? ` Meta ${focus.name}: ${formatMoney(focus.saved)} de ${formatMoney(focus.target)}. ${paused ? 'Seus lembretes estão pausados; seu progresso continua.' : journey.message}` : ''}`,
       });
   }
   if (data.profile.journey_reminders && !paused && focus && journey && journey.remaining > 0) {
@@ -152,7 +161,7 @@ export function notificationCandidates(
       candidates.push({
         key: `journey:${focus.id}:${data.profile.checkin_frequency === 'weekly' ? start : today}`,
         kind: 'journey',
-        text: `Um convite, não uma cobrança: como está seu momento para a meta ${focus.name}? Você já guardou ${formatMoney(focus.saved)}. ${journey.message} Abra o Nexo para um check-in; não precisa guardar dinheiro hoje para participar.`,
+        text: `Se quiser, faça seu check-in da meta ${focus.name}. Você informou ${formatMoney(focus.saved)} guardados. ${journey.message} É um convite, não uma cobrança; não precisa guardar dinheiro hoje.`,
       });
   }
   return candidates;
@@ -183,12 +192,12 @@ export function verifiedReply(
     const goals = data.goals;
     return {
       answer: goals.length
-        ? 'Veja quanto falta para suas metas, conforme os valores que você informou.'
-        : 'Você ainda não cadastrou uma meta.',
+        ? 'Veja quanto falta para chegar a cada meta:'
+        : 'Você ainda não tem metas cadastradas. Pode criar uma no app quando quiser.',
       calculation: goals.map((goal) =>
         goal.saved >= goal.target
-          ? `${goal.name}: meta atingida. Objetivo ${formatMoney(goal.target)}; guardado ${formatMoney(goal.saved)}; falta ${formatMoney(0)}.`
-          : `${goal.name}: ${formatMoney(goal.target)} - ${formatMoney(goal.saved)} = ${formatMoney(goal.target - goal.saved)} para chegar à meta.`,
+          ? `${goal.name}: meta atingida. Você informou ${formatMoney(goal.saved)} guardados.`
+          : `${goal.name}: faltam ${formatMoney(goal.target - goal.saved)}. Guardado: ${formatMoney(goal.saved)} de ${formatMoney(goal.target)}.`,
       ),
       records: [],
       goals,
@@ -205,10 +214,10 @@ export function verifiedReply(
       .sort((first, second) => first.date.localeCompare(second.date));
     return {
       answer: records.length
-        ? 'Estas contas ainda não foram marcadas como pagas, incluindo atrasadas e vencimentos dos próximos 30 dias.'
-        : 'Não há contas pendentes anotadas para os próximos 30 dias.',
+        ? 'Estas são as contas pendentes anotadas para os próximos 30 dias, incluindo as que já venceram:'
+        : 'Não encontrei contas pendentes anotadas para os próximos 30 dias.',
       calculation: [
-        `${records.length} contas = ${formatMoney(sum(records.map((transaction) => transaction.amount)))}. Não entram no total de gastos pagos.`,
+        `${records.length} ${records.length === 1 ? 'conta' : 'contas'} pendente${records.length === 1 ? '' : 's'}, somando ${formatMoney(sum(records.map((transaction) => transaction.amount)))}. Ainda não foram contadas como gastos pagos.`,
       ],
       records,
       goals: [],
@@ -242,17 +251,23 @@ export function verifiedReply(
   return {
     answer:
       previous === 0
-        ? 'Não há gastos pagos no período anterior para uma comparação completa.'
+        ? 'Ainda não há gastos pagos no mês passado para comparar com este.'
         : current > previous
-          ? `Você anotou ${formatMoney(current - previous)} a mais no período comparável.`
-          : `Seus gastos anotados não aumentaram: a diferença foi ${formatMoney(current - previous)}.`,
+          ? `Você anotou ${formatMoney(current - previous)} a mais neste mês, comparando o mesmo período.`
+          : `Neste mês, você anotou ${formatMoney(Math.abs(current - previous))} a menos que no mesmo período do mês passado.`,
     calculation: [
-      `${currentStart} a ${today}: ${formatMoney(current)}.`,
-      `${previousStart} a ${previousEnd}: ${formatMoney(previous)}.`,
-      `${formatMoney(current)} - ${formatMoney(previous)} = ${formatMoney(current - previous)}.`,
+      `Este mês, até ${formatDate(today)}: ${formatMoney(current)}.`,
+      `No mesmo período do mês passado (${formatDate(previousStart)} a ${formatDate(previousEnd)}): ${formatMoney(previous)}.`,
+      `Variação por categoria:`,
       ...[...changes.entries()]
         .sort((first, second) => second[1] - first[1])
-        .map(([category, amount]) => `${category}: diferença de ${formatMoney(amount)}.`),
+        .map(([category, amount]) =>
+          amount > 0
+            ? `${category}: aumentou ${formatMoney(amount)}.`
+            : amount < 0
+              ? `${category}: diminuiu ${formatMoney(Math.abs(amount))}.`
+              : `${category}: sem variação.`,
+        ),
     ],
     records,
     goals: [],

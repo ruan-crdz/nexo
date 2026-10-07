@@ -3,6 +3,31 @@ import { formatMoney, sum } from './financial-engine.ts';
 import { questionPeriod } from './question-period.ts';
 import { merchantKey } from './financial-decisions.ts';
 import { isVerifiedQuestion, verifiedReply } from './planning.ts';
+
+export function isSpendabilityQuestion(text: string) {
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+  return /\b(?:posso|consigo|da para|vale a pena)\b.*\b(?:comprar|pagar|adquirir)\b/.test(normalized);
+}
+
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function formatPeriod(start: string, end: string, today: string) {
+  if (start === `${today.slice(0, 7)}-01` && end === today) return `neste mês, até ${formatDate(end)}`;
+  if (start === end) return `em ${formatDate(start)}`;
+  return `de ${formatDate(start)} a ${formatDate(end)}`;
+}
+
 export function isFinancialQuestion(text: string) {
   const normalized = text
     .normalize('NFD')
@@ -10,6 +35,7 @@ export function isFinancialQuestion(text: string) {
     .toLowerCase()
     .trim();
   return (
+    isSpendabilityQuestion(normalized) ||
     isVerifiedQuestion(text) ||
     (/^(quanto|quais|como|por que|porque|mostre|me mostre|posso)\b/.test(normalized) &&
       /gast|receb|entrou|saiu|conta|meta|dinheiro|saldo/.test(normalized))
@@ -25,6 +51,14 @@ export function answerFinancialQuestion(
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
   if (!isFinancialQuestion(text)) return null;
+  if (isSpendabilityQuestion(normalized))
+    return {
+      answer:
+        'Posso te ajudar a avaliar essa compra, mas não vou chutar com base só nos gastos anotados. Para calcular com segurança, preciso do dinheiro disponível confirmado hoje, da data do próximo recebimento, das contas até lá, da reserva que você quer proteger e do valor separado para metas. “Posso gastar?” no app calcula isso com esses dados.',
+      calculation: [],
+      records: [],
+      goals: [],
+    };
   if (/posso gastar|posso comprar|disponivel|quanto.*(?:dinheiro|saldo)/.test(normalized))
     return {
       answer:
@@ -119,13 +153,17 @@ export function answerFinancialQuestion(
       (!merchantFilter || merchantKey(row.description).includes(merchantFilter)),
   );
   const total = sum(records.map((row) => row.amount));
+  const periodLabel = formatPeriod(start, end, today);
+  const description = type === 'income' ? 'entradas recebidas' : 'gastos pagos';
   return {
-    answer: `${type === 'income' ? 'Entradas' : 'Gastos'} anotados: ${formatMoney(total)}.`,
+    answer: records.length
+      ? `Você anotou ${formatMoney(total)} em ${description} ${periodLabel}.`
+      : `Não encontrei ${description} ${periodLabel}.`,
     calculation: [
-      `Período: ${start} a ${end}.`,
-      category ? `Categoria: ${category}.` : 'Todas as categorias.',
-      accounts.length ? `Conta: ${accounts[0].name}.` : 'Todas as contas.',
-      `${records.length} registros pagos somados = ${formatMoney(total)}. Previsões não foram incluídas.`,
+      `${records.length} ${type === 'income' ? 'entradas' : 'gastos'} considerados.`,
+      'Previsões não entram nesse total.',
+      ...(category ? [`Categoria: ${category}.`] : []),
+      ...(accounts.length ? [`Conta: ${accounts[0].name}.`] : []),
     ],
     records,
     goals: [],

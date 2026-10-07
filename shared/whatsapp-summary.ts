@@ -14,10 +14,10 @@ export function isSummaryRequest(text: string) {
 export function whatsappDeliveryNotice(status: string | null, messageState: string | null) {
   if (status !== 'failed') return null;
   if (messageState === 'complete')
-    return 'A mensagem foi processada, mas o WhatsApp não confirmou o envio da resposta. Confira “Anotações” no app antes de enviar de novo, para evitar duplicar.';
+    return 'Recebi sua mensagem, mas não consegui entregar a resposta pelo WhatsApp. Confira o Histórico no app antes de tentar de novo, para evitar duplicar o registro.';
   if (messageState === 'pending')
-    return 'A mensagem ainda precisa ser conferida, mas o WhatsApp não confirmou o envio da resposta. Não confirme sem ver os dados primeiro.';
-  return 'O WhatsApp não confirmou o envio da resposta. Confira “Anotações” no app antes de enviar de novo.';
+    return 'Preparei uma anotação para você conferir, mas não consegui entregar a resposta pelo WhatsApp. Não confirme sem ver os dados primeiro.';
+  return 'Não consegui entregar a resposta pelo WhatsApp. Confira o Histórico no app antes de enviar de novo.';
 }
 
 export function whatsappMonthSummary(rows: Transaction[], today: string) {
@@ -28,13 +28,17 @@ export function whatsappMonthSummary(rows: Transaction[], today: string) {
   const month = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
     new Date(`${today.slice(0, 7)}-01T12:00:00Z`),
   );
+  const difference =
+    flow.net < 0
+      ? `Saíram ${formatMoney(Math.abs(flow.net))} a mais do que entrou.`
+      : `Entraram ${formatMoney(flow.net)} a mais do que saiu.`;
   return (
-    `Seu resumo de ${month}, até agora:\n\n` +
+    `Resumo de ${month}, até hoje:\n\n` +
     `Entrou: ${formatMoney(flow.income)}\n` +
     `Saiu: ${formatMoney(flow.expenses)}\n` +
-    `${flow.net < 0 ? 'Faltou' : 'Sobrou'} no mês: ${formatMoney(Math.abs(flow.net))}\n\n` +
-    (flow.count === 0 ? 'Você ainda não tem anotações pagas ou recebidas neste mês.\n\n' : '') +
-    'Esse resumo usa suas anotações. Não é o saldo da sua conta bancária.\n' +
-    'Para conferir ou corrigir, abra “Anotações” no app.'
+    `${difference}\n\n` +
+    (flow.count === 0 ? 'Ainda não há registros pagos ou recebidos neste mês.\n\n' : '') +
+    'Este resumo considera o que você anotou; não representa o saldo da sua conta.\n' +
+    'Para conferir ou corrigir, abra Histórico no app.'
   );
 }

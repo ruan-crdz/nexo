@@ -14,7 +14,7 @@ import {
   whatsappWelcome,
 } from '../../../shared/whatsapp-link.ts';
 import { extractionDecision } from '../../../shared/extraction.ts';
-import { structured, transcribe, readReceipt } from '../_shared/openai.ts';
+import { parseSpendabilityMessage, structured, transcribe, readReceipt } from '../_shared/openai.ts';
 
 Deno.test('job financeiro exige credencial forte e nunca aceita autorização ausente', () => {
   const previous = Deno.env.get('FINANCIAL_JOB_SECRET');
@@ -84,7 +84,7 @@ Deno.test('mensagem pronta vincula sem aceitar códigos incompletos ou texto arb
   assert.equal(url.hostname, 'wa.me');
   assert.equal(url.searchParams.get('text'), message);
   assert.throws(() => whatsappUrl('+55 11 99999-9999', message));
-  for (const instruction of ['áudio', 'Anotações', 'desfazer', '24 horas', 'ajuda']) {
+  for (const instruction of ['áudio', 'Histórico', 'desfazer', '24 horas', 'ajuda']) {
     assert.ok(whatsappWelcome.includes(instruction));
   }
 });
@@ -168,6 +168,61 @@ Deno.test('saída estruturada trata recusa e resposta incompleta como erro', asy
     globalThis.fetch = originalFetch;
   }
 });
+Deno.test('diálogo de compra combina apenas premissas explicitamente informadas', async () => {
+  const previousKey = Deno.env.get('OPENAI_API_KEY');
+  const previousModel = Deno.env.get('OPENAI_EXTRACTION_MODEL');
+  const originalFetch = globalThis.fetch;
+  Deno.env.set('OPENAI_API_KEY', 'test-key');
+  Deno.env.set('OPENAI_EXTRACTION_MODEL', 'test-model');
+  const replies = [
+    {
+      purchase: 'Play 5',
+      purchase_amount: 500000,
+      cash: null,
+      next_income_date: null,
+      estimated_income: null,
+      protected_reserve: null,
+      goal_allocation: null,
+    },
+    {
+      purchase: null,
+      purchase_amount: null,
+      cash: 1200000,
+      next_income_date: '2026-10-10',
+      estimated_income: 400000,
+      protected_reserve: 200000,
+      goal_allocation: 50000,
+    },
+  ];
+  try {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          status: 'completed',
+          output: [{ content: [{ type: 'output_text', text: JSON.stringify(replies.shift()) }] }],
+        }),
+        { status: 200 },
+      );
+    const first = await parseSpendabilityMessage('Posso comprar um Play 5 por R$ 5.000?', '2026-10-07', null);
+    assert.equal(first.purchase_amount, 500000);
+    assert.equal(first.cash, null);
+    const second = await parseSpendabilityMessage(
+      'Tenho R$ 12.000 disponíveis hoje, recebo R$ 4.000 em 10/10, reserva R$ 2.000 e metas R$ 500.',
+      '2026-10-07',
+      first,
+    );
+    assert.equal(second.purchase, 'Play 5');
+    assert.equal(second.purchase_amount, 500000);
+    assert.equal(second.cash, 1200000);
+    assert.equal(second.goal_allocation, 50000);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) Deno.env.delete('OPENAI_API_KEY');
+    else Deno.env.set('OPENAI_API_KEY', previousKey);
+    if (previousModel === undefined) Deno.env.delete('OPENAI_EXTRACTION_MODEL');
+    else Deno.env.set('OPENAI_EXTRACTION_MODEL', previousModel);
+  }
+});
 Deno.test('áudio inválido é bloqueado antes de chamada externa', async () => {
   await assert.rejects(() => transcribe(new File(['script'], 'x.html', { type: 'text/html' })), /suportado/);
   await assert.rejects(() => transcribe(new File([], 'empty.ogg', { type: 'audio/ogg' })), /suportado/);
@@ -185,7 +240,9 @@ Deno.test('recibo envia foto ou PDF como conteúdo e retorna somente prévia', a
       if (attachment.type === 'input_file') {
         assert.equal(attachment.filename, 'nota-fiscal.pdf');
         assert.equal(attachment.detail, 'high');
-        const pdfBytes = Uint8Array.from(atob(attachment.file_data.split(',')[1]), (char) => char.charCodeAt(0));
+        const pdfBytes = Uint8Array.from(atob(attachment.file_data.split(',')[1]), (char) =>
+          char.charCodeAt(0),
+        );
         assert.equal(new TextDecoder().decode(pdfBytes.subarray(0, 5)), '%PDF-');
       } else {
         assert.equal(attachment.type, 'input_image');

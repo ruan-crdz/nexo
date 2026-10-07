@@ -43,22 +43,23 @@ describe('resumo simples no WhatsApp', () => {
     );
     expect(reply).toMatch(/Entrou: R\$\s100,00/);
     expect(reply).toMatch(/Saiu: R\$\s25,00/);
-    expect(reply).toMatch(/Sobrou no mês: R\$\s75,00/);
-    expect(reply).toContain('Não é o saldo da sua conta bancária');
+    expect(reply).toMatch(/Entraram R\$\s75,00 a mais do que saiu/);
+    expect(reply).toContain('não representa o saldo da sua conta');
   });
   it('mostra falta com linguagem explícita e explica um mês vazio', () => {
     expect(whatsappMonthSummary([row({ type: 'expense' })], '2026-10-05')).toMatch(
-      /Faltou no mês: R\$\s100,00/,
+      /Saíram R\$\s100,00 a mais do que entrou/,
     );
-    expect(whatsappMonthSummary([], '2026-10-05')).toContain('ainda não tem anotações');
+    expect(whatsappMonthSummary([], '2026-10-05')).toContain('Ainda não há registros pagos ou recebidos');
+    expect(whatsappMonthSummary([], '2026-10-05')).toContain('Histórico');
   });
 });
 
 describe('falha ao enviar resposta no WhatsApp', () => {
   it('separa entrega da resposta do processamento da mensagem', () => {
     expect(whatsappDeliveryNotice('accepted', 'complete')).toBeNull();
-    expect(whatsappDeliveryNotice('failed', 'complete')).toContain('A mensagem foi processada');
-    expect(whatsappDeliveryNotice('failed', 'complete')).toContain('antes de enviar de novo');
+    expect(whatsappDeliveryNotice('failed', 'complete')).toContain('Recebi sua mensagem');
+    expect(whatsappDeliveryNotice('failed', 'complete')).toContain('antes de tentar de novo');
   });
   it('não orienta confirmar uma leitura pendente que não foi vista', () => {
     expect(whatsappDeliveryNotice('failed', 'pending')).toContain('Não confirme sem ver os dados');

@@ -20,6 +20,7 @@ Usuário autenticado toca em “Conectar meu WhatsApp”. `whatsapp-link` gera c
 - Confiança >=0,90 grava; 0,70–0,89 grava com aviso de correção; <0,70 exige “confirmar”. Valor ausente exige esclarecimento.
 - “Desfazer” remove o último lote da conta registrado por WhatsApp nas últimas vinte e quatro horas.
 - “Resumo”, “saldo” ou “quanto gastei este mês?” retornam entradas, gastos e diferença do mês, calculados em centavos, sem chamada de IA. Consulta usa usuário vinculado e seu fuso, desconsiderando previsões e datas futuras. Não representa saldo bancário.
+- “Posso comprar um Play 5 por R$ 5.000?” abre uma avaliação em etapas. O Nexo pede preço, dinheiro confirmado hoje, próximo recebimento, reserva e valor separado para metas; a conversa expira em dez minutos. O cálculo usa as contas pendentes, nunca trata renda esperada como dinheiro recebido e não salva compra. “Cancelar” encerra a avaliação.
 - “Ajuda” e “oi” retornam instruções curtas. Outras perguntas recebem orientação sobre as funções disponíveis; não encaminham a simuladores removidos.
 
 Perguntas “por que gastei mais?”, “quanto falta para minha meta?” e “quais contas ainda vencem?” usam cálculos determinísticos, com períodos e registros de origem. O app mostra a evidência completa; o WhatsApp limita a lista e aponta para a consulta completa quando necessário. Nenhuma anotação é criada ao consultar.
@@ -27,6 +28,8 @@ Perguntas “por que gastei mais?”, “quanto falta para minha meta?” e “q
 Consultas também aceitam hoje/ontem/mês passado/últimos N dias e filtros conhecidos de categoria, conta e estabelecimento. Filtros não reconhecidos pedem esclarecimento, sem criar lançamentos. Preferências de categoria autorizadas valem somente para próximos registros.
 
 JPG/PNG/WEBP de recibos até 5 MB usam `OPENAI_VISION_MODEL`: a imagem gera prévia pendente; “confirmar” não comprova pagamento. O usuário marca como pago no app depois de conferir. Imagens ilegíveis ou sem valor/data confiáveis pedem esclarecimento. Não há conteúdo de imagem em logs.
+
+As respostas do bot são texto com listas legíveis no WhatsApp. Envio de gráficos ou imagens gerados pelo Nexo ainda não está implementado.
 
 Não suportado ainda: empréstimos entre pessoas, alteração de cartão/metas ou criação de lembretes por mensagem e Open Finance. O parser devolve `unsupported` e orienta o usuário; não inventa execução.
 
@@ -36,7 +39,7 @@ Jornada de hábitos exige `202610050004_goal_journey.sql`. Mensagens vinculadas 
 
 O resumo semanal pode incluir a meta em foco e um passo pequeno, sem prometer rendimento. Lembretes de jornada são opt-in, no horário escolhido entre 09h e 19h, diários/semanais conforme preferência; pausa e check-in do período suprimem convites. Além dessa preferência, é necessário consentimento externo em Ajustes. A restrição atual da conta Meta e ausência de template/job continuam sendo bloqueios de entrega real; preparar o código não garante mensagem recebida.
 
-`financial-notifications` é um worker preparado, não um agendamento já ativado. Exige a migração de planejamento, consentimento externo explícito (desativado por padrão), número vinculado, `FINANCIAL_JOB_SECRET` de pelo menos 32 caracteres e `WHATSAPP_FINANCIAL_TEMPLATE` aprovado na Meta em `pt_BR`, com um parâmetro de corpo contendo o aviso. Nunca use o token Meta como credencial do job.
+`financial-notifications` é um worker implementado, mas o agendamento de produção está desligado. Para ativá-lo, são necessários consentimento externo explícito (desativado por padrão), número vinculado, `FINANCIAL_JOB_SECRET` de pelo menos 32 caracteres, template aprovado pela Meta em `pt_BR` com um parâmetro de corpo, credenciais atuais no Supabase e configuração do Vault/Cron. Nunca use o token Meta como credencial do job.
 
 Os tipos de aviso são vencimentos, excesso de limite e resumo da última semana completa, conforme as preferências. Chaves estáveis impedem reenvio diário do mesmo evento. A função confere consentimento e vínculo novamente antes de enviar. Envia somente entre 09h e 20h no fuso do perfil e limita cada execução a 20 tentativas; assinantes e dados são lidos em páginas, sem o antigo bloqueio de 200 assinantes.
 

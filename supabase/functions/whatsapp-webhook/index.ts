@@ -1,13 +1,23 @@
 import { z } from 'zod';
 import { goalSchema } from '../../../shared/domain.ts';
-import { isFinancialQuestion, answerFinancialQuestion } from '../../../shared/financial-questions.ts';
-import { merchantKey } from '../../../shared/financial-decisions.ts';
+import {
+  isFinancialQuestion,
+  isSpendabilityQuestion,
+  answerFinancialQuestion,
+} from '../../../shared/financial-questions.ts';
+import { merchantKey, spendingAllowance } from '../../../shared/financial-decisions.ts';
 import { readPages } from '../../../shared/pagination.ts';
 import { accountSchema } from '../../../shared/domain.ts';
 import { admin, env, HttpError, json } from '../_shared/http.ts';
 import { downloadMedia, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
-import { parseTransaction, transcribe, readReceipt } from '../_shared/openai.ts';
+import {
+  parseSpendabilityMessage,
+  parseTransaction,
+  spendabilityContextSchema,
+  transcribe,
+  readReceipt,
+} from '../_shared/openai.ts';
 import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
 import { transactionSchema } from '../../../shared/domain.ts';
 import { isSummaryRequest, whatsappMonthSummary } from '../../../shared/whatsapp-summary.ts';
@@ -26,8 +36,9 @@ const messageSchema = z.object({
 });
 const webhookSchema = z.object({
   object: z.literal('whatsapp_business_account'),
-  entry: z.array(
-    z.object({
+  entry: z
+    .array(
+      z.object({
         changes: z
           .array(
             z.object({
@@ -53,6 +64,30 @@ const webhookSchema = z.object({
     .max(20),
 });
 type Message = z.infer<typeof messageSchema>;
+function whatsappDate(date: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+function spendabilityMissing(context: z.infer<typeof spendabilityContextSchema>) {
+  const missing: string[] = [];
+  if (context.purchase_amount === null) missing.push('o preço total da compra');
+  if (context.cash === null) missing.push('quanto dinheiro está disponível hoje');
+  if (context.next_income_date === null) missing.push('a data do próximo recebimento');
+  if (context.estimated_income === null) missing.push('o valor esperado desse recebimento (ou R$ 0)');
+  if (context.protected_reserve === null) missing.push('quanto quer manter como reserva (ou R$ 0)');
+  if (context.goal_allocation === null) missing.push('quanto já separou para metas (ou R$ 0)');
+  return missing;
+}
+function spendabilityPrompt(context: z.infer<typeof spendabilityContextSchema>) {
+  const missing = spendabilityMissing(context);
+  const purchase = context.purchase ? ` para ${context.purchase}` : ' para essa compra';
+  const price = context.purchase_amount === null ? '' : ` de ${formatMoney(context.purchase_amount)}`;
+  return `Consigo avaliar${purchase}${price}, mas ainda faltam alguns dados para não chutar:\n${missing.map((item) => `• ${item}`).join('\n')}\n\nPode mandar tudo em uma mensagem, por exemplo: “Disponível hoje R$ 12.000; recebo R$ 4.000 em 10/10; reserva R$ 2.000; metas R$ 500.”`;
+}
 async function processMessage(message: Message) {
   const db = admin();
   const claim = await db.rpc('claim_whatsapp', { message_key: message.id });
@@ -77,7 +112,7 @@ async function processMessage(message: Message) {
   let showPoints = false;
   async function finish(reply: string, userId?: string) {
     if (showPoints && messagePoints > 0)
-      reply += `\n\n+${messagePoints} pontos de hábito. Seu caminho continua; pontos não são dinheiro ou score de crédito.`;
+      reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
     const result = await db
       .from('whatsapp_messages_metadata')
       .update({ state: 'complete', reply, user_id: userId ?? null, updated_at: new Date().toISOString() })
@@ -85,6 +120,113 @@ async function processMessage(message: Message) {
     if (result.error) throw new Error('metadata');
     committed = true;
     await deliverReply(message.id, message.from, reply);
+  }
+  async function findPendingSpendability(userId: string) {
+    const pending = await db
+      .from('whatsapp_messages_metadata')
+      .select('message_id,pending_payload')
+      .eq('user_id', userId)
+      .eq('state', 'pending')
+      .gte('created_at', new Date(Date.now() - 10 * 60_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (pending.error) throw new HttpError(503, 'Não foi possível retomar a conversa.');
+    const match = pending.data.find(
+      (item) => spendabilityContextSchema.safeParse(item.pending_payload).success,
+    );
+    if (!match) return null;
+    const parsed = spendabilityContextSchema.safeParse(match.pending_payload);
+    return parsed.success ? { messageId: match.message_id, context: parsed.data } : null;
+  }
+  async function closePendingSpendability(messageId: string) {
+    const closed = await db
+      .from('whatsapp_messages_metadata')
+      .update({ state: 'complete', pending_payload: null, updated_at: new Date().toISOString() })
+      .eq('message_id', messageId);
+    if (closed.error) throw new HttpError(503, 'Não foi possível encerrar a avaliação pendente.');
+  }
+  async function holdSpendability(
+    context: z.infer<typeof spendabilityContextSchema>,
+    userId: string,
+    previousMessageId?: string,
+  ) {
+    if (previousMessageId && previousMessageId !== message.id)
+      await closePendingSpendability(previousMessageId);
+    const reply = spendabilityPrompt(context);
+    const stored = await db
+      .from('whatsapp_messages_metadata')
+      .update({
+        user_id: userId,
+        state: 'pending',
+        pending_payload: context,
+        reply,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('message_id', message.id);
+    if (stored.error) throw new HttpError(503, 'Não foi possível guardar as premissas da conversa.');
+    committed = true;
+    await deliverReply(message.id, message.from, reply);
+  }
+  async function answerSpendability(
+    context: z.infer<typeof spendabilityContextSchema>,
+    userId: string,
+    today: string,
+    pendingMessageId?: string,
+  ) {
+    const rows = transactionSchema
+      .array()
+      .parse(
+        await readPages((from, to) =>
+          db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
+        ),
+      );
+    let decision: ReturnType<typeof spendingAllowance>;
+    try {
+      decision = spendingAllowance(
+        {
+          cash: context.cash!,
+          confirmed_on: today,
+          next_income_date: context.next_income_date!,
+          protected_amount: context.protected_reserve!,
+          goal_amount: context.goal_allocation!,
+          estimated_income: context.estimated_income!,
+        },
+        rows,
+        today,
+      );
+    } catch {
+      await finish(
+        'Não consegui validar essa data de recebimento. Envie uma data futura, dentro dos próximos 12 meses.',
+        userId,
+      );
+      return;
+    }
+    if (pendingMessageId) await closePendingSpendability(pendingMessageId);
+    if (decision.needs_confirmation) {
+      await finish(
+        'Encontrei gastos sem conta vinculada e não consigo confirmar se o saldo informado está atualizado. Confira seus registros no app antes de decidir.',
+        userId,
+      );
+      return;
+    }
+    const remaining = decision.allowed - context.purchase_amount!;
+    const lines = [
+      remaining >= 0
+        ? `Pelas premissas que você informou, a compra de ${formatMoney(context.purchase_amount!)} cabe. Depois dela, restariam ${formatMoney(remaining)} até o próximo recebimento.`
+        : `Com essas premissas, a compra não cabe sem mexer no dinheiro protegido. Faltariam ${formatMoney(Math.abs(remaining))} para cobrir o valor.`,
+      `Considerei ${formatMoney(context.cash!)} disponíveis hoje, ${formatMoney(context.protected_reserve!)} de reserva, ${formatMoney(context.goal_allocation!)} separados para metas e as contas até ${whatsappDate(context.next_income_date!)}.`,
+      `Não somei os ${formatMoney(context.estimated_income!)} esperados como dinheiro já recebido.`,
+      'É uma estimativa baseada nos valores que você informou; gastos não anotados podem mudar o resultado.',
+    ];
+    if (decision.bills.length)
+      lines.push(
+        '',
+        'Contas consideradas:',
+        ...decision.bills
+          .slice(0, 5)
+          .map((bill) => `• ${bill.description} · ${whatsappDate(bill.date)} · ${formatMoney(bill.amount)}`),
+      );
+    await finish(lines.join('\n'), userId);
   }
   try {
     let text = message.text?.body?.trim() ?? '';
@@ -98,7 +240,7 @@ async function processMessage(message: Message) {
       await finish(
         link.data
           ? whatsappWelcome
-          : 'Esse código já foi usado ou expirou. Abra o Nexo → WhatsApp e toque em “Conectar meu WhatsApp” para gerar uma nova mensagem.',
+          : 'Esse código de conexão já expirou ou foi usado. No app, abra Você → WhatsApp e gere um novo código.',
         link.data ?? undefined,
       );
       return;
@@ -110,7 +252,9 @@ async function processMessage(message: Message) {
       .maybeSingle();
     if (connection.error) throw new Error('connection');
     if (!connection.data?.consent_at) {
-      await finish('Vincule sua conta em Nexo → WhatsApp antes de enviar dados financeiros.');
+      await finish(
+        'Para proteger seus dados, conecte sua conta antes de enviar informações financeiras. No app, abra Você → WhatsApp e toque em “Conectar meu WhatsApp”.',
+      );
       return;
     }
     const userId = connection.data.user_id;
@@ -120,7 +264,7 @@ async function processMessage(message: Message) {
       max_requests: 15,
     });
     if (rate.error || !rate.data) {
-      await finish('Vamos com calma. Aguarde um minuto para enviar a próxima mensagem.', userId);
+      await finish('Recebi várias mensagens seguidas. Aguarde um minuto e tente de novo.', userId);
       return;
     }
     const profile = await db
@@ -153,7 +297,10 @@ async function processMessage(message: Message) {
         message.document?.mime_type?.split(';')[0] !== 'application/pdf' &&
         !message.document?.filename?.toLowerCase().endsWith('.pdf')
       ) {
-        await finish('Por WhatsApp, envie uma foto ou um PDF da nota fiscal.', userId);
+        await finish(
+          'Consigo ler recibos por foto ou PDF. Envie a imagem da nota ou um arquivo PDF.',
+          userId,
+        );
         return;
       }
       const receipt = await readReceipt(
@@ -171,12 +318,12 @@ async function processMessage(message: Message) {
       if (!receipt.transactions.length) {
         await finish(
           receipt.parsed.clarification ??
-            'Não consegui ler valor e data com segurança. Envie uma foto mais nítida ou os dados por texto.',
+            'Não consegui identificar o valor e a data com segurança. Tente uma foto mais nítida ou me envie esses dados por texto.',
           userId,
         );
         return;
       }
-      const reply = `Confira o recibo antes de salvar:\n${receipt.transactions.map((row) => `${row.description} · ${row.date} · ${formatMoney(row.amount)}`).join('\n')}\nEnvie “confirmar” em até dez minutos para anotar como pendente. A foto não confirma pagamento; marque como pago no app somente depois de conferir. Nada foi registrado ainda.`;
+      const reply = `Encontrei isto no recibo, mas ainda não salvei:\n${receipt.transactions.map((row) => `• ${row.description} · ${whatsappDate(row.date)} · ${formatMoney(row.amount)}`).join('\n')}\n\nSe estiver certo, envie “confirmar” em até 10 minutos. Vou deixar como pendente; marque como pago no app só depois de conferir. A foto não confirma o pagamento.`;
       const pending = await db
         .from('whatsapp_messages_metadata')
         .update({ user_id: userId, state: 'pending', pending_payload: receipt.transactions, reply })
@@ -189,10 +336,10 @@ async function processMessage(message: Message) {
     if (!text) {
       await finish(
         message.type === 'image'
-          ? 'Não consegui abrir essa foto. Tente uma imagem mais nítida, uma foto da nota inteira ou envie um PDF.'
+          ? 'Não consegui abrir essa foto. Tente outra mais nítida, mostre a nota inteira ou envie um PDF.'
           : message.type === 'document'
-            ? 'Por WhatsApp, envie um PDF da nota fiscal ou uma foto da nota inteira.'
-            : 'Nesta versão, envie texto ou áudio. Para uma nota fiscal, envie uma foto ou PDF.',
+            ? 'Envie um PDF da nota ou uma foto mostrando o recibo inteiro.'
+            : 'Pode me mandar uma mensagem de texto ou áudio. Para ler um recibo, envie uma foto ou PDF.',
         userId,
       );
       return;
@@ -217,6 +364,14 @@ async function processMessage(message: Message) {
       return;
     }
     if (isFinancialQuestion(text)) {
+      if (isSpendabilityQuestion(text)) {
+        const pending = await findPendingSpendability(userId);
+        const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
+        const context = await parseSpendabilityMessage(text, today, null, userId);
+        if (spendabilityMissing(context).length) await holdSpendability(context, userId, pending?.messageId);
+        else await answerSpendability(context, userId, today, pending?.messageId);
+        return;
+      }
       const [rows, goals, accounts] = await Promise.all([
         readPages((from, to) =>
           db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
@@ -237,20 +392,22 @@ async function processMessage(message: Message) {
         text,
         civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
       );
-      if (!reply) throw new HttpError(422, 'Pergunta não reconhecida.');
-      const lines = [
-        reply.answer,
-        'Cálculo:',
-        ...reply.calculation.slice(0, 12),
-        'Registros usados:',
-        ...reply.records
-          .slice(0, 8)
-          .map((record) => `${record.description} · ${record.date} · ${formatMoney(record.amount)}`),
-      ];
-      if (reply.records.length > 8 || reply.calculation.length > 12)
+      if (!reply)
+        throw new HttpError(422, 'Não consegui entender essa pergunta. Tente perguntar de outro jeito.');
+      const lines = [reply.answer, ...reply.calculation.slice(0, 8).map((line) => `• ${line}`)];
+      if (reply.records.length)
         lines.push(
-          'Há mais detalhes. Veja o cálculo completo e todos os registros em Perguntar ao Nexo no app.',
+          '',
+          'Lançamentos considerados:',
+          ...reply.records
+            .slice(0, 8)
+            .map(
+              (record) =>
+                `• ${record.description} · ${whatsappDate(record.date)} · ${formatMoney(record.amount)}`,
+            ),
         );
+      if (reply.records.length > 8 || reply.calculation.length > 8)
+        lines.push('', 'Há mais detalhes no Histórico e em Perguntar ao Nexo no app.');
       await finish(lines.join('\n'), userId);
       return;
     }
@@ -259,8 +416,8 @@ async function processMessage(message: Message) {
       if (undone.error) throw new Error('undo');
       await finish(
         undone.data
-          ? 'Último registro por WhatsApp desfeito. Seu app já foi atualizado.'
-          : 'Não encontrei registro recente para desfazer.',
+          ? 'Desfeito. Removi o último registro feito pelo WhatsApp; confira o Histórico no app.'
+          : 'Não encontrei um registro feito pelo WhatsApp nas últimas 24 horas para desfazer.',
         userId,
       );
       return;
@@ -273,23 +430,40 @@ async function processMessage(message: Message) {
         .eq('state', 'pending')
         .gte('created_at', new Date(Date.now() - 10 * 60_000).toISOString())
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(10);
       if (pending.error) throw new Error('pending');
-      if (!pending.data) {
-        await finish('Não há confirmação pendente. Envie novamente o registro completo.', userId);
+      const transactionPending = pending.data.find((item) => Array.isArray(item.pending_payload));
+      if (!transactionPending) {
+        await finish('Não há nada aguardando confirmação. Envie o gasto ou recibo novamente.', userId);
         return;
       }
       const saved = await db.rpc('commit_whatsapp', {
-        message_key: pending.data.message_id,
+        message_key: transactionPending.message_id,
         owner: userId,
-        payload: pending.data.pending_payload,
+        payload: transactionPending.pending_payload,
       });
       if (saved.error) throw new Error('commit');
       await finish(
-        'Tudo certo, anotação salva! Você pode conferir em “Anotações” no app. Para cancelar, envie “desfazer”.',
+        'Salvo! Confira em Histórico no app. Para cancelar, envie “desfazer” em até 24 horas.',
         userId,
       );
+      return;
+    }
+    const pendingSpendability = await findPendingSpendability(userId);
+    if (pendingSpendability && /^(?:cancelar|desistir)[!.\s]*$/i.test(text)) {
+      await closePendingSpendability(pendingSpendability.messageId);
+      await finish('Sem problema, cancelei essa avaliação. Não alterei seus registros.', userId);
+      return;
+    }
+    const newTransactionMessage = /\b(?:gastei|gaste|comprei|paguei|recebi|ganhei|entrou|saiu)\b/i.test(text);
+    if (pendingSpendability && !newTransactionMessage) {
+      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
+      const context = await parseSpendabilityMessage(text, today, pendingSpendability.context, userId);
+      if (spendabilityMissing(context).length) {
+        await holdSpendability(context, userId, pendingSpendability.messageId);
+        return;
+      }
+      await answerSpendability(context, userId, today, pendingSpendability.messageId);
       return;
     }
     const parsed = await parseTransaction(
@@ -309,14 +483,14 @@ async function processMessage(message: Message) {
     }
     if (parsed.parsed.intent === 'question') {
       await finish(
-        'Posso anotar o que você gastou ou recebeu e mostrar seu resumo do mês.\n\nEnvie “resumo” para ver o que entrou, saiu e sobrou. Para conferir uma anotação específica, abra “Anotações” no app.\n\nNão salvei nenhuma anotação com esta pergunta.',
+        'Posso ajudar com gastos, entradas, contas e metas. Para ver o mês, envie “resumo”; para conferir seus registros, abra Histórico no app. Não salvei nada com esta pergunta.',
         userId,
       );
       return;
     }
     if (parsed.parsed.intent === 'unsupported') {
       await finish(
-        'Ainda não faço esse tipo de pedido. Posso anotar gastos e entradas. Por exemplo: “Gastei 25 reais no almoço hoje”.\n\nPara ver o mês, envie “resumo”. Não salvei nenhuma anotação com esta mensagem.',
+        'Ainda não consigo fazer isso por mensagem. Posso registrar gastos e entradas ou consultar seu resumo, suas contas e metas. Não salvei nada desta vez.',
         userId,
       );
       return;
@@ -324,7 +498,7 @@ async function processMessage(message: Message) {
     if (parsed.action === 'clarify') {
       await finish(
         parsed.parsed.clarification ??
-          'Me conte o valor, com o que foi e quando aconteceu. Por exemplo: “Gastei 25 reais no almoço hoje”.',
+          'Não peguei todos os detalhes. Me diga o valor, o que foi e quando aconteceu. Por exemplo: “Gastei 25 reais no almoço hoje”.',
         userId,
       );
       return;
@@ -336,7 +510,7 @@ async function processMessage(message: Message) {
       )
       .join('\n');
     if (parsed.action === 'confirm') {
-      const reply = `Entendi assim:\n${details}\nEnvie “confirmar” em até dez minutos ou reenvie os dados corrigidos.`;
+      const reply = `Antes de salvar, entendi assim:\n${details}\n\nNada foi salvo ainda. Se estiver certo, envie “confirmar” em até 10 minutos. Se precisar corrigir, mande os dados novamente.`;
       const pending = await db
         .from('whatsapp_messages_metadata')
         .update({ user_id: userId, state: 'pending', pending_payload: parsed.transactions, reply })
@@ -354,7 +528,7 @@ async function processMessage(message: Message) {
     if (saved.error) throw new Error('commit');
     committed = true;
     await finish(
-      `Anotado!\n${details}\n\n${parsed.action === 'save-correctable' ? 'Confira se entendi direitinho. ' : ''}Você pode corrigir em “Anotações” no app. Para cancelar, envie “desfazer”.`,
+      `Pronto, anotei:\n${details}\n\n${parsed.action === 'save-correctable' ? 'Confira se entendi direitinho. ' : ''}Para corrigir, abra Histórico no app. Para cancelar este registro, envie “desfazer” em até 24 horas.`,
       userId,
     );
   } catch {

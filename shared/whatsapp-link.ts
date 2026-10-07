@@ -20,12 +20,10 @@ export function whatsappUrl(phone: string, message?: string) {
 }
 
 export const whatsappWelcome =
-  'Tudo certo, seu WhatsApp está conectado ao Nexo! 🌿\n\n' +
-  'Pode escrever ou mandar um áudio contando o que gastou ou recebeu. Por exemplo:\n\n' +
-  '💬 “Gastei 25 reais no almoço hoje.”\n' +
-  '🎙️ “Recebi 150 reais ontem.”\n\n' +
-  'Eu anoto no seu Nexo e te aviso quando estiver salvo. Se faltar informação, eu pergunto.\n\n' +
-  'Para conferir ou corrigir, abra “Anotações” no app.\n' +
-  'Quer saber como está o mês? Envie “resumo”.\n' +
-  'Se quiser cancelar as anotações da sua última mensagem, envie “desfazer” em até 24 horas.\n\n' +
-  'Envie “ajuda” sempre que precisar destas dicas. Vamos começar?';
+  'Oi! Seu WhatsApp está conectado ao Nexo 🌿\n\n' +
+  'Pode me mandar um texto ou áudio contando o que entrou ou saiu. Por exemplo:\n' +
+  '• “Gastei 25 reais no almoço hoje”\n' +
+  '• “Recebi 150 reais ontem”\n\n' +
+  'Eu aviso o que entendi. Se faltar informação, pergunto; se houver dúvida, peço para você conferir.\n\n' +
+  'Para ver o mês, envie “resumo”. Para cancelar o último registro, envie “desfazer” em até 24 horas.\n' +
+  'Seus registros ficam em Histórico no app. Envie “ajuda” para ver estas opções.';
