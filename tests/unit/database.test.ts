@@ -49,6 +49,7 @@ beforeAll(async () => {
   await db.exec(
     readFileSync('supabase/migrations/202610070007_recurring_payment_reconciliation.sql', 'utf8'),
   );
+  await db.exec(readFileSync('supabase/migrations/202610070008_ai_chat_writes.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -60,6 +61,35 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('chat autenticado com MFA cria uma vez, faz rollback do lote e isola outro usuário', async () => {
+    await asUser(alice);
+    await db.query("select set_config('request.jwt.claim.aal','aal2',false)");
+    const request=crypto.randomUUID();
+    const record=crypto.randomUUID();
+    const payload={id:record,description:'Almoço pelo chat',amount:2500,type:'expense',category:'Alimentação',date:'2026-10-07',status:'paid',source:'whatsapp',account_id:null};
+    const save=(requestId:string,changes:unknown)=>db.query<{result:{status:string;saved:number;records:{id:string}[]}}>('select save_ai_chat_batch($1,$2::jsonb) result',[requestId,JSON.stringify(changes)]);
+    const first=(await save(request,[{entity:'transactions',action:'create',id:record,payload,expected:null}])).rows[0].result;
+    expect(first).toMatchObject({status:'applied',saved:1});
+    expect((await db.query<{source:string}>('select source from transactions where id=$1',[record])).rows[0].source).toBe('manual');
+    await save(request,[{entity:'transactions',action:'create',id:record,payload,expected:null}]);
+    expect((await db.query('select id from transactions where id=$1',[record])).rows).toHaveLength(1);
+    const invalidRequest=crypto.randomUUID();
+    const rollback=crypto.randomUUID();
+    await expect(save(invalidRequest,[
+      {entity:'transactions',action:'create',id:rollback,payload:{...payload,id:rollback,description:'Não deve entrar'},expected:null},
+      {entity:'transactions',action:'create',id:crypto.randomUUID(),payload:{...payload,amount:-1},expected:null},
+    ])).rejects.toThrow();
+    expect((await db.query("select id from transactions where description='Não deve entrar'")).rows).toHaveLength(0);
+    await expect(db.query('select * from ai_chat_writes')).rejects.toThrow(/permission denied/);
+    await asUser(bob);
+    const foreignRequest=crypto.randomUUID();
+    await expect(save(foreignRequest,[{entity:'transactions',action:'update',id:record,payload:{amount:9999},expected:payload}])).rejects.toThrow(/ownership/);
+    await db.exec('reset role');
+    await db.query('delete from transactions where id=$1',[record]);
+    await db.query('delete from ai_chat_writes where request_id=any($1::uuid[])',[[request,foreignRequest]]);
+    await db.query("select set_config('request.jwt.claim.aal','aal1',false)");
+    expect((await db.query('select * from transactions where id=$1',[record])).rows).toHaveLength(0);
+  });
   it('DAS já pago é conciliado sem novo gasto e sem recriar a pendência do mês', async () => {
     await db.exec('reset role');
     const rule = crypto.randomUUID(),
@@ -645,10 +675,11 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
     expect(result.rows).toEqual([]);
   });
   it('usuário A não lê, altera ou insere dados do B', async () => {
+    const transaction = crypto.randomUUID();
     await asUser(alice);
     await db.query(
-      "insert into transactions(user_id,description,amount,type,category,date) values($1,'Almoço',1000,'expense','Alimentação','2026-10-04')",
-      [alice],
+      "insert into transactions(id,user_id,description,amount,type,category,date) values($1,$2,'Almoço',1000,'expense','Alimentação','2026-10-04')",
+      [transaction, alice],
     );
     await asUser(bob);
     expect((await db.query('select * from transactions')).rows).toHaveLength(0);
@@ -662,6 +693,8 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
       ),
     ).rejects.toThrow(/row-level security/i);
     expect((await db.query('select * from profiles')).rows).toHaveLength(1);
+    await db.exec('reset role');
+    await db.query('delete from transactions where id=$1', [transaction]);
   });
   it('FK composta impede vincular movimento à conta alheia', async () => {
     await asUser(alice);
@@ -780,6 +813,11 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
   });
   it('MFA bloqueia leitura e RPC privilegiada até elevar a sessão', async () => {
     await db.exec('reset role');
+    const transaction = crypto.randomUUID();
+    await db.query(
+      "insert into transactions(id,user_id,description,amount,type,category,date) values($1,$2,'Registro protegido',100,'expense','Outros','2026-10-04')",
+      [transaction, alice],
+    );
     await db.query("insert into auth.mfa_factors(user_id,status) values($1,'verified')", [alice]);
     await asUser(alice);
     expect((await db.query('select * from transactions')).rows).toHaveLength(0);
@@ -787,6 +825,10 @@ describe('migrations e autorização real do Postgres (PGlite)', () => {
     await db.query("select set_config('request.jwt.claim.aal','aal2',false)");
     expect((await db.query('select * from transactions')).rows.length).toBeGreaterThan(0);
     expect((await db.query<{ ok: boolean }>('select session_assured() as ok')).rows[0].ok).toBe(true);
+    await db.exec('reset role');
+    await db.query('delete from transactions where id=$1', [transaction]);
+    await db.query('delete from auth.mfa_factors where user_id=$1', [alice]);
+    await db.query("select set_config('request.jwt.claim.aal','aal1',false)");
   });
   it('apenas owner exclui uma empresa, com confirmação do nome', async () => {
     await asUser(bob);

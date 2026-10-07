@@ -1,8 +1,9 @@
 import { strict as assert } from 'node:assert';
+import { createClient } from '@supabase/supabase-js';
 import { handleWhatsAppAction } from '../_shared/whatsapp-interactions.ts';
 import { sendText, hashToken, retryWhatsAppReply } from '../_shared/whatsapp.ts';
 import { proposalButtons } from '../../../shared/whatsapp-presentation.ts';
-import { executeChatTool, chatWithWhatsApp } from '../_shared/whatsapp-chat.ts';
+import { executeChatTool, chatWithWhatsApp, chatToolDefinitions } from '../_shared/whatsapp-chat.ts';
 import {
   whatsappMoneySnapshot,
   whatsappMoneyReply,
@@ -538,6 +539,57 @@ Deno.test('lote valida todos os itens antes de gravar e evita proposta por lanç
       assert.equal(requests.length, 0);
     },
     () => null,
+  );
+});
+
+Deno.test('modo app salva movimentos como manuais pelo RPC autenticado', async () => {
+  const appSaveTool = chatToolDefinitions(true).find((tool) => tool.name === 'save_records');
+  const whatsappSaveTool = chatToolDefinitions(false).find((tool) => tool.name === 'save_records');
+  assert.match(appSaveTool!.description, /source=manual/);
+  assert.match(whatsappSaveTool!.description, /source=whatsapp/);
+  const income = {
+    description: 'Salário',
+    amount: 700000,
+    type: 'income',
+    category: 'Salário',
+    date: '2026-10-07',
+    status: 'paid',
+    account_id: null,
+  };
+  await mocked(
+    async (requests) => {
+      await executeChatTool(
+        'save_records',
+        { changes: [{ entity: 'transactions', values: JSON.stringify(income) }] },
+        {
+          ...context,
+          db: createClient('https://buttons.test', 'user-scoped-test-key'),
+          appMode: true,
+          requestId: proposal,
+        },
+      );
+      await executeChatTool(
+        'save_records',
+        { changes: [{ entity: 'transactions', values: JSON.stringify(income) }] },
+        {
+          ...context,
+          db: createClient('https://buttons.test', 'user-scoped-test-key'),
+          appMode: true,
+          requestId: proposal,
+        },
+      );
+      const write = requests.find((request) => request.url.pathname.endsWith('/rpc/save_ai_chat_batch'));
+      assert.ok(write);
+      const changes = write.body.changes as { payload: Record<string, unknown>; action: string }[];
+      assert.equal(changes[0].payload.source, 'manual');
+      assert.equal(changes[0].action, 'create');
+      assert.match(write.body.request as string, /^[0-9a-f-]{36}$/);
+      assert.equal(
+        requests[1].body.request,
+        write.body.request,
+      );
+    },
+    (url) => (url.pathname.endsWith('/rpc/save_ai_chat_batch') ? { status: 'applied', saved: 1 } : null),
   );
 });
 

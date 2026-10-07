@@ -28,9 +28,9 @@ export { Brand } from '../design-system/components';
 const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
+  { to: '/nexo', label: 'Nexo', icon: MessageCircle },
   { to: '/metas', label: 'Metas', icon: Target },
   { to: '/planejar', label: 'Planejar', icon: CalendarDays },
-  { to: '/nexo', label: 'Nexo', icon: MessageCircle },
   { to: '/perfil', label: 'Você', icon: Settings },
 ];
 export function Shell() {

@@ -127,13 +127,14 @@ Deno.test('chat do app usa meta e sobra reais sem bloquear por ausência de font
     assert.equal(reply.sources.length, 0);
     assert.match(reply.answer, /R\$\s64,08/);
     assert.match(reply.answer, /Juntar 500 reais/);
+    assert.doesNotMatch(reply.answer, /[*_`#]/);
     assert.ok(!reply.answer.includes('não sustenta'));
     assert.ok(!reply.answer.includes('{{'));
     assert.equal(reply.metrics.free?.replace(/\s/g, ''), 'R$64,08');
   }, 'Na meta {{goal_name}}, cabe {{goal_next_contribution}} agora. Antes de separar, confira suas necessidades até o próximo recebimento.');
 });
 Deno.test('chat rejeita valor inventado ou referência de cálculo inexistente', async () => {
-  for (const explanation of ['Você pode gastar R$ 999,00.', 'O valor é {{saldo_inventado}}.']) {
+  for (const explanation of ['Você pode gastar R$ 999,00.', 'O valor é {{saldo_inventado}}.', '**Saldo** disponível: {{free}}.']) {
     await withAdvice(async () => {
       await assert.rejects(
         () => advise(admin(), owner, 'Qual meu próximo passo?', undefined, history),

@@ -68,12 +68,13 @@ export function AssistantPage() {
     [error, setError] = useState(''),
     [saveHistory, setSaveHistory] = useState(false),
     [business, setBusiness] = useState(false);
-  async function send(question = input) {
-    if (!question.trim() || pending) return;
+  async function send(question = input, fromAudio = false) {
+    if (!question.trim() || (pending && !fromAudio)) return;
     setInput('');
     setError('');
     setPending(true);
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', text: question }]);
+    const requestId = crypto.randomUUID();
+    setMessages((prev) => [...prev, { id: requestId, role: 'user', text: question }]);
     try {
       let reply: Reply;
       if (app.demo) {
@@ -98,6 +99,7 @@ export function AssistantPage() {
         };
       } else {
         reply = await invoke<Reply>('ai-chat', {
+          request_id: requestId,
           question,
           save_history: saveHistory,
           history: messages
@@ -125,8 +127,7 @@ export function AssistantPage() {
       const form = new FormData();
       form.set('file', file);
       const result = await invoke<{ text: string }>('ai-transcribe', form);
-      setInput(result.text);
-      app.toast('Áudio transcrito. Confira o texto antes de enviar.');
+      await send(result.text, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível transcrever.');
     } finally {

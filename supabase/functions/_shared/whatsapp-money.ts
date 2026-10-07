@@ -4,9 +4,10 @@ import type { Transaction } from '../../../shared/domain.ts';
 import { goalMonthlyBudget } from '../../../shared/journey.ts';
 import { readPages } from '../../../shared/pagination.ts';
 import { admin, HttpError } from './http.ts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export async function whatsappMoneySnapshot(userId: string, today: string) {
-  const db = admin();
+export async function whatsappMoneySnapshot(userId: string, today: string, client?: SupabaseClient) {
+  const db = client ?? admin();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {

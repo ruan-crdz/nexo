@@ -55,7 +55,11 @@ export const chatChangeSchema = z
   })
   .strict();
 
-export function validateChatChange(input: unknown, current: Record<string, unknown> | null) {
+export function validateChatChange(
+  input: unknown,
+  current: Record<string, unknown> | null,
+  transactionSource: 'manual' | 'whatsapp' = 'whatsapp',
+) {
   const change = chatChangeSchema.parse(input);
   if (change.entity === 'profiles' && change.action !== 'update')
     throw new Error('O perfil só pode ser atualizado; exclusão da conta exige autenticação no app.');
@@ -68,11 +72,13 @@ export function validateChatChange(input: unknown, current: Record<string, unkno
   const schema = chatSchemas[change.entity];
   const fields = schema.partial().strict().parse(patch) as Record<string, unknown>;
   if ('id' in fields) throw new Error('Não é permitido alterar o identificador.');
+  if (change.entity === 'transactions' && change.action !== 'create' && 'source' in fields)
+    throw new Error('A origem do movimento não pode ser alterada.');
   if (!Object.keys(fields).length) throw new Error('Informe pelo menos um campo para alterar.');
   const identifier = change.action === 'create' ? crypto.randomUUID() : change.id;
   const values =
     change.action === 'create'
-      ? { ...fields, id: identifier, ...(change.entity === 'transactions' ? { source: 'whatsapp' } : {}) }
+      ? { ...fields, id: identifier, ...(change.entity === 'transactions' ? { source: transactionSource } : {}) }
       : { ...current, ...fields };
   const parsed = schema.parse(values) as Record<string, unknown>;
   const payload =
