@@ -3,6 +3,7 @@ import { goalSchema, recurringRuleSchema, transactionSchema } from '../../../sha
 import {
   isFinancialQuestion,
   isFinancialChartRequest,
+  isNextMonthForecastQuestion,
   imageGenerationPrompt,
   isSpendabilityQuestion,
   answerFinancialQuestion,
@@ -512,7 +513,11 @@ async function processMessage(message: Message) {
         else await answerSpendability(context, userId, today, pending?.messageId);
         return;
       }
-      const [rows, goals, accounts] = await Promise.all([
+      const forecastQuestion = isNextMonthForecastQuestion(text);
+      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
+      const forecastStart = shiftMonths(`${today.slice(0, 7)}-01`, 1);
+      const forecastEnd = shiftDays(shiftMonths(forecastStart, 1), -1);
+      const [rows, goals, accounts, recurringRows] = await Promise.all([
         readPages((from, to) =>
           db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
         ),
@@ -522,15 +527,43 @@ async function processMessage(message: Message) {
         readPages((from, to) =>
           db.from('financial_accounts').select('*').eq('user_id', userId).order('id').range(from, to),
         ),
+        forecastQuestion
+          ? readPages((from, to) =>
+              db.from('recurring_rules').select('*').eq('user_id', userId).order('id').range(from, to),
+            )
+          : Promise.resolve([]),
       ]);
+      const transactions = transactionSchema.array().parse(rows);
+      const recurringRules = recurringRuleSchema.array().parse(recurringRows);
+      const occurrenceRows =
+        forecastQuestion && recurringRules.length
+          ? await readPages((from, to) =>
+              db
+                .from('recurring_occurrences')
+                .select('transaction_id')
+                .in(
+                  'rule_id',
+                  recurringRules.map((rule) => rule.id),
+                )
+                .gte('due_date', forecastStart)
+                .lte('due_date', forecastEnd)
+                .order('rule_id')
+                .order('due_date')
+                .range(from, to),
+            )
+          : [];
       const reply = answerFinancialQuestion(
         {
-          transactions: transactionSchema.array().parse(rows),
+          transactions,
           goals: goalSchema.array().parse(goals),
           financial_accounts: accountSchema.array().parse(accounts),
+          recurring_rules: recurringRules,
+          recurring_occurrences: occurrenceRows.flatMap((row) =>
+            row.transaction_id ? [row.transaction_id] : [],
+          ),
         },
         text,
-        civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
+        today,
       );
       if (!reply)
         throw new HttpError(422, 'Não consegui entender essa pergunta. Tente perguntar de outro jeito.');
@@ -543,12 +576,11 @@ async function processMessage(message: Message) {
             .slice(0, 8)
             .map(
               (record) =>
-                `• ${record.description} · ${whatsappDate(record.date)} · ${formatMoney(record.amount)}`,
+                `• ${forecastQuestion ? `${record.type === 'income' ? 'Entrada' : 'Gasto'} previsto · ` : ''}${record.description} · ${whatsappDate(record.date)} · ${formatMoney(record.amount)}`,
             ),
         );
       if (reply.records.length > 8 || reply.calculation.length > 8)
         lines.push('', 'Há mais detalhes no Histórico e em Perguntar ao Nexo no app.');
-      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
       const normalized = text
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -587,6 +619,20 @@ async function processMessage(message: Message) {
           maxValue: goal.target,
           tone: 'income',
         }));
+      } else if (forecastQuestion) {
+        chartTitle = 'Previsões do próximo mês';
+        chartItems = [
+          {
+            label: 'Entradas previstas',
+            value: sum(reply.records.filter((row) => row.type === 'income').map((row) => row.amount)),
+            tone: 'income',
+          },
+          {
+            label: 'Gastos previstos',
+            value: sum(reply.records.filter((row) => row.type === 'expense').map((row) => row.amount)),
+            tone: 'expense',
+          },
+        ];
       } else if (reply.records.length) {
         chartTitle = 'Gastos por categoria';
         const grouped = new Map<string, number>();
@@ -612,21 +658,35 @@ async function processMessage(message: Message) {
         await finish(lines.join('\n'), userId);
         return;
       }
+      const chartMonth = forecastQuestion
+        ? shiftMonths(`${today.slice(0, 7)}-01`, 1)
+        : `${today.slice(0, 7)}-01`;
       const month = new Intl.DateTimeFormat('pt-BR', {
         month: 'long',
         year: 'numeric',
         timeZone: 'UTC',
-      }).format(new Date(`${today.slice(0, 7)}-01T12:00:00Z`));
+      }).format(new Date(`${chartMonth}T12:00:00Z`));
       const chart = await financeChartPng({
         title: chartTitle,
-        subtitle: `Até ${whatsappDate(today)} · ${month}`,
+        subtitle: forecastQuestion ? month : `Até ${whatsappDate(today)} · ${month}`,
         items: chartItems,
         footer: 'Valores dos registros do Nexo',
       });
       const caption = [
         reply.answer,
         ...reply.calculation.slice(0, 3).map((line) => `• ${line}`),
-        ...(reply.records.length ? ['Veja os lançamentos completos em Histórico no app.'] : []),
+        ...(reply.records.length
+          ? [
+              'Lançamentos considerados:',
+              ...reply.records
+                .slice(0, 6)
+                .map(
+                  (record) =>
+                    `• ${record.description.replace(/\s+/g, ' ').slice(0, 48)} · ${whatsappDate(record.date)} · ${formatMoney(record.amount)}`,
+                ),
+              ...(reply.records.length > 6 ? ['Mais lançamentos em Histórico no app.'] : []),
+            ]
+          : []),
       ].join('\n');
       await finishImage(chart, caption, userId, 'image/png');
       return;

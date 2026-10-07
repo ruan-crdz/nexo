@@ -3,6 +3,7 @@ import {
   answerFinancialQuestion,
   imageGenerationPrompt,
   isFinancialChartRequest,
+  isFinancialQuestion,
 } from '../../shared/financial-questions';
 import type { Transaction } from '../../shared/domain';
 const row = (changes: Partial<Transaction> = {}): Transaction => ({
@@ -130,4 +131,74 @@ it('gera imagens só quando pedidas explicitamente e não troca gráfico finance
   );
   expect(imageGenerationPrompt('Crie um gráfico dos meus gastos deste mês')).toBeNull();
   expect(imageGenerationPrompt('Qual é a previsão para minha conta?')).toBeNull();
+});
+
+it('consulta previsões do próximo mês em lançamentos e recorrências reais', () => {
+  const planned = row({
+    description: 'IPTU',
+    amount: 20000,
+    date: '2026-11-05',
+    category: 'Moradia',
+    status: 'planned',
+  });
+  const recurringRule = {
+    id: crypto.randomUUID(),
+    description: 'Internet',
+    amount: 9900,
+    category: 'Serviços',
+    start_date: '2026-04-15',
+    active: true,
+    type: 'expense' as const,
+    frequency: 'monthly' as const,
+    end_date: null,
+    annual_adjustment_bps: 0,
+  };
+  const question = 'Previsões do próximo mês?';
+  const answer = answerFinancialQuestion(
+    {
+      transactions: [planned],
+      goals: [],
+      financial_accounts: [],
+      recurring_rules: [recurringRule],
+      recurring_occurrences: [],
+    },
+    question,
+    '2026-10-07',
+  );
+
+  expect(isFinancialQuestion(question)).toBe(true);
+  expect(answer?.records.map((record) => record.description)).toEqual(['IPTU', 'Internet']);
+  expect(answer?.answer).toContain('novembro de 2026');
+  expect(answer?.answer).toMatch(/R\$\s299,00/);
+});
+
+it('encontra cassino ou loteria em todo o histórico sem incluir pendências', () => {
+  const casino = row({ description: 'Cassino online', amount: 5000, date: '2026-04-12' });
+  const lottery = row({ description: 'Loteria central', amount: 1500, date: '2026-02-01' });
+  const lotteryCategory = row({
+    description: 'Aposta online',
+    category: 'Loteria',
+    amount: 3500,
+    date: '2026-03-02',
+  });
+  const answer = answerFinancialQuestion(
+    {
+      transactions: [
+        casino,
+        lottery,
+        lotteryCategory,
+        row({ description: 'Cinema', amount: 3000, date: '2026-04-12' }),
+        row({ description: 'Cassino futuro', date: '2026-10-10', status: 'planned' }),
+      ],
+      goals: [],
+      financial_accounts: [],
+    },
+    'Tive algum gasto com cassino ou loteria?',
+    '2026-10-07',
+  );
+
+  expect(isFinancialQuestion('Tive algum gasto com cassino ou loteria?')).toBe(true);
+  expect(answer?.records).toEqual([casino, lottery, lotteryCategory]);
+  expect(answer?.answer).toMatch(/R\$\s100,00/);
+  expect(answer?.answer).toContain('histórico');
 });

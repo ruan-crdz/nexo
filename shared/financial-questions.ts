@@ -1,8 +1,8 @@
 import type { Dataset } from './domain.ts';
-import { formatMoney, sum } from './financial-engine.ts';
+import { formatMoney, shiftDays, shiftMonths, sum } from './financial-engine.ts';
 import { questionPeriod } from './question-period.ts';
 import { merchantKey } from './financial-decisions.ts';
-import { isVerifiedQuestion, verifiedReply } from './planning.ts';
+import { isVerifiedQuestion, recurringTransactions, verifiedReply } from './planning.ts';
 
 export function isSpendabilityQuestion(text: string) {
   const normalized = text
@@ -23,6 +23,17 @@ export function isFinancialChartRequest(text: string) {
     /\b(?:gastos?|gastei|recebi|entradas?|saidas?|resumo|mes|contas?|metas?|dinheiro|saldo|financas?)\b/.test(
       normalized,
     )
+  );
+}
+
+export function isNextMonthForecastQuestion(text: string) {
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return (
+    /\b(?:previs\w*|projec\w*)\b/.test(normalized) &&
+    /\b(?:proximo\s+mes|mes\s+que\s+vem|mes\s+seguinte)\b/.test(normalized)
   );
 }
 
@@ -62,13 +73,18 @@ export function isFinancialQuestion(text: string) {
   return (
     isSpendabilityQuestion(normalized) ||
     isFinancialChartRequest(normalized) ||
+    isNextMonthForecastQuestion(normalized) ||
     isVerifiedQuestion(text) ||
     (/^(quanto|quais|como|por que|porque|mostre|me mostre|posso)\b/.test(normalized) &&
-      /gast|receb|entrou|saiu|conta|meta|dinheiro|saldo/.test(normalized))
+      /gast|receb|entrou|saiu|conta|meta|dinheiro|saldo/.test(normalized)) ||
+    /^(?:tive|houve|encontrei|achei)\b.*\b(?:gastos?|despesas?|compras?|pagamentos?|lancamentos?)\b/.test(
+      normalized,
+    )
   );
 }
 export function answerFinancialQuestion(
-  data: Pick<Dataset, 'transactions' | 'goals' | 'financial_accounts'>,
+  data: Pick<Dataset, 'transactions' | 'goals' | 'financial_accounts'> &
+    Partial<Pick<Dataset, 'recurring_rules' | 'recurring_occurrences'>>,
   text: string,
   today: string,
 ) {
@@ -85,6 +101,42 @@ export function answerFinancialQuestion(
       records: [],
       goals: [],
     };
+  if (isNextMonthForecastQuestion(normalized)) {
+    const start = shiftMonths(`${today.slice(0, 7)}-01`, 1);
+    const end = shiftDays(shiftMonths(start, 1), -1);
+    const planned = data.transactions.filter(
+      (row) => row.status === 'planned' && row.date >= start && row.date <= end,
+    );
+    const recurring = recurringTransactions(
+      data.recurring_rules ?? [],
+      data.transactions,
+      start,
+      data.recurring_occurrences ?? [],
+    ).filter((row) => row.date >= start && row.date <= end);
+    const records = [...new Map([...planned, ...recurring].map((row) => [row.id, row])).values()].sort(
+      (first, second) => first.date.localeCompare(second.date),
+    );
+    const expenses = sum(records.filter((row) => row.type === 'expense').map((row) => row.amount));
+    const income = sum(records.filter((row) => row.type === 'income').map((row) => row.amount));
+    const month = new Intl.DateTimeFormat('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(`${start}T12:00:00Z`));
+    return {
+      answer: records.length
+        ? `Para ${month}, encontrei ${records.length} lançamentos previstos: ${formatMoney(expenses)} em gastos e ${formatMoney(income)} em entradas.`
+        : `Não encontrei lançamentos previstos nem recorrências ativas para ${month}.`,
+      calculation: [
+        `Gastos previstos: ${formatMoney(expenses)}.`,
+        `Entradas previstas: ${formatMoney(income)}.`,
+        `Diferença projetada nos registros: ${formatMoney(income - expenses)}. Isso não é saldo bancário.`,
+        `${planned.length} lançamento(s) já anotado(s) e ${recurring.length} ocorrência(s) de recorrências ativas.`,
+      ],
+      records,
+      goals: [],
+    };
+  }
   if (/posso gastar|posso comprar|disponivel|quanto.*(?:dinheiro|saldo)/.test(normalized))
     return {
       answer:
@@ -154,6 +206,11 @@ export function answerFinancialQuestion(
     !category && !accounts.length && merchant && !/\b(mes|ano|hoje|ontem|conta|ultimos|dias)\b/.test(merchant)
       ? merchantKey(merchant)
       : null;
+  const merchantTerms =
+    merchantFilter
+      ?.split(/\s+ou\s+/)
+      .map(merchantKey)
+      .filter(Boolean) ?? [];
   if (/por que|porque|pq/.test(normalized) && /gastei.*mais/.test(normalized))
     return verifiedReply(
       {
@@ -168,18 +225,20 @@ export function answerFinancialQuestion(
       today,
     );
   const type = /receb|entrou|ganhei/.test(normalized) ? 'income' : 'expense';
+  const allHistory = !period.explicit && merchantTerms.length > 0 && /\b(?:tive|houve)\b/.test(normalized);
   const records = data.transactions.filter(
     (row) =>
       row.status === 'paid' &&
       row.type === type &&
-      row.date >= start &&
+      (allHistory ? row.date <= today : row.date >= start) &&
       row.date <= end &&
       (!category || row.category === category) &&
       (!accounts.length || row.account_id === accounts[0].id) &&
-      (!merchantFilter || merchantKey(row.description).includes(merchantFilter)),
+      (!merchantTerms.length ||
+        merchantTerms.some((term) => merchantKey(`${row.description} ${row.category}`).includes(term))),
   );
   const total = sum(records.map((row) => row.amount));
-  const periodLabel = formatPeriod(start, end, today);
+  const periodLabel = allHistory ? 'no seu histórico' : formatPeriod(start, end, today);
   const description = type === 'income' ? 'entradas recebidas' : 'gastos pagos';
   return {
     answer: records.length
