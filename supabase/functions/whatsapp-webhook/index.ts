@@ -35,7 +35,7 @@ import {
 } from '../_shared/openai.ts';
 import { civilDate, formatMoney, shiftDays, shiftMonths, sum } from '../../../shared/financial-engine.ts';
 import { monthlyFlow } from '../../../shared/insights.ts';
-import { financeChartPng } from '../_shared/finance-chart.ts';
+import { financeChartPng } from '../_shared/finance-chart-svg.ts';
 import { isSummaryRequest, whatsappMonthSummary } from '../../../shared/whatsapp-summary.ts';
 
 const messageSchema = z.object({
@@ -318,18 +318,18 @@ async function processMessage(message: Message) {
           .map((bill) => `• ${bill.description} · ${whatsappDate(bill.date)} · ${formatMoney(bill.amount)}`),
       );
     const chart = await financeChartPng({
-      title: 'AVALIACAO DA COMPRA',
-      subtitle: context.purchase ?? 'COMPRA CONSULTADA',
+      title: 'Avaliação da compra',
+      subtitle: context.purchase ?? 'Compra consultada',
       items: [
-        { label: 'LIVRE APOS CONTAS', value: decision.allowed, tone: 'income' },
-        { label: 'PRECO DA COMPRA', value: context.purchase_amount!, tone: 'expense' },
+        { label: 'Disponível após contas', value: decision.allowed, tone: 'income' },
+        { label: 'Preço da compra', value: context.purchase_amount!, tone: 'expense' },
         {
-          label: remaining >= 0 ? 'RESTANTE' : 'FALTA',
+          label: remaining >= 0 ? 'Restaria' : 'Faltaria',
           value: Math.abs(remaining),
           tone: remaining >= 0 ? 'neutral' : 'warning',
         },
       ],
-      footer: 'ESTIMATIVA COM AS PREMISSAS INFORMADAS',
+      footer: 'Estimativa com as premissas informadas',
     });
     await finishImage(chart, lines.join('\n'), userId, 'image/png');
   }
@@ -475,18 +475,18 @@ async function processMessage(message: Message) {
         timeZone: 'UTC',
       }).format(new Date(`${today.slice(0, 7)}-01T12:00:00Z`));
       const chart = await financeChartPng({
-        title: 'RESUMO DO MES',
+        title: 'Resumo do mês',
         subtitle: month,
         items: [
-          { label: 'ENTROU', value: flow.income, tone: 'income' },
-          { label: 'SAIU', value: flow.expenses, tone: 'expense' },
+          { label: 'Entrou', value: flow.income, tone: 'income' },
+          { label: 'Saiu', value: flow.expenses, tone: 'expense' },
           {
-            label: flow.net < 0 ? 'FALTOU' : 'SOBROU',
+            label: flow.net < 0 ? 'Faltou' : 'Sobrou',
             value: Math.abs(flow.net),
             tone: flow.net < 0 ? 'warning' : 'neutral',
           },
         ],
-        footer: 'VALORES ANOTADOS - NAO E SALDO BANCARIO',
+        footer: 'Valores anotados no Nexo · Não é saldo bancário',
       });
       await finishImage(chart, summary, userId, 'image/png');
       return;
@@ -559,7 +559,7 @@ async function processMessage(message: Message) {
         maxValue?: number;
         tone: 'income' | 'expense' | 'neutral' | 'warning';
       }[];
-      let chartTitle = 'CONSULTA FINANCEIRA';
+      let chartTitle = 'Consulta financeira';
       if (/por que|porque|\bpq\b/.test(normalized) && /gastei.*mais/.test(normalized)) {
         const currentStart = `${today.slice(0, 7)}-01`;
         const previousEnd = shiftMonths(today, -1);
@@ -574,13 +574,13 @@ async function processMessage(message: Message) {
             .filter((row) => row.date >= previousStart && row.date <= previousEnd)
             .map((row) => row.amount),
         );
-        chartTitle = 'GASTOS NO MES';
+        chartTitle = 'Gastos por período';
         chartItems = [
-          { label: 'MES ATUAL', value: current, tone: 'expense' },
-          { label: 'MES PASSADO', value: previous, tone: 'neutral' },
+          { label: 'Este mês', value: current, tone: 'expense' },
+          { label: 'Mesmo período do mês passado', value: previous, tone: 'neutral' },
         ];
       } else if (reply.goals.length) {
-        chartTitle = 'PROGRESSO DAS METAS';
+        chartTitle = 'Progresso das metas';
         chartItems = reply.goals.map((goal) => ({
           label: goal.name,
           value: goal.saved,
@@ -588,6 +588,7 @@ async function processMessage(message: Message) {
           tone: 'income',
         }));
       } else if (reply.records.length) {
+        chartTitle = 'Gastos por categoria';
         const grouped = new Map<string, number>();
         for (const record of reply.records)
           grouped.set(record.category, (grouped.get(record.category) ?? 0) + record.amount);
@@ -618,9 +619,9 @@ async function processMessage(message: Message) {
       }).format(new Date(`${today.slice(0, 7)}-01T12:00:00Z`));
       const chart = await financeChartPng({
         title: chartTitle,
-        subtitle: `ATE ${whatsappDate(today)} · ${month}`,
+        subtitle: `Até ${whatsappDate(today)} · ${month}`,
         items: chartItems,
-        footer: 'VALORES DOS REGISTROS DO NEXO',
+        footer: 'Valores dos registros do Nexo',
       });
       const caption = [
         reply.answer,

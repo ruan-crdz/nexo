@@ -1,11 +1,21 @@
 {
   "version": "5",
   "specifiers": {
+    "npm:@fontsource/manrope@5.3.0": "5.3.0",
+    "npm:@resvg/resvg-wasm@2.6.2": "2.6.2",
     "npm:@supabase/supabase-js@2": "2.116.0",
     "npm:uuid@14": "14.0.2",
     "npm:zod@4": "4.6.1"
   },
   "npm": {
+    "@fontsource/manrope@5.3.0": {
+      "integrity": "sha512-obJ1Dv3+uCA6HlHgW8u4BGYxJR9In2HW7gjJhlflEvkrj1X1iSEwu0fToL+JYGC/FEKFfIz1sBuPduvcL2gIAA==",
+      "tarball": "https://registry.npmjs.org/@fontsource/manrope/-/manrope-5.3.0.tgz"
+    },
+    "@resvg/resvg-wasm@2.6.2": {
+      "integrity": "sha512-FqALmHI8D4o6lk/LRWDnhw95z5eO+eAa6ORjVg09YRR7BkcM6oPHU9uyC0gtQG5vpFLvgpeU4+zEAz2H8APHNw==",
+      "tarball": "https://registry.npmjs.org/@resvg/resvg-wasm/-/resvg-wasm-2.6.2.tgz"
+    },
     "@supabase/auth-js@2.116.0": {
       "integrity": "sha512-Cmosty12gyKGK9N3bQb+lMmuAFev5nmUzaR1AsmZHqKOAGzqX1VQzmp49CNPwOx/pw0H9Qqk4rs9yhwTlKpfDg==",
       "dependencies": [
@@ -78,6 +88,8 @@
   },
   "workspace": {
     "dependencies": [
+      "npm:@fontsource/manrope@5.3.0",
+      "npm:@resvg/resvg-wasm@2.6.2",
       "npm:@supabase/supabase-js@2",
       "npm:uuid@14",
       "npm:zod@4"

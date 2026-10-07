@@ -16,7 +16,7 @@ import {
   whatsappWelcome,
 } from '../../../shared/whatsapp-link.ts';
 import { extractionDecision } from '../../../shared/extraction.ts';
-import { financeChartPng } from '../_shared/finance-chart.ts';
+import { financeChartPng } from '../_shared/finance-chart-svg.ts';
 import {
   generateWhatsAppImage,
   parseSpendabilityMessage,
