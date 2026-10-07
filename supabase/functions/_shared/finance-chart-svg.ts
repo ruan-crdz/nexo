@@ -1,7 +1,5 @@
 import { Resvg, initWasm } from '@resvg/resvg-wasm';
-import wasmBytes from '@resvg/resvg-wasm/index_bg.wasm' with { type: 'bytes' };
-import manropeRegular from './assets/manrope-latin-400.ttf' with { type: 'bytes' };
-import manropeBold from './assets/manrope-latin-700.ttf' with { type: 'bytes' };
+import { financeChartAssets } from './finance-chart-assets.ts';
 import { formatMoney } from '../../../shared/financial-engine.ts';
 
 export type FinanceChartItem = {
@@ -30,7 +28,13 @@ const toneColor = {
   neutral: colors.ink,
   warning: colors.warning,
 };
-let rendererReady: Promise<void> | null = null;
+let rendererReady: Promise<{ regular: Uint8Array; bold: Uint8Array }> | null = null;
+
+async function decompressAsset(value: string) {
+  const compressed = Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+  const stream = new Response(compressed).body!.pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
 
 function xml(value: string) {
   return value.replace(/[&<>\"']/g, (character) => {
@@ -51,8 +55,16 @@ export async function financeChartPng(input: {
   items: FinanceChartItem[];
   footer?: string;
 }) {
-  rendererReady ??= initWasm(wasmBytes);
-  await rendererReady;
+  rendererReady ??= (async () => {
+    const [wasm, regular, bold] = await Promise.all([
+      decompressAsset(financeChartAssets.wasm),
+      decompressAsset(financeChartAssets.manropeRegular),
+      decompressAsset(financeChartAssets.manropeBold),
+    ]);
+    await initWasm(wasm);
+    return { regular, bold };
+  })();
+  const fonts = await rendererReady;
 
   const items = input.items.slice(0, 6);
   const height = 230 + Math.max(items.length, 1) * 145 + 76;
@@ -94,7 +106,7 @@ export async function financeChartPng(input: {
 
   const renderer = new Resvg(svg, {
     font: {
-      fontBuffers: [manropeRegular, manropeBold],
+      fontBuffers: [fonts.regular, fonts.bold],
       defaultFontFamily: 'Manrope',
       loadSystemFonts: false,
     },
