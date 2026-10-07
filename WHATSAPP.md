@@ -12,6 +12,12 @@ A matriz completa de ações do app e pendências está em [docs/WHATSAPP-PARITY
 
 As descrições de comandos abaixo documentam o fluxo anterior e formatos de dados; texto/áudio não dependem mais deles. Escritas do novo chat sempre exigem confirmação, não usam gravação automática por confiança.
 
+## Recuperação de respostas visuais
+
+Aplicar `202610070002_whatsapp_reply_media.sql` antes do webhook atualizado. Novas imagens ficam em cache privado por até 24 horas para recuperar rejeições confirmadas sem gerar novamente nem repetir ações financeiras. O retry verifica o vínculo e um claim atômico reserva a entrega. Resultado ambíguo (timeout após envio, resposta 5xx ou ausência do ID remoto) fica em `reconcile`, sem reenvio automático, para evitar duplicatas. Depois da expiração, o bot informa que a imagem não pode mais ser recuperada; não substitui silenciosamente a imagem pela legenda.
+
+Imagens anteriores à implantação desse cache não podem ser reconstruídas a partir dos metadados antigos. A retenção física depende da limpeza descrita em PRIVACY.md.
+
 ## Fluxo
 
 Webhook bruto → HMAC → validação do número de destino → claim idempotente → vínculo de conta → rate limit → texto ou mídia → extração estruturada → validação → confirmação/gravação → resposta.

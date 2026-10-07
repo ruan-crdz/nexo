@@ -39,6 +39,7 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610050004_goal_journey.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050005_notification_operations.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610070001_whatsapp_chat.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610070002_whatsapp_reply_media.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -50,6 +51,35 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('cache de mídia é privado, expira e reserva entrega uma única vez', async () => {
+    await db.exec('reset role');
+    await db.query(
+      "insert into whatsapp_messages_metadata(message_id,user_id,state,reply,reply_kind) values('cached-image-test',$1,'complete','Legenda','image')",
+      [alice],
+    );
+    await db.query(
+      "insert into whatsapp_reply_media(message_id,mime_type,image_base64,expires_at) values('cached-image-test','image/png','aW1hZ2U=',now()-interval '1 minute')",
+    );
+    const first = await db.query<{ claimed: boolean }>(
+      "select claim_whatsapp_reply('cached-image-test') claimed",
+    );
+    const second = await db.query<{ claimed: boolean }>(
+      "select claim_whatsapp_reply('cached-image-test') claimed",
+    );
+    expect(first.rows[0].claimed).toBe(true);
+    expect(second.rows[0].claimed).toBe(false);
+    await asUser(alice);
+    await expect(db.query('select * from whatsapp_reply_media')).rejects.toThrow(/permission denied/);
+    await expect(db.query("select claim_whatsapp_reply('cached-image-test')")).rejects.toThrow(
+      /permission denied/,
+    );
+    await db.exec('reset role');
+    await db.query('select prune_ephemeral_data()');
+    expect(
+      (await db.query("select * from whatsapp_reply_media where message_id='cached-image-test'")).rows,
+    ).toHaveLength(0);
+    await db.query("delete from whatsapp_messages_metadata where message_id='cached-image-test'");
+  });
   it('chat confirma recorrência uma vez, exige outro turno e isola o proprietário', async () => {
     await db.exec('reset role');
     await db.query(

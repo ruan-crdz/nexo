@@ -7,6 +7,8 @@ import {
   sendImage,
   showTypingIndicator,
   WhatsAppDeliveryError,
+  WhatsAppAmbiguousDeliveryError,
+  retryWhatsAppReply,
 } from '../_shared/whatsapp.ts';
 import { authorizeJob } from '../_shared/http.ts';
 import {
@@ -17,7 +19,7 @@ import {
 } from '../../../shared/whatsapp-link.ts';
 import { extractionDecision } from '../../../shared/extraction.ts';
 import { financeChartPng } from '../_shared/finance-chart-svg.ts';
-import { chatWithWhatsApp } from '../_shared/whatsapp-chat.ts';
+import { chatWithWhatsApp, executeChatTool } from '../_shared/whatsapp-chat.ts';
 import {
   generateWhatsAppImage,
   parseSpendabilityMessage,
@@ -339,6 +341,165 @@ Deno.test('gráfico financeiro gera PNG com dimensões e compressão válidas', 
   assert.equal(view.getUint32(20), 741);
   assert.ok(png.length > 10_000);
   assert.equal(new TextDecoder().decode(png.slice(-8, -4)), 'IEND');
+});
+
+Deno.test('retry recupera a imagem original e não repete entrega aceita ou ambígua', async () => {
+  const names = [
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'WHATSAPP_GRAPH_VERSION',
+    'WHATSAPP_PHONE_NUMBER_ID',
+    'WHATSAPP_ACCESS_TOKEN',
+  ];
+  const previous = names.map((name) => Deno.env.get(name));
+  const originalFetch = globalThis.fetch;
+  const headers = { 'Content-Type': 'application/json' };
+  try {
+    ['https://retry.test', 'test-service-key', 'v23.0', '123456', 'test-token'].forEach((value, index) =>
+      Deno.env.set(names[index], value),
+    );
+    for (const mode of ['image', 'expired', 'reconcile', 'accepted']) {
+      let deliveries = 0;
+      let uploads = 0;
+      globalThis.fetch = async (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : String(input));
+        if (url.pathname.endsWith('whatsapp_messages_metadata')) {
+          if (init?.method === 'PATCH') return new Response(null, { status: 204 });
+          return new Response(
+            JSON.stringify({
+              state: 'complete',
+              reply: 'Entradas de janeiro',
+              reply_kind: 'image',
+              user_id: '00000000-0000-4000-8000-00000000000a',
+              sent_at: mode === 'accepted' ? '2026-10-07T12:00:00Z' : null,
+              reply_message_id: null,
+              delivery_status: mode === 'reconcile' ? 'reconcile' : 'failed',
+            }),
+            { headers },
+          );
+        }
+        if (url.pathname.endsWith('whatsapp_connections'))
+          return new Response('{"consent_at":"2026-10-07T12:00:00Z"}', { headers });
+        if (url.pathname.endsWith('whatsapp_reply_media'))
+          return new Response(
+            mode === 'expired'
+              ? 'null'
+              : JSON.stringify({ image_base64: btoa('original-image-bytes'), mime_type: 'image/png' }),
+            { headers },
+          );
+        if (url.pathname.endsWith('claim_whatsapp_reply')) return new Response('true', { headers });
+        if (url.pathname.endsWith('/media')) {
+          uploads++;
+          const file = (init?.body as FormData).get('file') as Blob;
+          assert.equal(await file.text(), 'original-image-bytes');
+          return new Response('{"id":"cached-image-upload"}', { headers });
+        }
+        if (url.pathname.endsWith('/messages')) {
+          deliveries++;
+          const body = JSON.parse(String(init?.body));
+          assert.equal(body.type, mode === 'expired' ? 'text' : 'image');
+          if (mode === 'image') assert.equal(body.image.caption, 'Entradas de janeiro');
+          else assert.match(body.text.body, /expirou/);
+          return new Response('{"messages":[{"id":"retry-reply"}]}', { headers });
+        }
+        throw new Error(`Unexpected retry request ${url.pathname}`);
+      };
+      const retried = await retryWhatsAppReply('original-message', '5511999997777');
+      assert.equal(retried, mode === 'image' || mode === 'expired');
+      assert.equal(deliveries, mode === 'image' || mode === 'expired' ? 1 : 0);
+      assert.equal(uploads, mode === 'image' ? 1 : 0);
+    }
+    globalThis.fetch = async (input) => {
+      if (String(input).endsWith('/media')) return new Response('{"id":"uploaded-image"}', { headers });
+      throw new TypeError('Network timeout');
+    };
+    await assert.rejects(
+      () => sendImage('5511999997777', new Uint8Array([1, 2, 3]), 'caption'),
+      WhatsAppAmbiguousDeliveryError,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, previous[index]!);
+    });
+  }
+});
+
+Deno.test('consulta de entradas em janeiro gera gráfico da consulta, não do mês atual', async () => {
+  const names = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+  const previous = names.map((name) => Deno.env.get(name));
+  const originalFetch = globalThis.fetch;
+  let png: Uint8Array | null = null;
+  try {
+    Deno.env.set('SUPABASE_URL', 'https://chart.test');
+    Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', 'test-service-key');
+    globalThis.fetch = async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const rows = url.pathname.endsWith('transactions')
+        ? [
+            {
+              id: '00000000-0000-4000-8000-000000000001',
+              description: 'Salário',
+              amount: 300000,
+              date: '2026-01-05',
+              type: 'income',
+              category: 'Salário',
+              status: 'paid',
+              source: 'manual',
+              account_id: null,
+            },
+            {
+              id: '00000000-0000-4000-8000-000000000002',
+              description: 'Salário outubro',
+              amount: 400000,
+              date: '2026-10-05',
+              type: 'income',
+              category: 'Salário',
+              status: 'paid',
+              source: 'manual',
+              account_id: null,
+            },
+          ]
+        : [];
+      return new Response(JSON.stringify(rows), { headers: { 'Content-Type': 'application/json' } });
+    };
+    const reply = (await executeChatTool(
+      'financial_answer',
+      { question: 'Quanto recebi em janeiro?' },
+      {
+        userId: '00000000-0000-4000-8000-00000000000a',
+        phone: '5511999997777',
+        messageId: 'chart-january',
+        today: '2026-10-07',
+        onCommit: () => {
+          throw new Error('Query cannot write');
+        },
+        onImage: (image) => {
+          png = image;
+        },
+      },
+    )) as { answer: string; records: { date: string }[] };
+    assert.match(reply.answer, /janeiro de 2026/);
+    assert.equal(reply.records.length, 1);
+    assert.equal(reply.records[0].date, '2026-01-05');
+    assert.ok(png);
+    assert.deepEqual(
+      png,
+      await financeChartPng({
+        title: 'Seus registros no Nexo',
+        subtitle: 'Quanto recebi em janeiro?',
+        items: [{ label: 'Entrada · Salário', value: 300000, tone: 'income' }],
+        footer: 'Valores anotados ou previstos · Não é saldo bancário',
+      }),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, previous[index]!);
+    });
+  }
 });
 
 Deno.test('imagem é enviada à Meta como mídia com legenda', async () => {

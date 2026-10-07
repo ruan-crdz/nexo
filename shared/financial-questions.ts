@@ -200,7 +200,7 @@ export function answerFinancialQuestion(
       goals: [],
     };
   const merchant = normalized.match(
-    /\b(?:na|no|com)\s+([^?]+?)(?=\s+(?:hoje|ontem|nos ultimos|no mes|este mes|mes passado|em |ano passado)|[?]|$)/,
+    /\b(?:na|no|com|em)\s+(?!(?:janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\d{4})\b)([^?]+?)(?=\s+(?:hoje|ontem|nos ultimos|no mes|este mes|neste mes|mes passado|em |ano passado)|[?]|$)/,
   )?.[1];
   const merchantFilter =
     !category && !accounts.length && merchant && !/\b(mes|ano|hoje|ontem|conta|ultimos|dias)\b/.test(merchant)

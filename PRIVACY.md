@@ -29,6 +29,8 @@ Registros financeiros permanecem até exclusão pelo usuário; backup pode reter
 
 Sessões e propostas pendentes do chat ficam inutilizáveis após dez minutos e são removidas fisicamente na próxima entrada de webhook por `prune_whatsapp_chat`. Sem novas entradas, dados expirados podem permanecer armazenados. Propostas aplicadas ficam vinculadas aos metadados para idempotência e são removidas em cascata quando esses metadados forem apagados pela limpeza de trinta dias. Exclusão da conta remove sessões e propostas por cascata.
 
+Novas imagens enviadas como resposta são armazenadas temporariamente no cache privado `whatsapp_reply_media` para recuperar falhas de entrega, com expiração de 24 horas. Clientes autenticados não têm acesso direto à tabela. Arquivos expirados não podem ser reenviados e são removidos fisicamente pela rotina diária `prune_ephemeral_data` ou pela próxima entrada de webhook. Sem execução de limpeza, podem permanecer armazenados; exclusão dos metadados ou da conta remove o cache por cascata.
+
 ## Transparência
 
 HTTPS e controles de armazenamento dependem da infraestrutura configurada. RLS isola contas, mas administradores privilegiados podem acessar dados tecnicamente. Acesso administrativo precisa ser restrito, justificado e auditado na operação. Não prometemos que desenvolvedores sejam tecnicamente incapazes de acessar informações.

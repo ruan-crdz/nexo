@@ -83,6 +83,29 @@ it('respeita mês nomeado, ano e estabelecimento sem trocar pelo mês atual', ()
     'janeiro de 2026',
   );
 });
+it.each(['com Uber', 'em Uber', 'no Uber'])('filtra estabelecimento sem somar aluguel: %s', (filter) => {
+  const uber = row({ description: 'Uber', category: 'Transporte', amount: 2500 });
+  const data = {
+    transactions: [uber, row({ description: 'Aluguel', category: 'Moradia', amount: 150000 })],
+    goals: [],
+    financial_accounts: [],
+  };
+  const answer = answerFinancialQuestion(data, `Quanto gastei ${filter}?`, '2026-10-07');
+  expect(answer?.records).toEqual([uber]);
+  expect(answer?.answer).toMatch(/R\$\s25,00/);
+});
+it('separa estabelecimento de mês nomeado usando a preposição em', () => {
+  const uber = row({ description: 'Uber', category: 'Transporte', amount: 2500, date: '2026-01-10' });
+  const rent = row({ description: 'Aluguel', amount: 150000, date: '2026-01-10' });
+  const data = { transactions: [uber, rent], goals: [], financial_accounts: [] };
+  expect(answerFinancialQuestion(data, 'Quanto gastei em Uber em janeiro?', '2026-10-07')?.records).toEqual([
+    uber,
+  ]);
+  expect(answerFinancialQuestion(data, 'Quanto gastei em janeiro?', '2026-10-07')?.records).toEqual([
+    uber,
+    rent,
+  ]);
+});
 it.each([
   'em janeiro e fevereiro',
   'na semana passada',

@@ -6,6 +6,8 @@ import {
   hashToken,
   deliverReply,
   deliverImageReply,
+  cacheImageReply,
+  retryWhatsAppReply,
   showTypingIndicator,
   verifySignature,
 } from '../_shared/whatsapp.ts';
@@ -69,18 +71,7 @@ async function processMessage(message: Message) {
   const claim = await db.rpc('claim_whatsapp', { message_key: message.id });
   if (claim.error) throw new HttpError(503, 'Não foi possível receber a mensagem.');
   if (!claim.data) {
-    const previous = await db
-      .from('whatsapp_messages_metadata')
-      .select('state,reply,sent_at')
-      .eq('message_id', message.id)
-      .single();
-    if (
-      previous.data?.reply &&
-      !previous.data.sent_at &&
-      ['complete', 'pending'].includes(previous.data.state)
-    ) {
-      await deliverReply(message.id, message.from, previous.data.reply);
-    }
+    await retryWhatsAppReply(message.id, message.from);
     return;
   }
   let committed = false;
@@ -106,9 +97,16 @@ async function processMessage(message: Message) {
     let reply = caption;
     if (showPoints && messagePoints > 0)
       reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
+    await cacheImageReply(message.id, image, mimeType);
     const stored = await db
       .from('whatsapp_messages_metadata')
-      .update({ state: 'complete', reply, user_id: userId, updated_at: new Date().toISOString() })
+      .update({
+        state: 'complete',
+        reply,
+        reply_kind: 'image',
+        user_id: userId,
+        updated_at: new Date().toISOString(),
+      })
       .eq('message_id', message.id);
     if (stored.error) throw new HttpError(503, 'Não foi possível registrar a resposta visual.');
     committed = true;
