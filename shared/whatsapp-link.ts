@@ -22,5 +22,5 @@ export function whatsappUrl(phone: string, message?: string) {
 export const whatsappWelcome =
   'Oi! Seu WhatsApp está conectado ao Nexo 🌿\n\n' +
   'Pode conversar comigo por texto ou áudio sobre seus registros, contas, metas e perfil.\n\n' +
-  'Se faltar informação, eu pergunto. Antes de alterar ou excluir um registro, mostro o que entendi e peço sua confirmação.\n\n' +
+  'Pedidos claros são executados direto, inclusive vários de uma vez. Se faltar informação ou houver dúvida sobre qual registro mudar, eu pergunto. Depois, mando um resumo do que foi feito.\n\n' +
   'A conversa e as propostas ficam disponíveis por dez minutos. Seus registros continuam em Histórico no app.';

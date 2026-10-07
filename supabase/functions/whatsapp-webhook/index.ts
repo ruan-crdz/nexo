@@ -14,7 +14,15 @@ import {
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
 import { transcribe, readReceipt } from '../_shared/openai.ts';
 import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
-import { chatWithWhatsApp } from '../_shared/whatsapp-chat.ts';
+import { chatWithWhatsApp, executeChatTool } from '../_shared/whatsapp-chat.ts';
+import { replyWithMoneySnapshot } from '../_shared/whatsapp-money.ts';
+import type { WhatsAppMoneySnapshot } from '../_shared/whatsapp-money.ts';
+import { handleWhatsAppAction } from '../_shared/whatsapp-interactions.ts';
+import {
+  proposalButtons,
+  welcomeButtons,
+  type WhatsAppButton,
+} from '../../../shared/whatsapp-presentation.ts';
 
 const messageSchema = z.object({
   id: z.string().min(1).max(300),
@@ -22,6 +30,12 @@ const messageSchema = z.object({
   timestamp: z.string().regex(/^\d+$/),
   type: z.string(),
   text: z.object({ body: z.string().max(4000) }).optional(),
+  interactive: z
+    .object({
+      type: z.string(),
+      button_reply: z.object({ id: z.string().max(256), title: z.string().max(100) }).optional(),
+    })
+    .optional(),
   audio: z.object({ id: z.string(), mime_type: z.string().optional() }).optional(),
   image: z.object({ id: z.string(), mime_type: z.string().optional() }).optional(),
   document: z
@@ -75,18 +89,29 @@ async function processMessage(message: Message) {
     return;
   }
   let committed = false;
+  let financialChanged = false;
+  let moneyToday = '';
+  let currentMoney: WhatsAppMoneySnapshot | null | undefined;
   let messagePoints = 0;
   let showPoints = false;
-  async function finish(reply: string, userId?: string) {
+  async function finish(reply: string, userId?: string, buttons: WhatsAppButton[] = []) {
+    if (financialChanged && userId)
+      reply = await replyWithMoneySnapshot(reply, userId, moneyToday, currentMoney);
     if (showPoints && messagePoints > 0)
       reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
     const result = await db
       .from('whatsapp_messages_metadata')
-      .update({ state: 'complete', reply, user_id: userId ?? null, updated_at: new Date().toISOString() })
+      .update({
+        state: 'complete',
+        reply,
+        reply_buttons: buttons,
+        user_id: userId ?? null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('message_id', message.id);
     if (result.error) throw new Error('metadata');
     committed = true;
-    await deliverReply(message.id, message.from, reply);
+    await deliverReply(message.id, message.from, reply, buttons);
   }
   async function finishImage(
     image: Uint8Array,
@@ -95,6 +120,7 @@ async function processMessage(message: Message) {
     mimeType: 'image/png' | 'image/jpeg',
   ) {
     let reply = caption;
+    if (financialChanged) reply = await replyWithMoneySnapshot(reply, userId, moneyToday, currentMoney);
     if (showPoints && messagePoints > 0)
       reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
     await cacheImageReply(message.id, image, mimeType);
@@ -126,6 +152,7 @@ async function processMessage(message: Message) {
           ? whatsappWelcome
           : 'Esse código de conexão já expirou ou foi usado. No app, abra Você → WhatsApp e gere um novo código.',
         link.data ?? undefined,
+        link.data ? welcomeButtons : [],
       );
       return;
     }
@@ -158,6 +185,32 @@ async function processMessage(message: Message) {
       .eq('id', userId)
       .single();
     if (profile.error) throw new Error('profile');
+    moneyToday = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
+    if (message.type === 'interactive') {
+      const owned = await db
+        .from('whatsapp_messages_metadata')
+        .update({ user_id: userId })
+        .eq('message_id', message.id);
+      if (owned.error) throw new HttpError(503, 'Não consegui conferir a origem da escolha.');
+      const action = await handleWhatsAppAction(
+        message.interactive?.type === 'button_reply' ? (message.interactive.button_reply?.id ?? '') : '',
+        {
+          userId,
+          phone: message.from,
+          messageId: message.id,
+          today: civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
+          onCommit: () => {
+            committed = true;
+            financialChanged = true;
+          },
+        },
+      );
+      if (action.reply) {
+        await finish(action.reply, userId);
+        return;
+      }
+      text = action.text ?? '';
+    }
     if (['text', 'audio', 'image', 'document'].includes(message.type)) {
       const award = await db.rpc('award_habit_for', {
         owner: userId,
@@ -208,14 +261,42 @@ async function processMessage(message: Message) {
         );
         return;
       }
-      const reply = `Encontrei isto no recibo, mas ainda não salvei:\n${receipt.transactions.map((row) => `• ${row.description} · ${whatsappDate(row.date)} · ${formatMoney(row.amount)}`).join('\n')}\n\nSe estiver certo, envie “confirmar” em até 10 minutos. Vou deixar como pendente; marque como pago no app só depois de conferir. A foto não confirma o pagamento.`;
-      const pending = await db
+      const owned = await db
         .from('whatsapp_messages_metadata')
-        .update({ user_id: userId, state: 'pending', pending_payload: receipt.transactions, reply })
+        .update({ user_id: userId })
         .eq('message_id', message.id);
-      if (pending.error) throw new HttpError(503, 'Não foi possível preparar revisão.');
-      committed = true;
-      await deliverReply(message.id, message.from, reply);
+      if (owned.error) throw new HttpError(503, 'Não consegui identificar a origem do recibo.');
+      const result = (await executeChatTool(
+        'save_records',
+        {
+          changes: receipt.transactions.map((row) => ({
+            entity: 'transactions',
+            values: JSON.stringify({
+              description: row.description,
+              amount: row.amount,
+              category: row.category,
+              date: row.date,
+              type: row.type,
+              status: 'planned',
+              account_id: null,
+            }),
+          })),
+        },
+        {
+          userId,
+          phone: message.from,
+          messageId: message.id,
+          today: civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
+          onCommit: () => {
+            committed = true;
+            financialChanged = true;
+          },
+        },
+      )) as { saved: number; already_exists: number };
+      await finish(
+        `Pronto! ${result.saved} registro(s) do recibo salvo(s) como pendentes.${result.already_exists ? ` ${result.already_exists} já existia(m).` : ''}\n${receipt.transactions.map((row) => `• ${row.description} · ${whatsappDate(row.date)} · ${formatMoney(row.amount)}`).join('\n')}\n\nConfira no app. A foto não confirma o pagamento; me avise se já pagou.`,
+        userId,
+      );
       return;
     }
     if (!text) {
@@ -229,13 +310,22 @@ async function processMessage(message: Message) {
       );
       return;
     }
-    if (message.type === 'text' || message.type === 'audio') {
+    if (/^(oi|olá|ola|menu|ajuda)[!.?\s]*$/i.test(text)) {
+      await finish(
+        'Oi! Sou o Nexo 🌿\n\nPode mandar texto ou áudio para anotar gastos, consultar seu mês ou organizar suas contas.\n\nComo posso ajudar?',
+        userId,
+        welcomeButtons,
+      );
+      return;
+    }
+    if (message.type === 'text' || message.type === 'audio' || message.type === 'interactive') {
       const owned = await db
         .from('whatsapp_messages_metadata')
         .update({ user_id: userId })
         .eq('message_id', message.id);
       if (owned.error) throw new HttpError(503, 'Não consegui iniciar a conversa.');
       let visual: { image: Uint8Array; mime: 'image/png' | 'image/jpeg' } | undefined;
+      let buttons: WhatsAppButton[] = [];
       const typingRefresh = setInterval(() => void showTypingIndicator(message.id), 20000);
       try {
         const reply = await chatWithWhatsApp(text, {
@@ -245,13 +335,21 @@ async function processMessage(message: Message) {
           today: civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
           onCommit: () => {
             committed = true;
+            financialChanged = true;
+            buttons = [];
+          },
+          onProposal: (id) => {
+            buttons = proposalButtons(id);
+          },
+          onMoneySnapshot: (snapshot) => {
+            currentMoney = snapshot;
           },
           onImage: (image, mime) => {
             visual = { image, mime };
           },
         });
         if (visual) await finishImage(visual.image, reply, userId, visual.mime);
-        else await finish(reply, userId);
+        else await finish(reply, userId, buttons);
       } finally {
         clearInterval(typingRefresh);
       }

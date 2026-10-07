@@ -4,13 +4,23 @@ Integração com Meta WhatsApp Business Platform / Cloud API. Nenhum scraping ou
 
 ## Chat com ferramentas
 
-Texto e áudio agora usam um chat conversacional com ferramentas. O modelo consulta perfil/registros reais, prepara alterações pessoais e pede confirmação antes de executá-las. Contexto e propostas expiram em dez minutos. A confirmação é transacional/idempotente e verifica vínculo, proprietário, registro atual e turno diferente da proposta.
+Texto e áudio agora usam um chat conversacional com ferramentas. Pedidos claros e completos são executados em lote, sem uma segunda confirmação; campos ausentes ou alvos ambíguos geram perguntas. O modelo consulta perfil/registros reais. Contexto e propostas antigas expiram em dez minutos. Confirmações por botão continuam disponíveis para propostas anteriores e verificam vínculo, proprietário e registro atual.
 
 Aplicar `202610070001_whatsapp_chat.sql` antes de publicar `whatsapp-webhook`. Usar `OPENAI_CHAT_MODEL` com suporte a tools na Responses API; na ausência dele, usa o modelo de extração configurado. O processamento envia aviso de falha quando possível em vez de apenas retornar erro à Meta.
 
 A matriz completa de ações do app e pendências está em [docs/WHATSAPP-PARITY.md](docs/WHATSAPP-PARITY.md). Não há paridade total nesta revisão. Segurança, compartilhamento, empresa e várias operações especializadas ainda exigem o app. Lembretes proativos não são ativados.
 
-As descrições de comandos abaixo documentam o fluxo anterior e formatos de dados; texto/áudio não dependem mais deles. Escritas do novo chat sempre exigem confirmação, não usam gravação automática por confiança.
+As descrições de comandos abaixo documentam o fluxo anterior e formatos de dados; texto/áudio não dependem mais deles. Pedidos explícitos usam validação e gravação transacional; perguntas, hipóteses e sugestões não autorizam gravação.
+
+## Sobra após registros e comparação com o app
+
+Depois de uma operação salva, a resposta recebe pelo código o resultado dos movimentos e o valor livre para planejar, não apenas uma sugestão no prompt. Funciona em texto, áudio e confirmações por botão, com o resumo no início da legenda quando houver imagem. Se a consulta falhar, preserva a confirmação e avisa que não conseguiu consultar a sobra; nunca substitui por zero ou inventa saldo.
+
+`money_snapshot` usa o mesmo `goalMonthlyBudget` da Home, sem exigir conta cadastrada. Mostra movimentos pagos até hoje, metas protegidas e despesas reservadas, sem antecipar renda prevista. `compare_money` calcula diferenças entre um valor declarado, o resultado dos movimentos e o valor livre; não identifica a causa nem salva ajuste automaticamente. Um ajuste não identificado precisa de autorização explícita.
+
+`budget_until` usa dinheiro informado pela pessoa, dias incluindo hoje e contas pendentes até a data, incluindo atrasadas. O teto diário é limite, não recomendação de gastar. Se alimentação e transporte já estão garantidos, a orientação preserva a reserva em vez de repetir conselhos irrelevantes. Nenhum desses números é saldo bancário consultado.
+
+O contexto monetário é atualizado após gravações. O resumo pós-gravação é reutilizado no envio final quando disponível; cada consulta tem limite de oito segundos e respeita o usuário vinculado.
 
 ## Recuperação de respostas visuais
 

@@ -40,6 +40,9 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610050005_notification_operations.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610070001_whatsapp_chat.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610070002_whatsapp_reply_media.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610070003_whatsapp_reply_buttons.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610070004_whatsapp_batch.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610070005_whatsapp_direct_actions.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -51,6 +54,191 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('fluxo direto cria conta e meta, edita e exclui com autorização e proteção contra dados antigos', async () => {
+    await db.exec('reset role');
+    await db.query(
+      "insert into whatsapp_connections(user_id,phone,consent_at) values($1,'5511999997777',now()) on conflict(user_id) do update set phone=excluded.phone,consent_at=excluded.consent_at",
+      [alice],
+    );
+    await db.query(
+      "insert into whatsapp_messages_metadata(message_id,user_id) values('direct-create',$1),('direct-edit',$1),('direct-stale',$1),('direct-foreign',$1),('direct-profile-delete',$1)",
+      [alice],
+    );
+    const run = (message: string, changes: unknown[]) =>
+      db.query<{ result: { saved: number; records: { id: string }[] } }>(
+        "select save_whatsapp_batch($1,'5511999997777',$2,$3) result",
+        [alice, message, JSON.stringify(changes)],
+      );
+    const result = (
+      await run('direct-create', [
+        {
+          entity: 'financial_accounts',
+          action: 'create',
+          payload: {
+            name: 'Conta fluxo direto',
+            kind: 'checking',
+            opening_balance: 0,
+            closing_day: null,
+            due_day: null,
+          },
+        },
+        {
+          entity: 'goals',
+          action: 'create',
+          payload: {
+            name: 'Meta fluxo direto',
+            target: 100000,
+            monthly_contribution: 10000,
+            deadline: '2027-01-01',
+            priority: 'medium',
+          },
+        },
+      ])
+    ).rows[0].result;
+    expect(result.saved).toBe(2);
+    const [account, goal] = result.records.map((record) => record.id);
+    const snapshot = async (table: string, id: string) =>
+      (await db.query<{ row: unknown }>(`select to_jsonb(t) row from ${table} t where id=$1`, [id])).rows[0]
+        .row;
+    const accountBefore = await snapshot('financial_accounts', account);
+    const goalBefore = await snapshot('goals', goal);
+    const edits = [
+      {
+        entity: 'financial_accounts',
+        action: 'update',
+        id: account,
+        payload: { name: 'Conta corrigida' },
+        expected: accountBefore,
+      },
+      { entity: 'goals', action: 'delete', id: goal, payload: {}, expected: goalBefore },
+    ];
+    expect((await run('direct-edit', edits)).rows[0].result.saved).toBe(2);
+    expect((await run('direct-edit', edits)).rows[0].result.saved).toBe(2);
+    expect((await db.query('select id from goals where id=$1', [goal])).rows).toHaveLength(0);
+    await expect(
+      run('direct-stale', [
+        {
+          entity: 'assets',
+          action: 'create',
+          payload: { name: 'Rollback direto', value: 12300, kind: 'other' },
+        },
+        edits[0],
+      ]),
+    ).rejects.toThrow(/record changed/);
+    expect((await db.query("select id from assets where name='Rollback direto'")).rows).toHaveLength(0);
+    const foreign = crypto.randomUUID();
+    await db.query(
+      "insert into assets(id,user_id,name,value,kind) values($1,$2,'Bem de outra pessoa',100,'other')",
+      [foreign, bob],
+    );
+    await expect(
+      run('direct-foreign', [
+        {
+          entity: 'assets',
+          action: 'delete',
+          id: foreign,
+          payload: {},
+          expected: await snapshot('assets', foreign),
+        },
+      ]),
+    ).rejects.toThrow(/ownership/);
+    await expect(
+      run('direct-profile-delete', [{ entity: 'profiles', action: 'delete', id: alice, payload: {} }]),
+    ).rejects.toThrow(/profile scope/);
+    await db.query('delete from financial_accounts where id=$1', [account]);
+    await db.query('delete from assets where id=$1', [foreign]);
+  });
+  it('WhatsApp salva lançamentos e recorrências juntos, sem duplicar retries e com rollback integral', async () => {
+    await db.exec('reset role');
+    await db.query(
+      "insert into whatsapp_connections(user_id,phone,consent_at) values($1,'5511999997777',now()) on conflict(user_id) do update set phone=excluded.phone,consent_at=excluded.consent_at",
+      [alice],
+    );
+    await db.query(
+      "insert into whatsapp_messages_metadata(message_id,user_id) values('batch-request',$1),('batch-repeat',$1),('batch-invalid',$1)",
+      [alice],
+    );
+    const changes: { entity: string; payload: Record<string, unknown> }[] = [
+      {
+        entity: 'transactions',
+        payload: {
+          description: 'Salário lote teste',
+          amount: 700000,
+          type: 'income',
+          category: 'Salário',
+          date: '2026-10-07',
+          status: 'paid',
+          source: 'whatsapp',
+          account_id: null,
+        },
+      },
+      {
+        entity: 'transactions',
+        payload: {
+          description: 'Fatura PJ lote teste',
+          amount: 202403,
+          type: 'expense',
+          category: 'Outros',
+          date: '2026-10-07',
+          status: 'paid',
+          source: 'whatsapp',
+          account_id: null,
+        },
+      },
+      {
+        entity: 'recurring_rules',
+        payload: {
+          description: 'Faculdade lote teste',
+          amount: 50000,
+          type: 'expense',
+          category: 'Educação',
+          start_date: '2026-11-20',
+          frequency: 'monthly',
+          active: true,
+          end_date: null,
+          annual_adjustment_bps: 0,
+        },
+      },
+    ];
+    const save = (message: string, payload = changes) =>
+      db.query<{ result: { saved: number; already_exists: number; records: { id: string }[] } }>(
+        "select save_whatsapp_batch($1,'5511999997777',$2,$3) result",
+        [alice, message, JSON.stringify(payload)],
+      );
+    const first = (await save('batch-request')).rows[0].result;
+    expect(first.saved).toBe(3);
+    expect((await save('batch-request')).rows[0].result).toEqual(first);
+    const again = (await save('batch-repeat')).rows[0].result;
+    expect(again.saved).toBe(0);
+    expect(again.already_exists).toBe(3);
+    const invalid = [
+      { ...changes[0], payload: { ...changes[0].payload, description: 'Rollback lote teste' } },
+      { ...changes[1], payload: { ...changes[1].payload, amount: -1 } },
+    ];
+    await expect(save('batch-invalid', invalid)).rejects.toThrow();
+    expect(
+      (await db.query("select id from transactions where description='Rollback lote teste'")).rows,
+    ).toHaveLength(0);
+    await expect(
+      db.query("select save_whatsapp_batch($1,'5511000000000','batch-invalid',$2)", [
+        alice,
+        JSON.stringify(changes),
+      ]),
+    ).rejects.toThrow(/connection/);
+    await db.query("insert into whatsapp_messages_metadata(message_id,user_id) values('batch-foreign',$1)", [
+      bob,
+    ]);
+    await expect(save('batch-foreign')).rejects.toThrow(/ownership/);
+    await asUser(alice);
+    await expect(save('batch-request')).rejects.toThrow(/permission denied/);
+    await db.exec('reset role');
+    await db.query('delete from transactions where id=any($1::uuid[])', [
+      first.records.map((record) => record.id),
+    ]);
+    await db.query('delete from recurring_rules where id=any($1::uuid[])', [
+      first.records.map((record) => record.id),
+    ]);
+  });
   it('cache de mídia é privado, expira e reserva entrega uma única vez', async () => {
     await db.exec('reset role');
     await db.query(

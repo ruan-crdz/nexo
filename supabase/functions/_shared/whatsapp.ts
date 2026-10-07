@@ -1,4 +1,9 @@
 import { admin, env, HttpError, safeFetch } from './http.ts';
+import {
+  formatWhatsAppText,
+  whatsAppMessageContent,
+  type WhatsAppButton,
+} from '../../../shared/whatsapp-presentation.ts';
 
 export class WhatsAppAmbiguousDeliveryError extends HttpError {
   constructor() {
@@ -60,7 +65,7 @@ export async function showTypingIndicator(messageId: string) {
     console.error(JSON.stringify({ event: 'whatsapp_typing_indicator_failed', status: 'network' }));
   }
 }
-export async function sendText(phone: string, text: string) {
+export async function sendText(phone: string, text: string, buttons: WhatsAppButton[] = []) {
   if (!/^\d{8,15}$/.test(phone)) throw new HttpError(400, 'Número inválido.');
   const response = await fetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/messages`), {
     method: 'POST',
@@ -68,8 +73,7 @@ export async function sendText(phone: string, text: string) {
     body: JSON.stringify({
       messaging_product: 'whatsapp',
       to: phone,
-      type: 'text',
-      text: { body: text.slice(0, 4000) },
+      ...whatsAppMessageContent(text, buttons),
     }),
     signal: AbortSignal.timeout(45_000),
   });
@@ -126,7 +130,7 @@ export async function sendImage(
         messaging_product: 'whatsapp',
         to: phone,
         type: 'image',
-        image: { id: uploaded.id, caption: caption.slice(0, 1024) },
+        image: { id: uploaded.id, caption: formatWhatsAppText(formatWhatsAppText(caption).slice(0, 1024)) },
       }),
       signal: AbortSignal.timeout(45_000),
     });
@@ -178,14 +182,19 @@ export async function sendFinancialTemplate(phone: string, text: string) {
   return String(result.messages[0].id);
 }
 
-export async function deliverReply(messageId: string, phone: string, text: string) {
+export async function deliverReply(
+  messageId: string,
+  phone: string,
+  text: string,
+  buttons: WhatsAppButton[] = [],
+) {
   const db = admin();
   const claim = await db.rpc('claim_whatsapp_reply', { message_key: messageId });
   if (claim.error) throw new HttpError(503, 'Não consegui reservar o envio da resposta.');
   if (!claim.data) return;
   let replyId: string | null = null;
   try {
-    replyId = await sendText(phone, text);
+    replyId = await sendText(phone, text, buttons);
     const saved = await db
       .from('whatsapp_messages_metadata')
       .update({
@@ -271,7 +280,7 @@ export async function retryWhatsAppReply(messageId: string, phone: string) {
   const db = admin();
   const previous = await db
     .from('whatsapp_messages_metadata')
-    .select('state,reply,reply_kind,sent_at,reply_message_id,delivery_status,user_id')
+    .select('state,reply,reply_kind,reply_buttons,sent_at,reply_message_id,delivery_status,user_id')
     .eq('message_id', messageId)
     .maybeSingle();
   if (previous.error) throw new HttpError(503, 'Não consegui conferir a entrega anterior.');
@@ -321,7 +330,7 @@ export async function retryWhatsAppReply(messageId: string, phone: string) {
       stored.data.mime_type as 'image/png' | 'image/jpeg',
     );
   } else {
-    await deliverReply(messageId, phone, reply.reply);
+    await deliverReply(messageId, phone, reply.reply, reply.reply_buttons ?? []);
   }
   return true;
 }

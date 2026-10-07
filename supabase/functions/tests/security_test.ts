@@ -99,6 +99,12 @@ Deno.test('chat consulta o nome real com ferramenta e mantém contexto sem salva
         );
       }
       assert.equal(url.hostname, 'chat.test');
+      if (['transactions', 'goals', 'goal_events'].some((entity) => url.pathname.endsWith(entity)))
+        return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+      if (url.pathname.endsWith('profiles') && url.searchParams.get('select') === 'fixed_expenses,timezone')
+        return new Response('{"fixed_expenses":0,"timezone":"America/Sao_Paulo"}', {
+          headers: { 'Content-Type': 'application/json' },
+        });
       if (url.pathname.endsWith('whatsapp_chat_sessions') && init?.method !== 'POST')
         return new Response(
           JSON.stringify({
@@ -110,6 +116,8 @@ Deno.test('chat consulta o nome real com ferramenta e mantém contexto sem salva
           { headers: { 'Content-Type': 'application/json' } },
         );
       if (url.pathname.endsWith('whatsapp_chat_requests'))
+        return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+      if (url.pathname.endsWith('whatsapp_messages_metadata'))
         return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
       if (url.pathname.endsWith('profiles')) {
         assert.equal(url.searchParams.get('id'), 'eq.00000000-0000-4000-8000-00000000000a');
@@ -188,11 +196,16 @@ Deno.test('chat avisa confirmação mesmo quando a IA falha depois da gravação
         );
       }
       const headers = { 'Content-Type': 'application/json' };
+      if (['transactions', 'goals', 'goal_events'].some((entity) => url.pathname.endsWith(entity)))
+        return new Response('[]', { headers });
+      if (url.pathname.endsWith('profiles'))
+        return new Response('{"fixed_expenses":0,"timezone":"America/Sao_Paulo"}', { headers });
       if (url.pathname.endsWith('whatsapp_chat_sessions'))
         return init?.method === 'POST'
           ? new Response('', { status: 201 })
           : new Response('null', { headers });
       if (url.pathname.endsWith('whatsapp_chat_requests')) return new Response('[]', { headers });
+      if (url.pathname.endsWith('whatsapp_messages_metadata')) return new Response('[]', { headers });
       if (url.pathname.endsWith('confirm_whatsapp_chat')) {
         assert.equal(JSON.parse(String(init?.body)).owner, '00000000-0000-4000-8000-00000000000a');
         return new Response('{"status":"applied","message":"Registro salvo."}', { headers });
@@ -265,7 +278,7 @@ Deno.test('mensagem pronta vincula sem aceitar códigos incompletos ou texto arb
   assert.equal(url.hostname, 'wa.me');
   assert.equal(url.searchParams.get('text'), message);
   assert.throws(() => whatsappUrl('+55 11 99999-9999', message));
-  for (const instruction of ['áudio', 'Histórico', 'confirmação', 'dez minutos', 'perfil']) {
+  for (const instruction of ['áudio', 'Histórico', 'executados direto', 'dez minutos', 'perfil']) {
     assert.ok(whatsappWelcome.includes(instruction));
   }
 });
