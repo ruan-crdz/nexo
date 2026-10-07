@@ -4,6 +4,9 @@ import { applyRate, formatMoney, shiftDays, shiftMonths, sum } from './financial
 import { goalJourney } from './journey.ts';
 
 const namespace = '9667e0ce-412e-47d9-a212-91d1d616f74b';
+export function recurringOccurrenceId(ruleId: string, date: string) {
+  return uuid(`${ruleId}:${date}`, namespace);
+}
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('pt-BR', {
     day: 'numeric',
@@ -50,7 +53,7 @@ export function recurringTransactions(
         anniversaries = Math.max(0, anniversaries - 1);
       for (let anniversary = 0; anniversary < anniversaries; anniversary++)
         amount = sum([amount, applyRate(amount, rule.annual_adjustment_bps ?? 0)]);
-      const id = uuid(`${rule.id}:${date}`, namespace);
+      const id = recurringOccurrenceId(rule.id, date);
       if (known.has(id)) continue;
       result.push({
         id,

@@ -431,6 +431,56 @@ Deno.test('aporte com meta ambígua não declara gravação e valida valores ant
   );
 });
 
+Deno.test('conciliação identifica a recorrência e não grava outro gasto', async () => {
+  const paid = '12345678-1234-4234-8234-123456789ab1';
+  const due = '2026-10-20';
+  let committed = false;
+  await mocked(
+    async (requests) => {
+      const records = (await executeChatTool(
+        'read_records',
+        { entity: 'transactions', start: null, end: null, search: 'DAS' },
+        context,
+      )) as { records: { recurring_rule_id: string; recurring_due_date: string }[] };
+      assert.equal(records.records[0].recurring_rule_id, proposal);
+      assert.equal(records.records[0].recurring_due_date, due);
+      const result = (await executeChatTool(
+        'reconcile_recurring_payment',
+        { rule_id: proposal, due_date: due, paid_id: paid },
+        {
+          ...context,
+          onCommit: () => {
+            committed = true;
+          },
+        },
+      )) as { no_new_expense: boolean };
+      assert.ok(committed);
+      assert.equal(result.no_new_expense, true);
+      const writes = requests.filter((request) => request.url.pathname.includes('/rpc/'));
+      assert.equal(writes.length, 1);
+      assert.ok(writes[0].url.pathname.endsWith('reconcile_recurring_payment_for'));
+      assert.equal(writes[0].body.owner, 'user-1');
+    },
+    (url) =>
+      url.pathname.endsWith('transactions')
+        ? [
+            {
+              id: paid,
+              description: 'DAS',
+              amount: 8605,
+              type: 'expense',
+              category: 'Serviços',
+              date: due,
+              status: 'planned',
+              source: 'manual',
+              account_id: null,
+              external_id: `recurring:${proposal}:${due}`,
+            },
+          ]
+        : { status: 'applied', paid_id: paid, no_transaction_created: true },
+  );
+});
+
 Deno.test('botão confirma apenas proposta vigente da pessoa e não chama IA', async () => {
   let committed = false;
   await mocked(

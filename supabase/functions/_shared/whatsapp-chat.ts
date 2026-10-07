@@ -17,7 +17,7 @@ import { admin, env, HttpError } from './http.ts';
 import { financeChartPng } from './finance-chart-svg.ts';
 import { generateWhatsAppImage } from './openai.ts';
 import { spendabilityAppAssumptions, spendingAllowance } from '../../../shared/financial-decisions.ts';
-import { recurringTransactions } from '../../../shared/planning.ts';
+import { recurringTransactions, recurringOccurrenceId } from '../../../shared/planning.ts';
 import { centsSchema, dateSchema } from '../../../shared/domain.ts';
 import { whatsappMoneySnapshot, compareReportedMoney, budgetUntilDate } from './whatsapp-money.ts';
 import type { WhatsAppMoneySnapshot } from './whatsapp-money.ts';
@@ -34,6 +34,12 @@ type ChatContext = {
 };
 type Tool = { name: string; description: string; properties: Record<string, unknown> };
 const tools: Tool[] = [
+  {
+    name: 'reconcile_recurring_payment',
+    description:
+      'Quando a pessoa CONFIRMA que uma conta recorrente já foi paga e existe pagamento registrado separado, vincula a ocorrência pendente ao pagamento real e remove apenas a previsão duplicada. Não marca outra despesa como paga nem cria gasto. Consulte transactions antes: a pendência retorna recurring_rule_id e recurring_due_date; paid_id deve ser o ID de uma despesa paid de mesmo nome, valor e mês. Se houver vários pagamentos/cobranças possíveis ou a pessoa não confirmou, pergunte. Novos meses continuam pendentes. Nunca use só porque dois valores são iguais.',
+    properties: { rule_id: { type: 'string' }, due_date: { type: 'string' }, paid_id: { type: 'string' } },
+  },
   {
     name: 'goal_progress',
     description:
@@ -181,11 +187,57 @@ function displayRecords(entity: keyof typeof chatSchemas, rows: Record<string, u
   if (entity === 'profiles') return rows.map((row) => ({ id: row.id, ...chatSchemas.profiles.parse(row) }));
   if (entity === 'goals') return rows.map((row) => goalSchema.parse(row));
   const schema = chatSchemas[entity];
-  return rows.map((row) => schema.parse(row));
+  return rows.map((row) => {
+    const parsed = schema.parse(row);
+    const occurrence =
+      entity === 'transactions' && typeof row.external_id === 'string'
+        ? /^recurring:([a-f0-9-]{36}):(\d{4}-\d{2}-\d{2})$/i.exec(row.external_id)
+        : null;
+    return occurrence
+      ? { ...parsed, recurring_rule_id: occurrence[1], recurring_due_date: occurrence[2] }
+      : parsed;
+  });
+}
+
+async function knownRecurringOccurrences(userId: string, rules: { id: string }[]) {
+  if (!rules.length) return [];
+  const rows = await readPages((from, to) =>
+    admin()
+      .from('recurring_occurrences')
+      .select('rule_id,due_date,recurring_rules!inner(user_id)')
+      .eq('recurring_rules.user_id', userId)
+      .in(
+        'rule_id',
+        rules.map((rule) => rule.id),
+      )
+      .order('rule_id')
+      .order('due_date')
+      .range(from, to),
+  );
+  return rows.map((row) => recurringOccurrenceId(row.rule_id, row.due_date));
 }
 
 export async function executeChatTool(name: string, raw: unknown, context: ChatContext) {
   const db = admin();
+  if (name === 'reconcile_recurring_payment') {
+    const args = z
+      .object({ rule_id: z.string().uuid(), due_date: dateSchema, paid_id: z.string().uuid() })
+      .strict()
+      .parse(raw);
+    const result = await db.rpc('reconcile_recurring_payment_for', {
+      owner: context.userId,
+      rule_identifier: args.rule_id,
+      occurrence_date: args.due_date,
+      paid_identifier: args.paid_id,
+    });
+    if (result.error)
+      return {
+        error:
+          'Não conciliei: confirme o pagamento e identifique uma ocorrência gerada correspondente. Nome, valor, período e proprietário devem coincidir; pagamentos já ligados a outra cobrança não podem ser usados.',
+      };
+    context.onCommit();
+    return { ...result.data, kind: 'recurring_payment_reconciliation', no_new_expense: true };
+  }
   if (name === 'goal_progress') {
     const args = z
       .object({
@@ -372,11 +424,9 @@ export async function executeChatTool(name: string, raw: unknown, context: ChatC
     ]);
     if (profile.error) throw new HttpError(503, 'Não consegui conferir a renda do perfil.');
     const transactions = transactionSchema.array().parse(rows);
-    const projected = recurringTransactions(
-      recurringRuleSchema.array().parse(ruleRows),
-      transactions,
-      context.today,
-    );
+    const recurringRules = recurringRuleSchema.array().parse(ruleRows);
+    const knownOccurrences = await knownRecurringOccurrences(context.userId, recurringRules);
+    const projected = recurringTransactions(recurringRules, transactions, context.today, knownOccurrences);
     const records = [...transactions, ...projected];
     const automatic = spendabilityAppAssumptions(
       goalSchema.array().parse(goalRows),
@@ -508,6 +558,10 @@ export async function executeChatTool(name: string, raw: unknown, context: ChatC
         goals: goalSchema.array().parse(goals),
         financial_accounts: accountSchema.array().parse(accounts),
         recurring_rules: recurringRuleSchema.array().parse(rules),
+        recurring_occurrences: await knownRecurringOccurrences(
+          context.userId,
+          recurringRuleSchema.array().parse(rules),
+        ),
       },
       args.question,
       context.today,

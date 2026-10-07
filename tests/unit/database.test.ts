@@ -5,6 +5,8 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { readFileSync } from 'node:fs';
 import { v5 as uuid } from 'uuid';
 import { readPages } from '../../shared/pagination';
+import { goalMonthlyBudget } from '../../shared/journey';
+import { transactionSchema } from '../../shared/domain';
 const alice = '00000000-0000-4000-8000-00000000000a',
   bob = '00000000-0000-4000-8000-00000000000b';
 let db: PGlite, org: string;
@@ -44,6 +46,9 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610070004_whatsapp_batch.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610070005_whatsapp_direct_actions.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610070006_whatsapp_goal_progress.sql', 'utf8'));
+  await db.exec(
+    readFileSync('supabase/migrations/202610070007_recurring_payment_reconciliation.sql', 'utf8'),
+  );
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -55,6 +60,97 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('DAS já pago é conciliado sem novo gasto e sem recriar a pendência do mês', async () => {
+    await db.exec('reset role');
+    const rule = crypto.randomUUID(),
+      paid = crypto.randomUUID(),
+      pending = crypto.randomUUID();
+    const income = crypto.randomUUID(),
+      expenses = crypto.randomUUID();
+    await db.query(
+      "insert into recurring_rules(id,user_id,description,amount,category,start_date,type,frequency,end_date) values($1,$2,'DAS',8605,'Serviços','2026-10-20','expense','monthly','2026-10-20')",
+      [rule, alice],
+    );
+    await db.query(
+      "insert into transactions(id,user_id,description,amount,type,category,date,status,source) values($1,$2,'Entradas',731300,'income','Outros','2026-10-07','paid','manual'),($3,$2,'Gastos anteriores',716287,'expense','Outros','2026-10-07','paid','manual'),($4,$2,'DAS',8605,'expense','Serviços','2026-10-07','paid','whatsapp')",
+      [income, alice, expenses, paid],
+    );
+    await db.query(
+      "insert into transactions(id,user_id,description,amount,type,category,date,status,source,external_id) values($1,$2,'DAS',8605,'expense','Serviços','2026-10-20','planned','manual',$3)",
+      [pending, alice, `recurring:${rule}:2026-10-20`],
+    );
+    await db.query(
+      "insert into recurring_occurrences(rule_id,due_date,transaction_id) values($1,'2026-10-20',$2)",
+      [rule, pending],
+    );
+    const budget = async () =>
+      goalMonthlyBudget(
+        {
+          transactions: transactionSchema
+            .array()
+            .parse(
+              (
+                await db.query<{ data: unknown }>(
+                  'select to_jsonb(record) data from transactions record where user_id=$1',
+                  [alice],
+                )
+              ).rows.map((row) => row.data),
+            ),
+          goal_events: [],
+        },
+        '2026-10-07',
+      );
+    expect(await budget()).toMatchObject({ net: 6408, bills: 8605, available: 0 });
+    await db.query('update transactions set amount=8606 where id=$1', [paid]);
+    await expect(
+      db.query("select reconcile_recurring_payment_for($1,$2,'2026-10-20',$3)", [alice, rule, paid]),
+    ).rejects.toThrow(/does not match/);
+    await db.query("update transactions set amount=8605,date='2026-09-07' where id=$1", [paid]);
+    await expect(
+      db.query("select reconcile_recurring_payment_for($1,$2,'2026-10-20',$3)", [alice, rule, paid]),
+    ).rejects.toThrow(/period mismatch/);
+    await db.query("update transactions set date='2026-10-07' where id=$1", [paid]);
+    await asUser(bob);
+    await expect(
+      db.query("select reconcile_recurring_payment($1,'2026-10-20',$2)", [rule, paid]),
+    ).rejects.toThrow(/ownership/);
+    await expect(
+      db.query("select reconcile_recurring_payment_for($1,$2,'2026-10-20',$3)", [alice, rule, paid]),
+    ).rejects.toThrow(/permission denied/);
+    await asUser(alice);
+    const result = (
+      await db.query<{ result: { status: string; repeated: boolean } }>(
+        "select reconcile_recurring_payment($1,'2026-10-20',$2) result",
+        [rule, paid],
+      )
+    ).rows[0].result;
+    expect(result).toMatchObject({ status: 'applied', repeated: false });
+    await db.exec('reset role');
+    expect(await budget()).toMatchObject({ net: 6408, bills: 0, available: 6408 });
+    expect((await db.query('select id from transactions where id=$1', [pending])).rows).toHaveLength(0);
+    expect(
+      (
+        await db.query<{ transaction_id: string }>(
+          "select transaction_id from recurring_occurrences where rule_id=$1 and due_date='2026-10-20'",
+          [rule],
+        )
+      ).rows[0].transaction_id,
+    ).toBe(paid);
+    await db.query('select sync_recurring_rules_for($1)', [alice]);
+    expect(
+      (await db.query('select id from transactions where external_id=$1', [`recurring:${rule}:2026-10-20`]))
+        .rows,
+    ).toHaveLength(0);
+    const again = (
+      await db.query<{ result: { repeated: boolean } }>(
+        "select reconcile_recurring_payment_for($1,$2,'2026-10-20',$3) result",
+        [alice, rule, paid],
+      )
+    ).rows[0].result;
+    expect(again.repeated).toBe(true);
+    await db.query('delete from recurring_rules where id=$1', [rule]);
+    await db.query('delete from transactions where id=any($1::uuid[])', [[income, expenses, paid]]);
+  });
   it('WhatsApp guarda 10 na meta ativa, mantém histórico e não cria gasto nem duplica aporte', async () => {
     await db.exec('reset role');
     const goal = crypto.randomUUID();

@@ -3,6 +3,7 @@ import {
   budgetUsage,
   notificationCandidates,
   recurringTransactions,
+  recurringOccurrenceId,
   verifiedReply,
   weeklySummary,
 } from '../../shared/planning';
@@ -39,6 +40,27 @@ it('recorrência preserva dia âncora, é idempotente e nunca marca como pago', 
   expect(rows.every((row) => row.status === 'planned')).toBe(true);
   expect(recurringTransactions([rule], rows, '2026-02-28')).toEqual([]);
   expect(recurringTransactions([{ ...rule, active: false }], [], '2026-02-28')).toEqual([]);
+});
+it('pagamento manual conciliado não vira nova cobrança nas projeções', () => {
+  const rule: RecurringRule = {
+    id: crypto.randomUUID(),
+    description: 'DAS',
+    amount: 8605,
+    category: 'Serviços',
+    start_date: '2026-10-20',
+    active: true,
+    type: 'expense',
+    frequency: 'monthly',
+    end_date: null,
+    annual_adjustment_bps: 0,
+  };
+  const paid = transaction({ description: 'DAS', amount: 8605, date: '2026-10-07' });
+  expect(recurringTransactions([rule], [paid], '2026-10-07')).toHaveLength(1);
+  const known = [recurringOccurrenceId(rule.id, '2026-10-20')];
+  expect(recurringTransactions([rule], [paid], '2026-10-07', known)).toEqual([]);
+  const future = recurringTransactions([rule], [paid], '2026-10-21', known);
+  expect(future.map((row) => row.date)).toEqual(['2026-11-20']);
+  expect(future[0].status).toBe('planned');
 });
 it('limite soma somente gastos pagos da categoria e mostra excesso', () => {
   const budget = { id: crypto.randomUUID(), category: 'Alimentação', limit_amount: 1000, month: '2026-10' };

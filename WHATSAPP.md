@@ -30,6 +30,12 @@ Se a pessoa não nomear a meta, usa a meta em foco; sem foco, usa a única meta 
 
 App e WhatsApp compartilham `update_goal_progress_for`, chamado por wrappers que preservam autenticação/MFA no app e vínculo/consentimento no WhatsApp. Message ID e request UUID determinístico impedem duplicação em retries. Uma operação de progresso não é misturada com outro lote de gravação na mesma mensagem; o chat deve informar o que falta e pedir a ação restante em outra mensagem, nunca afirmar que ambos foram executados.
 
+## Pagamentos recorrentes conciliados
+
+`202610070007_recurring_payment_reconciliation.sql` permite ligar uma ocorrência automática pendente a um pagamento já registrado. A pessoa precisa confirmar o pagamento; proprietário, despesa paga, nome, valor e período devem corresponder. Pagamento já usado por outra ocorrência não pode ser reutilizado. Valores iguais por si só não autorizam conciliação.
+
+A operação preserva o lançamento pago e sua data, vincula a ocorrência a ele e remove apenas a previsão gerada duplicada, sem novo gasto. O vínculo evita recriação pela sincronização; os próximos ciclos continuam previstos. O chat expõe a origem da recorrência ao consultar movimentos e usa `reconcile_recurring_payment` mediante confirmação explícita. Projeções e avaliação de compra respeitam as chaves de ocorrências já processadas mesmo quando o pagamento tem ID manual diferente.
+
 ## Recuperação de respostas visuais
 
 Aplicar `202610070002_whatsapp_reply_media.sql` antes do webhook atualizado. Novas imagens ficam em cache privado por até 24 horas para recuperar rejeições confirmadas sem gerar novamente nem repetir ações financeiras. O retry verifica o vínculo e um claim atômico reserva a entrega. Resultado ambíguo (timeout após envio, resposta 5xx ou ausência do ID remoto) fica em `reconcile`, sem reenvio automático, para evitar duplicatas. Depois da expiração, o bot informa que a imagem não pode mais ser recuperada; não substitui silenciosamente a imagem pela legenda.
