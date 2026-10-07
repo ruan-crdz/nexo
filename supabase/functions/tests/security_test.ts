@@ -4,6 +4,7 @@ import {
   hashToken,
   sendText,
   sendFinancialTemplate,
+  sendImage,
   showTypingIndicator,
   WhatsAppDeliveryError,
 } from '../_shared/whatsapp.ts';
@@ -15,7 +16,14 @@ import {
   whatsappWelcome,
 } from '../../../shared/whatsapp-link.ts';
 import { extractionDecision } from '../../../shared/extraction.ts';
-import { parseSpendabilityMessage, structured, transcribe, readReceipt } from '../_shared/openai.ts';
+import { financeChartPng } from '../_shared/finance-chart.ts';
+import {
+  generateWhatsAppImage,
+  parseSpendabilityMessage,
+  structured,
+  transcribe,
+  readReceipt,
+} from '../_shared/openai.ts';
 
 Deno.test('job financeiro exige credencial forte e nunca aceita autorização ausente', () => {
   const previous = Deno.env.get('FINANCIAL_JOB_SECRET');
@@ -142,6 +150,92 @@ Deno.test('indicador de digitação marca a mensagem recebida como lida', async 
       if (value === undefined) Deno.env.delete(name);
       else Deno.env.set(name, value);
     });
+  }
+});
+
+Deno.test('gráfico financeiro gera PNG com dimensões e compressão válidas', async () => {
+  const png = await financeChartPng({
+    title: 'Resumo do mês',
+    subtitle: 'Outubro 2026',
+    items: [
+      { label: 'Entrou', value: 200000, tone: 'income' },
+      { label: 'Saiu', value: 120000, tone: 'expense' },
+      { label: 'Diferença', value: 80000, tone: 'neutral' },
+    ],
+  });
+  assert.deepEqual([...png.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  assert.equal(view.getUint32(16), 1200);
+  assert.equal(view.getUint32(20), 741);
+  assert.ok(png.length > 10_000);
+  assert.equal(new TextDecoder().decode(png.slice(-8, -4)), 'IEND');
+});
+
+Deno.test('imagem é enviada à Meta como mídia com legenda', async () => {
+  const names = ['WHATSAPP_GRAPH_VERSION', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ACCESS_TOKEN'];
+  const previous = names.map((name) => Deno.env.get(name));
+  const originalFetch = globalThis.fetch;
+  try {
+    ['v23.0', '123456', 'test-only-token'].forEach((value, index) => Deno.env.set(names[index], value));
+    let calls = 0;
+    globalThis.fetch = async (input, init) => {
+      calls++;
+      if (String(input).endsWith('/123456/media')) {
+        const form = init?.body as FormData;
+        assert.equal(form.get('messaging_product'), 'whatsapp');
+        assert.equal(form.get('type'), 'image/png');
+        const file = form.get('file');
+        assert.ok(file instanceof Blob);
+        assert.equal(file.type, 'image/png');
+        return new Response(JSON.stringify({ id: 'uploaded-media-id' }), { status: 200 });
+      }
+      assert.equal(String(input).endsWith('/123456/messages'), true);
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.type, 'image');
+      assert.equal(body.to, '5511999999999');
+      assert.deepEqual(body.image, { id: 'uploaded-media-id', caption: 'Resumo do mês' });
+      return new Response(JSON.stringify({ messages: [{ id: 'image-message-id' }] }), { status: 200 });
+    };
+    const id = await sendImage('5511999999999', new Uint8Array([137, 80, 78, 71]), 'Resumo do mês');
+    assert.equal(id, 'image-message-id');
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    names.forEach((name, index) => {
+      const value = previous[index];
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    });
+  }
+});
+
+Deno.test('imagem solicitada é gerada como JPEG sem registrar o prompt', async () => {
+  const previousKey = Deno.env.get('OPENAI_API_KEY');
+  const previousModel = Deno.env.get('OPENAI_IMAGE_MODEL');
+  const originalFetch = globalThis.fetch;
+  Deno.env.set('OPENAI_API_KEY', 'test-key');
+  Deno.env.set('OPENAI_IMAGE_MODEL', 'test-image-model');
+  try {
+    globalThis.fetch = async (input, init) => {
+      assert.equal(String(input), 'https://api.openai.com/v1/images/generations');
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, 'test-image-model');
+      assert.equal(body.prompt, 'Uma paisagem verde ao amanhecer');
+      assert.equal(body.output_format, 'jpeg');
+      assert.equal(body.quality, 'low');
+      return new Response(JSON.stringify({ data: [{ b64_json: btoa('\xff\xd8\xff\xd9') }] }), {
+        status: 200,
+      });
+    };
+    const image = await generateWhatsAppImage('Uma paisagem verde ao amanhecer');
+    assert.deepEqual([...image], [255, 216, 255, 217]);
+    await assert.rejects(() => generateWhatsAppImage('x'.repeat(2001)), /2.000 caracteres/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) Deno.env.delete('OPENAI_API_KEY');
+    else Deno.env.set('OPENAI_API_KEY', previousKey);
+    if (previousModel === undefined) Deno.env.delete('OPENAI_IMAGE_MODEL');
+    else Deno.env.set('OPENAI_IMAGE_MODEL', previousModel);
   }
 });
 

@@ -20,7 +20,13 @@ const row = (overrides: Partial<Transaction>): Transaction => ({
 });
 describe('resumo simples no WhatsApp', () => {
   it('aceita comandos claros sem confundir um gasto com uma consulta', () => {
-    for (const command of ['resumo', 'Meu saldo', 'Como está meu mês?', 'quanto gastei este mês?'])
+    for (const command of [
+      'resumo',
+      'Meu saldo',
+      'Como está meu mês?',
+      'quanto gastei este mês?',
+      'Crie um gráfico do meu resumo do mês',
+    ])
       expect(isSummaryRequest(command)).toBe(true);
     for (const text of [
       'Gastei 20 reais no resumo impresso',

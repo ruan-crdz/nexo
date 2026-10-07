@@ -76,6 +76,56 @@ export async function sendText(phone: string, text: string) {
   return result.messages[0].id as string;
 }
 
+export async function sendImage(
+  phone: string,
+  image: Uint8Array,
+  caption: string,
+  mimeType: 'image/png' | 'image/jpeg' = 'image/png',
+) {
+  if (!/^\d{8,15}$/.test(phone)) throw new HttpError(400, 'Número inválido.');
+  if (!image.length || image.length > 5_000_000) throw new HttpError(413, 'A imagem precisa ter até 5 MB.');
+  const form = new FormData();
+  const imageBuffer = new ArrayBuffer(image.byteLength);
+  new Uint8Array(imageBuffer).set(image);
+  form.set('messaging_product', 'whatsapp');
+  form.set('type', mimeType);
+  form.set(
+    'file',
+    new Blob([imageBuffer], { type: mimeType }),
+    mimeType === 'image/png' ? 'nexo.png' : 'nexo.jpg',
+  );
+  const upload = await fetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/media`), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env('WHATSAPP_ACCESS_TOKEN')}` },
+    body: form,
+    signal: AbortSignal.timeout(45_000),
+  });
+  const uploaded = await upload.json();
+  if (!upload.ok || typeof uploaded.id !== 'string') {
+    const code = Number.isInteger(uploaded.error?.code) ? uploaded.error.code : null;
+    console.error(JSON.stringify({ event: 'whatsapp_image_upload_failed', code, status: upload.status }));
+    throw new WhatsAppDeliveryError(code);
+  }
+  const response = await fetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/messages`), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env('WHATSAPP_ACCESS_TOKEN')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: phone,
+      type: 'image',
+      image: { id: uploaded.id, caption: caption.slice(0, 1024) },
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.messages?.[0]?.id) {
+    const code = Number.isInteger(result.error?.code) ? result.error.code : null;
+    console.error(JSON.stringify({ event: 'whatsapp_image_delivery_failed', code, status: response.status }));
+    throw new WhatsAppDeliveryError(code);
+  }
+  return result.messages[0].id as string;
+}
+
 export async function sendFinancialTemplate(phone: string, text: string) {
   if (!/^\d{8,15}$/.test(phone) || text.length > 1024)
     throw new HttpError(400, 'Template financeiro inválido.');
@@ -119,6 +169,39 @@ export async function deliverReply(messageId: string, phone: string, text: strin
       })
       .eq('message_id', messageId);
     if (saved.error) throw new HttpError(503, 'Não foi possível registrar o envio.');
+  } catch (error) {
+    await db
+      .from('whatsapp_messages_metadata')
+      .update({
+        delivery_status: 'failed',
+        reply_error_code: error instanceof WhatsAppDeliveryError ? error.code : null,
+      })
+      .eq('message_id', messageId);
+    throw error;
+  }
+}
+
+export async function deliverImageReply(
+  messageId: string,
+  phone: string,
+  image: Uint8Array,
+  caption: string,
+  mimeType: 'image/png' | 'image/jpeg' = 'image/png',
+) {
+  const db = admin();
+  try {
+    const replyId = await sendImage(phone, image, caption, mimeType);
+    const saved = await db
+      .from('whatsapp_messages_metadata')
+      .update({
+        sent_at: new Date().toISOString(),
+        reply_message_id: replyId,
+        reply: caption,
+        delivery_status: 'accepted',
+        reply_error_code: null,
+      })
+      .eq('message_id', messageId);
+    if (saved.error) throw new HttpError(503, 'Não foi possível registrar o envio da imagem.');
   } catch (error) {
     await db
       .from('whatsapp_messages_metadata')

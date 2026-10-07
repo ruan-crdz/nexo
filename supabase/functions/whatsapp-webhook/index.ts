@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { goalSchema, recurringRuleSchema, transactionSchema } from '../../../shared/domain.ts';
 import {
   isFinancialQuestion,
+  isFinancialChartRequest,
+  imageGenerationPrompt,
   isSpendabilityQuestion,
   answerFinancialQuestion,
 } from '../../../shared/financial-questions.ts';
@@ -18,6 +20,7 @@ import {
   downloadMedia,
   hashToken,
   deliverReply,
+  deliverImageReply,
   showTypingIndicator,
   verifySignature,
 } from '../_shared/whatsapp.ts';
@@ -26,10 +29,13 @@ import {
   parseSpendabilityMessage,
   parseTransaction,
   spendabilityContextSchema,
+  generateWhatsAppImage,
   transcribe,
   readReceipt,
 } from '../_shared/openai.ts';
-import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
+import { civilDate, formatMoney, shiftDays, shiftMonths, sum } from '../../../shared/financial-engine.ts';
+import { monthlyFlow } from '../../../shared/insights.ts';
+import { financeChartPng } from '../_shared/finance-chart.ts';
 import { isSummaryRequest, whatsappMonthSummary } from '../../../shared/whatsapp-summary.ts';
 
 const messageSchema = z.object({
@@ -179,6 +185,23 @@ async function processMessage(message: Message) {
     committed = true;
     await deliverReply(message.id, message.from, reply);
   }
+  async function finishImage(
+    image: Uint8Array,
+    caption: string,
+    userId: string,
+    mimeType: 'image/png' | 'image/jpeg',
+  ) {
+    let reply = caption;
+    if (showPoints && messagePoints > 0)
+      reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
+    const stored = await db
+      .from('whatsapp_messages_metadata')
+      .update({ state: 'complete', reply, user_id: userId, updated_at: new Date().toISOString() })
+      .eq('message_id', message.id);
+    if (stored.error) throw new HttpError(503, 'Não foi possível registrar a resposta visual.');
+    committed = true;
+    await deliverImageReply(message.id, message.from, image, reply, mimeType);
+  }
   async function findPendingSpendability(userId: string) {
     const pending = await db
       .from('whatsapp_messages_metadata')
@@ -294,7 +317,21 @@ async function processMessage(message: Message) {
           .slice(0, 5)
           .map((bill) => `• ${bill.description} · ${whatsappDate(bill.date)} · ${formatMoney(bill.amount)}`),
       );
-    await finish(lines.join('\n'), userId);
+    const chart = await financeChartPng({
+      title: 'AVALIACAO DA COMPRA',
+      subtitle: context.purchase ?? 'COMPRA CONSULTADA',
+      items: [
+        { label: 'LIVRE APOS CONTAS', value: decision.allowed, tone: 'income' },
+        { label: 'PRECO DA COMPRA', value: context.purchase_amount!, tone: 'expense' },
+        {
+          label: remaining >= 0 ? 'RESTANTE' : 'FALTA',
+          value: Math.abs(remaining),
+          tone: remaining >= 0 ? 'neutral' : 'warning',
+        },
+      ],
+      footer: 'ESTIMATIVA COM AS PREMISSAS INFORMADAS',
+    });
+    await finishImage(chart, lines.join('\n'), userId, 'image/png');
   }
   try {
     let text = message.text?.body?.trim() ?? '';
@@ -429,7 +466,29 @@ async function processMessage(message: Message) {
           .order('id')
           .range(from, to),
       );
-      await finish(whatsappMonthSummary(transactionSchema.array().parse(rows), today), userId);
+      const transactions = transactionSchema.array().parse(rows);
+      const summary = whatsappMonthSummary(transactions, today);
+      const flow = monthlyFlow(transactions, today.slice(0, 7));
+      const month = new Intl.DateTimeFormat('pt-BR', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(`${today.slice(0, 7)}-01T12:00:00Z`));
+      const chart = await financeChartPng({
+        title: 'RESUMO DO MES',
+        subtitle: month,
+        items: [
+          { label: 'ENTROU', value: flow.income, tone: 'income' },
+          { label: 'SAIU', value: flow.expenses, tone: 'expense' },
+          {
+            label: flow.net < 0 ? 'FALTOU' : 'SOBROU',
+            value: Math.abs(flow.net),
+            tone: flow.net < 0 ? 'warning' : 'neutral',
+          },
+        ],
+        footer: 'VALORES ANOTADOS - NAO E SALDO BANCARIO',
+      });
+      await finishImage(chart, summary, userId, 'image/png');
       return;
     }
     if (isFinancialQuestion(text)) {
@@ -489,7 +548,119 @@ async function processMessage(message: Message) {
         );
       if (reply.records.length > 8 || reply.calculation.length > 8)
         lines.push('', 'Há mais detalhes no Histórico e em Perguntar ao Nexo no app.');
-      await finish(lines.join('\n'), userId);
+      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
+      const normalized = text
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      let chartItems: {
+        label: string;
+        value: number;
+        maxValue?: number;
+        tone: 'income' | 'expense' | 'neutral' | 'warning';
+      }[];
+      let chartTitle = 'CONSULTA FINANCEIRA';
+      if (/por que|porque|\bpq\b/.test(normalized) && /gastei.*mais/.test(normalized)) {
+        const currentStart = `${today.slice(0, 7)}-01`;
+        const previousEnd = shiftMonths(today, -1);
+        const previousStart = `${previousEnd.slice(0, 7)}-01`;
+        const current = sum(
+          reply.records
+            .filter((row) => row.date >= currentStart && row.date <= today)
+            .map((row) => row.amount),
+        );
+        const previous = sum(
+          reply.records
+            .filter((row) => row.date >= previousStart && row.date <= previousEnd)
+            .map((row) => row.amount),
+        );
+        chartTitle = 'GASTOS NO MES';
+        chartItems = [
+          { label: 'MES ATUAL', value: current, tone: 'expense' },
+          { label: 'MES PASSADO', value: previous, tone: 'neutral' },
+        ];
+      } else if (reply.goals.length) {
+        chartTitle = 'PROGRESSO DAS METAS';
+        chartItems = reply.goals.map((goal) => ({
+          label: goal.name,
+          value: goal.saved,
+          maxValue: goal.target,
+          tone: 'income',
+        }));
+      } else if (reply.records.length) {
+        const grouped = new Map<string, number>();
+        for (const record of reply.records)
+          grouped.set(record.category, (grouped.get(record.category) ?? 0) + record.amount);
+        chartItems = [...grouped.entries()]
+          .sort((first, second) => second[1] - first[1])
+          .slice(0, 6)
+          .map(([label, value]) => ({
+            label,
+            value,
+            tone: reply.records[0].type === 'income' ? 'income' : 'expense',
+          }));
+      } else {
+        chartItems = [{ label: 'SEM REGISTROS', value: 0, tone: 'neutral' }];
+      }
+      const canShowChart =
+        reply.records.length > 0 ||
+        reply.goals.length > 0 ||
+        isFinancialChartRequest(text) ||
+        /não encontrei (gastos pagos|entradas recebidas)/.test(reply.answer);
+      if (!canShowChart) {
+        await finish(lines.join('\n'), userId);
+        return;
+      }
+      const month = new Intl.DateTimeFormat('pt-BR', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(`${today.slice(0, 7)}-01T12:00:00Z`));
+      const chart = await financeChartPng({
+        title: chartTitle,
+        subtitle: `ATE ${whatsappDate(today)} · ${month}`,
+        items: chartItems,
+        footer: 'VALORES DOS REGISTROS DO NEXO',
+      });
+      const caption = [
+        reply.answer,
+        ...reply.calculation.slice(0, 3).map((line) => `• ${line}`),
+        ...(reply.records.length ? ['Veja os lançamentos completos em Histórico no app.'] : []),
+      ].join('\n');
+      await finishImage(chart, caption, userId, 'image/png');
+      return;
+    }
+    const requestedImage = imageGenerationPrompt(text);
+    if (requestedImage) {
+      const imageLimit = await db.rpc('consume_rate_limit', {
+        subject: userId,
+        bucket_name: 'whatsapp-image',
+        max_requests: 3,
+      });
+      if (imageLimit.error || !imageLimit.data) {
+        await finish('Você já pediu algumas imagens agora. Aguarde um minuto e tente de novo.', userId);
+        return;
+      }
+      const typingRefresh = setInterval(() => void showTypingIndicator(message.id), 20_000);
+      try {
+        const image = await generateWhatsAppImage(requestedImage);
+        await finishImage(
+          image,
+          'Aqui está a imagem que você pediu. A criação usa a cota de imagens do Nexo.',
+          userId,
+          'image/jpeg',
+        );
+      } catch (error) {
+        if (committed) throw error;
+        await finish(
+          error instanceof HttpError
+            ? error.message
+            : 'Não consegui gerar essa imagem agora. Tente outra descrição.',
+          userId,
+        );
+      } finally {
+        clearInterval(typingRefresh);
+      }
       return;
     }
     if (/^desfazer$/i.test(text)) {

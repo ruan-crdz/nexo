@@ -7,8 +7,13 @@ export function isSummaryRequest(text: string) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
-  return /^(?:resumo|saldo|meu resumo|meu saldo|como esta meu mes|quanto (?:gastei|recebi|sobrou)(?: (?:este|nesse|neste) mes)?)[?.!]*$/i.test(
-    normalized,
+  return (
+    /^(?:resumo|saldo|meu resumo|meu saldo|como esta meu mes|quanto (?:gastei|recebi|sobrou)(?: (?:este|esse|nesse|neste|desse|deste) mes)?)[?.!]*$/i.test(
+      normalized,
+    ) ||
+    /^(?:gere|gera|crie|cria|faca|faz|mostre|me mostre)\b.*\b(?:grafico|imagem|foto)\b.*\b(?:resumo|mes)\b/i.test(
+      normalized,
+    )
   );
 }
 export function whatsappDeliveryNotice(status: string | null, messageState: string | null) {

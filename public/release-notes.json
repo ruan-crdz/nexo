@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.07.2",
+  "version": "2026.10.07.3",
   "changes": [
     "Experiência: rail lateral discreto no desktop, três destinos no mobile (Início, Histórico, Você), avatar/saudação, olho e Proteção.",
     "Início: resultado do mês, CTA WhatsApp, dois atalhos, um insight, uma meta e até três movimentos; gráficos e alertas saíram da primeira tela.",
@@ -15,6 +15,6 @@
     "Posso gastar?: acesso direto ao cálculo existente, com premissas confirmadas pela pessoa.",
     "Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.",
     "WhatsApp: o aviso agora distingue mensagem processada de resposta não entregue e recomenda conferir antes de reenviar.",
-    "WhatsApp: respostas mais naturais, indicador de digitação e avaliação de compras que reaproveita metas, renda e recebimentos previstos do app sem inventar saldo."
+    "WhatsApp: respostas mais naturais, indicador de digitação, avaliação de compras com premissas do app e gráficos calculados enviados como imagem."
   ]
 }

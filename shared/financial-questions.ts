@@ -13,6 +13,31 @@ export function isSpendabilityQuestion(text: string) {
   return /\b(?:posso|consigo|da para|vale a pena)\b.*\b(?:comprar|pagar|adquirir)\b/.test(normalized);
 }
 
+export function isFinancialChartRequest(text: string) {
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return (
+    /\b(?:grafico|graficos|imagem|foto|visual)\b/.test(normalized) &&
+    /\b(?:gastos?|gastei|recebi|entradas?|saidas?|resumo|mes|contas?|metas?|dinheiro|saldo|financas?)\b/.test(
+      normalized,
+    )
+  );
+}
+
+export function imageGenerationPrompt(text: string) {
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const asksForImage =
+    /\b(?:gere|gera|gerar|crie|cria|criar|desenhe|desenha|desenhar|faca|faz|fazer|quero|manda|envia|produza)\b/.test(
+      normalized,
+    ) && /\b(?:imagens?|fotos?|ilustracoes?|desenhos?|artes?|posters?)\b/.test(normalized);
+  return asksForImage && !isFinancialChartRequest(normalized) ? text.trim().slice(0, 2000) : null;
+}
+
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('pt-BR', {
     day: 'numeric',
@@ -36,6 +61,7 @@ export function isFinancialQuestion(text: string) {
     .trim();
   return (
     isSpendabilityQuestion(normalized) ||
+    isFinancialChartRequest(normalized) ||
     isVerifiedQuestion(text) ||
     (/^(quanto|quais|como|por que|porque|mostre|me mostre|posso)\b/.test(normalized) &&
       /gast|receb|entrou|saiu|conta|meta|dinheiro|saldo/.test(normalized))

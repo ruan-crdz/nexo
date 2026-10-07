@@ -146,6 +146,48 @@ export async function parseSpendabilityMessage(
       current.goal_allocation !== null ? 'user' : (previous?.goal_allocation_source ?? null),
   };
 }
+
+export async function generateWhatsAppImage(prompt: string) {
+  if (!prompt.trim() || prompt.length > 2000)
+    throw new HttpError(400, 'Descreva a imagem em até 2.000 caracteres.');
+  const model = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2.5-flare';
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env('OPENAI_API_KEY')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      prompt: prompt.trim(),
+      size: '1024x1024',
+      quality: 'low',
+      output_format: 'jpeg',
+      output_compression: 70,
+      n: 1,
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    console.error(
+      JSON.stringify({
+        event: 'whatsapp_image_generation_failed',
+        status: response.status,
+        code: result.error?.code ?? null,
+      }),
+    );
+    throw new HttpError(502, 'Não consegui criar essa imagem agora. Tente novamente com outra descrição.');
+  }
+  const encoded = result.data?.[0]?.b64_json;
+  if (typeof encoded !== 'string' || encoded.length > 7_000_000)
+    throw new HttpError(502, 'A imagem gerada veio vazia ou grande demais para enviar pelo WhatsApp.');
+  const binary = atob(encoded);
+  if (binary.length > 5_000_000)
+    throw new HttpError(413, 'A imagem gerada passa do limite de 5 MB do WhatsApp.');
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
 export async function embed(text: string): Promise<number[]> {
   const response = await safeFetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',

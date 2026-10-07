@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
-import { answerFinancialQuestion } from '../../shared/financial-questions';
+import {
+  answerFinancialQuestion,
+  imageGenerationPrompt,
+  isFinancialChartRequest,
+} from '../../shared/financial-questions';
 import type { Transaction } from '../../shared/domain';
 const row = (changes: Partial<Transaction> = {}): Transaction => ({
   id: crypto.randomUUID(),
@@ -114,4 +118,16 @@ it('reconhece uma pergunta de compra e pede as premissas sem inventar disponibil
   expect(answer?.answer).toContain('contas até lá');
   expect(answer?.records).toEqual([]);
   expect(answer?.answer).not.toContain('Pode comprar');
+});
+
+it('reconhece pedidos de gráfico financeiro para responder com dados verificados', () => {
+  expect(isFinancialChartRequest('Faz um gráfico de gastos por categoria neste mês')).toBe(true);
+  expect(isFinancialChartRequest('Gere uma foto de um cachorro no parque')).toBe(false);
+});
+it('gera imagens só quando pedidas explicitamente e não troca gráfico financeiro por arte', () => {
+  expect(imageGenerationPrompt('Faz uma foto de um cachorro no parque')).toBe(
+    'Faz uma foto de um cachorro no parque',
+  );
+  expect(imageGenerationPrompt('Crie um gráfico dos meus gastos deste mês')).toBeNull();
+  expect(imageGenerationPrompt('Qual é a previsão para minha conta?')).toBeNull();
 });

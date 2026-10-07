@@ -30,7 +30,7 @@ Consultas também aceitam hoje/ontem/mês passado/últimos N dias e filtros conh
 
 JPG/PNG/WEBP de recibos até 5 MB usam `OPENAI_VISION_MODEL`: a imagem gera prévia pendente; “confirmar” não comprova pagamento. O usuário marca como pago no app depois de conferir. Imagens ilegíveis ou sem valor/data confiáveis pedem esclarecimento. Não há conteúdo de imagem em logs.
 
-As respostas do bot são texto com listas legíveis no WhatsApp. Envio de gráficos ou imagens gerados pelo Nexo ainda não está implementado.
+Pedidos de resumo, comparação de gastos e metas podem receber gráficos PNG calculados pelo Nexo, com legenda em texto para preservar os valores exatos. Pedidos explícitos de “crie uma imagem”, “gere uma foto” ou “faça um desenho” usam o modelo `OPENAI_IMAGE_MODEL` (padrão `gpt-image-2.5-flare`) e enviam o JPEG pelo Media Upload API da Meta. Cada geração consome a cota/crédito OpenAI da conta; o webhook limita essas solicitações a três por minuto por usuário. Não enviamos dados financeiros ao gerador de imagens.
 
 Quando o processamento pode levar alguns segundos, o webhook marca a mensagem como lida e mostra o indicador nativo de digitação da Meta. Ele expira após 25 segundos ou quando a resposta chega.
 
