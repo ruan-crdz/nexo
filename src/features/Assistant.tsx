@@ -9,7 +9,8 @@ import {
   useMoneyDisplay,
 } from '../design-system/financial-visibility';
 import { invoke } from '../data/client';
-import { personalSummary, weeklyPlan } from '../../shared/insights';
+import { goalMonthlyBudget, goalMonthlyPlan } from '../../shared/journey';
+import { civilDate } from '../../shared/financial-engine';
 import { Badge, Brand, Button, PageHeader, Why } from '../design-system/components';
 
 type Reply = {
@@ -20,15 +21,32 @@ type Reply = {
   engine_version: string;
 };
 type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; reply?: Reply };
+export function TypingIndicator() {
+  return (
+    <div className="nexo-typing" role="status" aria-label="Nexo está digitando">
+      <span aria-hidden="true" />
+      <span aria-hidden="true" />
+      <span aria-hidden="true" />
+    </div>
+  );
+}
 const labels: Record<string, string> = {
-  balance: 'Saldo',
+  balance: 'Saldo estimado nos registros',
+  recorded_surplus: 'Resultado dos movimentos',
+  protected_goals: 'Protegido em metas',
+  goal_name: 'Meta em foco',
+  goal_saved: 'Guardado na meta',
+  goal_remaining: 'Falta para a meta',
+  goal_deadline: 'Prazo da meta',
+  goal_monthly_required: 'Cota mensal para o prazo',
+  goal_next_contribution: 'Próximo aporte que cabe agora',
   income: 'Entradas',
   expenses: 'Saídas',
   free: 'Livre para planejar',
   reserve: 'Reserva',
   debt: 'Dívidas',
   net_worth: 'Patrimônio líquido',
-  upcoming_bills: 'Contas previstas',
+  upcoming_bills: 'Reservado para despesas',
   score: 'Nexo Score',
   cash: 'Caixa',
   revenue: 'Receita',
@@ -59,17 +77,20 @@ export function AssistantPage() {
     try {
       let reply: Reply;
       if (app.demo) {
-        const s = personalSummary(app.data);
+        const today = civilDate(new Date(), app.data.profile.timezone);
+        const budget = goalMonthlyBudget(app.data, today, app.data.profile.timezone);
+        const goal =
+          app.data.goals.find((item) => item.id === app.data.profile.active_goal_id) ??
+          app.data.goals.find((item) => item.saved < item.target);
+        const plan = goal
+          ? goalMonthlyPlan(goal, today, budget.available, budget.contributed[goal.id] ?? 0)
+          : null;
         reply = {
-          answer: `Esta é uma explicação local da demonstração, sem chamada de IA.\n\nSeu próximo marco: ${s.milestone.title}.\n\n${weeklyPlan(
-            app.data,
-          )
-            .map((p, i) => `${i + 1}. ${p.title}`)
-            .join('\n')}\n\nPara avaliar uma compra específica, abra “Futuro se…”.`,
+          answer: `Esta é uma leitura local dos dados de exemplo, sem chamada de IA.\n\n${goal && plan ? (plan.remaining === 0 ? `Você já atingiu a meta ${goal.name}. Pode revisar o objetivo ou manter o valor protegido.` : plan.required === 0 ? `A cota deste mês para ${goal.name} já foi cumprida. Você pode manter o valor protegido sem se pressionar por outro aporte.` : plan.suggested > 0 ? `Para ${goal.name}, faltam ${displayMoney(plan.remaining)}. Pelas anotações atuais, cabe um próximo aporte de ${displayMoney(plan.suggested)} neste mês.${plan.gap > 0 ? ' O prazo pede mais que a sobra atual; você pode ajustar o prazo ou o valor da meta.' : ''}` : `Para ${goal.name}, ainda faltam ${displayMoney(plan.remaining)}, mas não há sobra registrada para um novo aporte agora. Confira as despesas e ajuste o prazo sem comprometer o essencial.`) : `Há ${displayMoney(budget.available)} livres para planejar. Antes de escolher uma meta, confira as contas e necessidades ainda não registradas.`}\n\nNão é saldo bancário confirmado. Para avaliar uma compra, use “Posso gastar?”.`,
           metrics: {
-            balance: displayMoney(s.balance),
-            free: displayMoney(s.free),
-            reserve: displayMoney(s.reserve),
+            recorded_surplus: displayMoney(budget.net),
+            free: displayMoney(budget.available),
+            upcoming_bills: displayMoney(budget.reservedExpenses),
           },
           sources: [],
           evidence_status: 'demo',
@@ -79,6 +100,9 @@ export function AssistantPage() {
         reply = await invoke<Reply>('ai-chat', {
           question,
           save_history: saveHistory,
+          history: messages
+            .slice(-6)
+            .map((message) => ({ role: message.role, content: message.text.slice(0, 2000) })),
           ...(business && app.organizationId ? { organization_id: app.organizationId } : {}),
         });
       }
@@ -88,7 +112,7 @@ export function AssistantPage() {
       ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível responder.');
-      setInput(question);
+      setInput((current) => (current.trim() ? current : question));
     } finally {
       setPending(false);
     }
@@ -115,11 +139,7 @@ export function AssistantPage() {
         eyebrow="Nexo"
         title="O que você quer entender?"
         description="Respostas claras, com cálculos e registros que você pode conferir."
-        action={
-          <Badge tone="green">
-            {app.demo ? 'Explicação local · demo' : 'IA + motor financeiro + fontes'}
-          </Badge>
-        }
+        action={<Badge tone="green">{app.demo ? 'Dados de exemplo' : 'Seus registros'}</Badge>}
       />
       <section className="assistant-experience">
         {!messages.length && (
@@ -146,7 +166,14 @@ export function AssistantPage() {
             <div className={`chat-message ${m.role}`} key={m.id}>
               <small className="muted">{m.role === 'user' ? 'Você' : 'Nexo'}</small>
               {m.role === 'assistant' && m.reply ? (
-                <h2>{visible ? m.text : redactFinancialText(m.text)}</h2>
+                <div className="chat-answer">
+                  {(visible ? m.text : redactFinancialText(m.text))
+                    .split(/\n\s*\n/)
+                    .filter(Boolean)
+                    .map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                </div>
               ) : (
                 <p>{visible ? m.text : redactFinancialText(m.text)}</p>
               )}
@@ -177,7 +204,9 @@ export function AssistantPage() {
                       <p>
                         {app.demo
                           ? 'Modo demonstração: sem busca RAG ou recomendação de IA.'
-                          : 'Não houve evidência suficiente para uma orientação específica.'}
+                          : m.reply.evidence_status === 'records'
+                            ? 'Resposta baseada nos seus registros e nos cálculos do Nexo. Não foi usada uma fonte externa para esta leitura.'
+                            : 'Não há fonte externa verificada para a recomendação específica; os registros abaixo continuam disponíveis para conferência.'}
                       </p>
                     )}
                   </Why>
@@ -186,11 +215,7 @@ export function AssistantPage() {
             </div>
           ))}
         </div>
-        {pending && (
-          <p className="muted" role="status" style={{ padding: 20 }}>
-            Preparando uma resposta com contexto…
-          </p>
-        )}
+        {pending && <TypingIndicator />}
         {error && (
           <p className="error-message" role="alert">
             {error}
@@ -210,13 +235,14 @@ export function AssistantPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-          <label className="button button-secondary">
+          <label className="button button-secondary" title="Enviar áudio para transcrição">
             <Mic size={18} />
             <input
               type="file"
               accept="audio/*"
               className="sr-only"
               aria-label="Enviar áudio para transcrição"
+              disabled={pending}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) void audio(file);

@@ -591,6 +591,22 @@ test('Home mantém o resultado legível e sem rolagem horizontal em mobile e des
   }
 });
 
+test('Nexo responde em parágrafos com o valor livre da Home e poucas métricas', async ({ page }) => {
+  const free = await page.locator('.home-month-result strong').innerText();
+  await page
+    .getByRole('navigation', { name: 'Principal' })
+    .getByRole('link', { name: 'Perguntar ao Nexo', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Qual meu próximo passo?', exact: true }).click();
+  const answer = page.locator('.chat-message.assistant').first();
+  await expect(answer.locator('.chat-answer p').first()).toBeVisible();
+  await expect(answer.locator('h2')).toHaveCount(0);
+  await expect(answer).not.toContainText('A base recuperada não sustenta');
+  await expect(answer).not.toContainText('Futuro se');
+  await expect(answer.locator('.source-list').first()).toContainText(free);
+  await expect(answer.locator('.source-list').first().locator('> div')).toHaveCount(3);
+});
+
 test('Home mantém um único CTA principal, um insight opcional e uma meta', async ({ page }) => {
   await expect(page.locator('.home-whatsapp-cta')).toBeVisible();
   await expect(page.locator('.home-insight').count()).resolves.toBeLessThanOrEqual(1);

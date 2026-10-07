@@ -188,7 +188,7 @@ export async function generateWhatsAppImage(prompt: string) {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-export async function embed(text: string): Promise<number[]> {
+export async function embed(text: string, signal?: AbortSignal): Promise<number[]> {
   const response = await safeFetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
@@ -197,6 +197,7 @@ export async function embed(text: string): Promise<number[]> {
       input: text.slice(0, 8000),
       dimensions: 1536,
     }),
+    signal,
   });
   const result = await response.json();
   const vector = result.data?.[0]?.embedding;

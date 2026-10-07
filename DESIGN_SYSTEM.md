@@ -21,6 +21,8 @@ Home: valor livre para planejar e composição (resultado bruto, metas protegida
 
 Metas: o plano mensal é a informação principal, com prazo, progresso total, cota necessária, aportes registrados e próximo aporte limitado pela capacidade estimada. Marcos ficam em detalhes opcionais. A prévia não grava nada; guardar exige confirmar o que aconteceu. Valores já guardados não viram uma despesa duplicada, mas reduzem a parcela livre para planejar.
 
+Chat Nexo: respostas em parágrafos, sem usar títulos grandes para a explicação; poucas métricas relevantes em corpo legível. O indicador de espera tem três pontos com salto escalonado, dimensões estáveis e status acessível. Em movimento reduzido, os pontos ficam estáticos. O campo de pergunta ocupa a largura disponível, com ações de enviar e transcrever por ícone.
+
 Planejar: seções verticais para próximas contas, limites, metas e recorrências. Movimentos possui busca, período, tipo, origem e status pendente. Anotar abre uma folha de ações no mobile e um diálogo no desktop; a entrada manual reusa `MoneyForm`. IA, recibo e importação mantêm confirmação/revisão existente.
 
 Empresa, pontuação e projeções antigas continuam fora das rotas pessoais públicas. Rotas compatíveis não foram removidas durante a reorganização. O resumo mensal explicita que não é saldo bancário e exclui previsões e datas futuras.

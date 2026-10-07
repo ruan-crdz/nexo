@@ -118,7 +118,7 @@ export function serve(handler: (request: Request) => Promise<Response>) {
   });
 }
 export async function safeFetch(url: string, init: RequestInit) {
-  const response = await fetch(url, { ...init, signal: AbortSignal.timeout(45_000) });
+  const response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(45_000) });
   if (!response.ok) throw new HttpError(502, 'Serviço externo indisponível. Tente novamente.');
   return response;
 }

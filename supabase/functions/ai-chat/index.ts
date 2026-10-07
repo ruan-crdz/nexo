@@ -8,9 +8,15 @@ serve(async (request) => {
       question: z.string().trim().min(2).max(2000),
       organization_id: z.string().uuid().optional(),
       save_history: z.boolean().default(false),
+      history: z
+        .array(
+          z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(2000) }).strict(),
+        )
+        .max(6)
+        .default([]),
     })
     .parse(await body(request));
-  const result = await advise(db, user.id, input.question, input.organization_id);
+  const result = await advise(db, user.id, input.question, input.organization_id, input.history);
   if (input.save_history) {
     const saved = await service.from('ai_messages').insert([
       { user_id: user.id, role: 'user', content: input.question },

@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.07.5",
+  "version": "2026.10.07.6",
   "changes": [
     "Experiência: Metas, Planejar e Nexo acessíveis diretamente no menu; perfil pelo avatar no celular, olho e Proteção.",
     "Início: resultado do mês, CTA WhatsApp, dois atalhos, um insight, uma meta e até três movimentos; gráficos e alertas saíram da primeira tela.",
@@ -17,6 +17,8 @@
     "WhatsApp: o aviso agora distingue mensagem processada de resposta não entregue e recomenda conferir antes de reenviar.",
     "WhatsApp: fotos criadas sob pedido e gráficos financeiros enviados como imagem com Manrope e cores Nexo; avaliação de compra reaproveita dados do app.",
     "Metas: plano mensal por valor e prazo, aporte limitado pela sobra atual, cota já cumprida e ajuste de prazo quando não cabe.",
-    "Início: livre para planejar desconta metas protegidas e despesas reservadas; o resultado dos movimentos permanece visível, sem criar gasto duplicado."
+    "Início: livre para planejar desconta metas protegidas e despesas reservadas; o resultado dos movimentos permanece visível, sem criar gasto duplicado.",
+    "Nexo: três pontos animados durante a resposta, com respeito à preferência de movimento reduzido.",
+    "Nexo: respostas em parágrafos, contexto entre perguntas e valor livre alinhado à Home; consultas sobre seus registros não são bloqueadas por falta de fonte externa."
   ]
 }
