@@ -6,6 +6,7 @@ import {
   isFinancialQuestion,
 } from '../../shared/financial-questions';
 import type { Transaction } from '../../shared/domain';
+import { validateChatChange } from '../../shared/whatsapp-chat';
 const row = (changes: Partial<Transaction> = {}): Transaction => ({
   id: crypto.randomUUID(),
   description: 'Almoço',
@@ -17,6 +18,48 @@ const row = (changes: Partial<Transaction> = {}): Transaction => ({
   source: 'manual',
   account_id: null,
   ...changes,
+});
+it('chat prepara recorrência sem inventar vencimento e bloqueia campos privilegiados', () => {
+  const args = {
+    entity: 'recurring_rules',
+    action: 'create',
+    id: null,
+    values: JSON.stringify({
+      description: 'Internet',
+      amount: 15600,
+      category: 'Serviços',
+      active: true,
+      type: 'expense',
+      frequency: 'monthly',
+      end_date: null,
+      annual_adjustment_bps: 0,
+    }),
+  };
+  expect(() => validateChatChange(args, null)).toThrow();
+  const change = validateChatChange(
+    { ...args, values: JSON.stringify({ ...JSON.parse(args.values), start_date: '2026-10-15' }) },
+    null,
+  );
+  expect(change.payload).toMatchObject({ description: 'Internet', amount: 15600, start_date: '2026-10-15' });
+  expect(change.id).toBeTruthy();
+  expect(() => validateChatChange({ ...args, id: crypto.randomUUID() }, null)).toThrow(/identificador/);
+  expect(() =>
+    validateChatChange(
+      {
+        entity: 'profiles',
+        action: 'update',
+        id: crypto.randomUUID(),
+        values: '{"whatsapp_notifications":true}',
+      },
+      { name: 'Ruan' },
+    ),
+  ).toThrow();
+  expect(() =>
+    validateChatChange(
+      { entity: 'transactions', action: 'update', id: crypto.randomUUID(), values: '{"user_id":"outro"}' },
+      row(),
+    ),
+  ).toThrow();
 });
 it('respeita mês nomeado, ano e estabelecimento sem trocar pelo mês atual', () => {
   const january = row({ date: '2026-01-10', amount: 9900, description: 'Mercado Central' });

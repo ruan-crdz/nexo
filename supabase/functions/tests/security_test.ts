@@ -17,6 +17,7 @@ import {
 } from '../../../shared/whatsapp-link.ts';
 import { extractionDecision } from '../../../shared/extraction.ts';
 import { financeChartPng } from '../_shared/finance-chart-svg.ts';
+import { chatWithWhatsApp } from '../_shared/whatsapp-chat.ts';
 import {
   generateWhatsAppImage,
   parseSpendabilityMessage,
@@ -44,6 +45,175 @@ Deno.test('job financeiro exige credencial forte e nunca aceita autorização au
   } finally {
     if (previous === undefined) Deno.env.delete('FINANCIAL_JOB_SECRET');
     else Deno.env.set('FINANCIAL_JOB_SECRET', previous);
+  }
+});
+
+Deno.test('chat consulta o nome real com ferramenta e mantém contexto sem salvar movimento', async () => {
+  const names = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'OPENAI_CHAT_MODEL'];
+  const previous = names.map((name) => Deno.env.get(name));
+  const originalFetch = globalThis.fetch;
+  let modelCalls = 0;
+  let committed = false;
+  try {
+    ['https://chat.test', 'test-service-key', 'test-openai-key', 'test-model'].forEach((value, index) =>
+      Deno.env.set(names[index], value),
+    );
+    globalThis.fetch = async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.hostname === 'api.openai.com') {
+        const body = JSON.parse(String(init?.body));
+        assert.equal(body.store, false);
+        assert.ok(body.tools.some((tool: { name: string }) => tool.name === 'read_records'));
+        modelCalls++;
+        if (modelCalls === 1) {
+          assert.ok(
+            body.input.some(
+              (item: { content: string }) => item.content === 'Tenho uma conta recorrente, 156 de internet',
+            ),
+          );
+          return new Response(
+            JSON.stringify({
+              status: 'completed',
+              output: [
+                {
+                  type: 'function_call',
+                  call_id: 'call-name',
+                  name: 'read_records',
+                  arguments: JSON.stringify({ entity: 'profiles', start: null, end: null, search: null }),
+                },
+              ],
+            }),
+          );
+        }
+        const toolResult = body.input.find((item: { type: string }) => item.type === 'function_call_output');
+        assert.equal(JSON.parse(toolResult.output).records[0].name, 'Ruan');
+        return new Response(
+          JSON.stringify({
+            status: 'completed',
+            output: [
+              { type: 'message', content: [{ type: 'output_text', text: 'Seu nome no Nexo é Ruan.' }] },
+            ],
+          }),
+        );
+      }
+      assert.equal(url.hostname, 'chat.test');
+      if (url.pathname.endsWith('whatsapp_chat_sessions') && init?.method !== 'POST')
+        return new Response(
+          JSON.stringify({
+            history: [
+              { role: 'user', content: 'Tenho uma conta recorrente, 156 de internet' },
+              { role: 'assistant', content: 'Qual é o vencimento e a frequência?' },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+      if (url.pathname.endsWith('whatsapp_chat_requests'))
+        return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+      if (url.pathname.endsWith('profiles')) {
+        assert.equal(url.searchParams.get('id'), 'eq.00000000-0000-4000-8000-00000000000a');
+        return new Response(
+          JSON.stringify([
+            {
+              id: '00000000-0000-4000-8000-00000000000a',
+              name: 'Ruan',
+              objective: 'Organizar',
+              monthly_income: 0,
+              fixed_expenses: 0,
+              dependents: 0,
+              variable_income: false,
+              insured: false,
+              timezone: 'America/Sao_Paulo',
+              active_goal_id: null,
+              show_journey_points: false,
+              checkin_frequency: 'weekly',
+              journey_pause_until: null,
+              journey_mode: 'steady',
+            },
+          ]),
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.pathname.endsWith('whatsapp_chat_sessions') && init?.method === 'POST')
+        return new Response('', { status: 201 });
+      throw new Error(`Unexpected tool request: ${url.pathname}`);
+    };
+    const reply = await chatWithWhatsApp('Qual meu nome?', {
+      userId: '00000000-0000-4000-8000-00000000000a',
+      phone: '5511999997777',
+      messageId: 'test-chat',
+      today: '2026-10-07',
+      onCommit: () => {
+        committed = true;
+      },
+    });
+    assert.equal(reply, 'Seu nome no Nexo é Ruan.');
+    assert.equal(modelCalls, 2);
+    assert.equal(committed, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, previous[index]!);
+    });
+  }
+});
+Deno.test('chat avisa confirmação mesmo quando a IA falha depois da gravação', async () => {
+  const names = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'OPENAI_CHAT_MODEL'];
+  const previous = names.map((name) => Deno.env.get(name));
+  const originalFetch = globalThis.fetch;
+  let modelCalls = 0;
+  let committed = false;
+  try {
+    ['https://chat.test', 'test-service-key', 'test-openai-key', 'test-model'].forEach((value, index) =>
+      Deno.env.set(names[index], value),
+    );
+    globalThis.fetch = async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.hostname === 'api.openai.com') {
+        if (++modelCalls > 1) return new Response('{}', { status: 503 });
+        return new Response(
+          JSON.stringify({
+            status: 'completed',
+            output: [
+              {
+                type: 'function_call',
+                call_id: 'confirm',
+                name: 'confirm_change',
+                arguments: '{"proposal_id":"00000000-0000-4000-8000-000000000123"}',
+              },
+            ],
+          }),
+        );
+      }
+      const headers = { 'Content-Type': 'application/json' };
+      if (url.pathname.endsWith('whatsapp_chat_sessions'))
+        return init?.method === 'POST'
+          ? new Response('', { status: 201 })
+          : new Response('null', { headers });
+      if (url.pathname.endsWith('whatsapp_chat_requests')) return new Response('[]', { headers });
+      if (url.pathname.endsWith('confirm_whatsapp_chat')) {
+        assert.equal(JSON.parse(String(init?.body)).owner, '00000000-0000-4000-8000-00000000000a');
+        return new Response('{"status":"applied","message":"Registro salvo."}', { headers });
+      }
+      throw new Error('Unexpected request');
+    };
+    const reply = await chatWithWhatsApp('Pode salvar', {
+      userId: '00000000-0000-4000-8000-00000000000a',
+      phone: '5511999997777',
+      messageId: 'confirm-turn',
+      today: '2026-10-07',
+      onCommit: () => {
+        committed = true;
+      },
+    });
+    assert.equal(committed, true);
+    assert.match(reply, /alteração foi confirmada/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, previous[index]!);
+    });
   }
 });
 Deno.test('aviso usa template com parâmetro e retorna aceite sem fingir entrega', async () => {
@@ -93,7 +263,7 @@ Deno.test('mensagem pronta vincula sem aceitar códigos incompletos ou texto arb
   assert.equal(url.hostname, 'wa.me');
   assert.equal(url.searchParams.get('text'), message);
   assert.throws(() => whatsappUrl('+55 11 99999-9999', message));
-  for (const instruction of ['áudio', 'Histórico', 'desfazer', '24 horas', 'ajuda']) {
+  for (const instruction of ['áudio', 'Histórico', 'confirmação', 'dez minutos', 'perfil']) {
     assert.ok(whatsappWelcome.includes(instruction));
   }
 });

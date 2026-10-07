@@ -10,6 +10,8 @@ Demo: somente dados fictícios em localStorage neste navegador. Conta real: Supa
 
 WhatsApp envolve também a Meta. Não há garantia de apagar cópias mantidas por usuários, dispositivos, backups ou fornecedores externos. Áudios baixados são mantidos apenas em memória durante a requisição.
 
+O chat do WhatsApp usa até oito mensagens recentes como contexto temporário, que expira após dez minutos de inatividade. O modelo recebe esse contexto e resultados limitados das ferramentas, não acesso livre ao banco. Nome/perfil e registros financeiros podem ser enviados ao provedor quando necessários à pergunta. Esse contexto temporário não é o histórico opt-in do assistente no app.
+
 ## Controle do titular
 
 - Exportar registros em JSON; CSV nas listagens.
@@ -24,6 +26,8 @@ WhatsApp envolve também a Meta. Não há garantia de apagar cópias mantidas po
 `prune_ephemeral_data`, agendada diariamente, remove tokens expirados, conteúdo pendente de confirmação após dez minutos, texto de resposta após vinte e quatro horas, metadados de WhatsApp após trinta dias e contadores antigos após um dia. Esses prazos são defaults técnicos e precisam de revisão. A execução diária pode ultrapassar o limiar por até um ciclo do agendador. Sem cron, nada é apagado automaticamente.
 
 Registros financeiros permanecem até exclusão pelo usuário; backup pode reter cópias conforme plano e configuração do projeto. Logs não devem receber conteúdo financeiro nem segredos. Auditoria empresarial contém antes/depois e deve ser tratada como dado sensível, acessível apenas a owner/admin.
+
+Sessões e propostas pendentes do chat ficam inutilizáveis após dez minutos e são removidas fisicamente na próxima entrada de webhook por `prune_whatsapp_chat`. Sem novas entradas, dados expirados podem permanecer armazenados. Propostas aplicadas ficam vinculadas aos metadados para idempotência e são removidas em cascata quando esses metadados forem apagados pela limpeza de trinta dias. Exclusão da conta remove sessões e propostas por cascata.
 
 ## Transparência
 

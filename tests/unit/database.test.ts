@@ -38,6 +38,7 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610050003_operations_upgrade.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050004_goal_journey.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610050005_notification_operations.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610070001_whatsapp_chat.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -49,6 +50,138 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('chat confirma recorrência uma vez, exige outro turno e isola o proprietário', async () => {
+    await db.exec('reset role');
+    await db.query(
+      "insert into whatsapp_connections(user_id,phone,consent_at) values($1,'5511999997777',now()) on conflict(user_id) do update set phone=excluded.phone,consent_at=excluded.consent_at",
+      [alice],
+    );
+    await db.query(
+      "insert into whatsapp_messages_metadata(message_id,user_id) values('chat-proposal',$1),('chat-confirm',$1),('chat-other',$2)",
+      [alice, bob],
+    );
+    const identifier = crypto.randomUUID();
+    const proposal = crypto.randomUUID();
+    await db.query(
+      "insert into whatsapp_chat_requests(id,user_id,message_id,entity,action,record_id,payload) values($1,$2,'chat-proposal','recurring_rules','create',$3,$4)",
+      [
+        proposal,
+        alice,
+        identifier,
+        JSON.stringify({
+          id: identifier,
+          description: 'Internet',
+          amount: 15600,
+          category: 'Serviços',
+          start_date: '2026-10-15',
+          active: true,
+          type: 'expense',
+          frequency: 'monthly',
+          end_date: null,
+          annual_adjustment_bps: 0,
+        }),
+      ],
+    );
+    await expect(
+      db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-proposal',$2)", [alice, proposal]),
+    ).rejects.toThrow(/another message/);
+    await expect(
+      db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-other',$2)", [alice, proposal]),
+    ).rejects.toThrow(/ownership/);
+    const first = await db.query<{ result: { status: string } }>(
+      "select confirm_whatsapp_chat($1,'5511999997777','chat-confirm',$2) result",
+      [alice, proposal],
+    );
+    expect(first.rows[0].result.status).toBe('applied');
+    await db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-confirm',$2)", [alice, proposal]);
+    const rows = await db.query<{ amount: number }>(
+      'select amount from recurring_rules where id=$1 and user_id=$2',
+      [identifier, alice],
+    );
+    expect(rows.rows).toHaveLength(1);
+    expect(Number(rows.rows[0].amount)).toBe(15600);
+    await asUser(alice);
+    await expect(db.query('select * from whatsapp_chat_sessions')).rejects.toThrow(/permission denied/);
+    await expect(
+      db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-confirm',$2)", [alice, proposal]),
+    ).rejects.toThrow(/permission denied/);
+    await db.exec('reset role');
+  });
+  it('chat rejeita proposta expirada, registro alterado e registro de outro usuário', async () => {
+    await db.exec('reset role');
+    const record = crypto.randomUUID();
+    await db.query(
+      "insert into transactions(id,user_id,description,amount,type,category,date) values($1,$2,'Registro chat',1000,'expense','Outros','2026-10-07')",
+      [record, alice],
+    );
+    const snapshot = (
+      await db.query<{ data: Record<string, unknown> }>(
+        'select to_jsonb(t) data from transactions t where id=$1',
+        [record],
+      )
+    ).rows[0].data;
+    await db.query(
+      "insert into whatsapp_messages_metadata(message_id,user_id) values('chat-edit-proposal',$1),('chat-edit-confirm',$1)",
+      [alice],
+    );
+    const stale = crypto.randomUUID();
+    await db.query(
+      "insert into whatsapp_chat_requests(id,user_id,message_id,entity,action,record_id,payload,expected) values($1,$2,'chat-edit-proposal','transactions','update',$3,'{\"amount\":2000}',$4)",
+      [stale, alice, record, JSON.stringify(snapshot)],
+    );
+    await db.query('update transactions set amount=1500 where id=$1', [record]);
+    await expect(
+      db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-edit-confirm',$2)", [alice, stale]),
+    ).rejects.toThrow(/record changed/);
+    await db.query("update whatsapp_chat_requests set expires_at=now()-interval '1 minute' where id=$1", [
+      stale,
+    ]);
+    await expect(
+      db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-edit-confirm',$2)", [alice, stale]),
+    ).rejects.toThrow(/expired/);
+    const foreign = crypto.randomUUID();
+    const foreignRecord = crypto.randomUUID();
+    await db.query(
+      "insert into transactions(id,user_id,description,amount,type,category,date) values($1,$2,'Outro usuário',1000,'expense','Outros','2026-10-07')",
+      [foreignRecord, bob],
+    );
+    await db.query(
+      "insert into whatsapp_chat_requests(id,user_id,message_id,entity,action,record_id,payload) values($1,$2,'chat-edit-proposal','transactions','delete',$3,'{}')",
+      [foreign, alice, foreignRecord],
+    );
+    await expect(
+      db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-edit-confirm',$2)", [alice, foreign]),
+    ).rejects.toThrow(/ownership/);
+    const fresh = crypto.randomUUID();
+    const latest = (
+      await db.query<{ data: Record<string, unknown> }>(
+        'select to_jsonb(t) data from transactions t where id=$1',
+        [record],
+      )
+    ).rows[0].data;
+    await db.query(
+      "insert into whatsapp_messages_metadata(message_id,user_id) values('chat-valid-confirm',$1)",
+      [alice],
+    );
+    await db.query(
+      "insert into whatsapp_chat_requests(id,user_id,message_id,entity,action,record_id,payload,expected) values($1,$2,'chat-edit-proposal','transactions','update',$3,'{\"amount\":2000,\"status\":\"planned\"}',$4)",
+      [fresh, alice, record, JSON.stringify(latest)],
+    );
+    await db.query("select confirm_whatsapp_chat($1,'5511999997777','chat-valid-confirm',$2)", [
+      alice,
+      fresh,
+    ]);
+    const changed = (
+      await db.query<{ amount: number; status: string; description: string }>(
+        'select amount,status,description from transactions where id=$1',
+        [record],
+      )
+    ).rows[0];
+    expect(Number(changed.amount)).toBe(2000);
+    expect(changed.status).toBe('planned');
+    expect(changed.description).toBe('Registro chat');
+    await db.query('delete from transactions where id=any($1::uuid[])', [[record, foreignRecord]]);
+  });
   it('usuário não lê estado interno nem configura o agendamento de avisos', async () => {
     await asUser(alice);
     await expect(db.query('select * from notification_runtime')).rejects.toThrow(/permission denied/);

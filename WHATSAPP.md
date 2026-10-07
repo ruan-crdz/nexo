@@ -2,6 +2,16 @@
 
 Integração com Meta WhatsApp Business Platform / Cloud API. Nenhum scraping ou automação de WhatsApp Web.
 
+## Chat com ferramentas
+
+Texto e áudio agora usam um chat conversacional com ferramentas. O modelo consulta perfil/registros reais, prepara alterações pessoais e pede confirmação antes de executá-las. Contexto e propostas expiram em dez minutos. A confirmação é transacional/idempotente e verifica vínculo, proprietário, registro atual e turno diferente da proposta.
+
+Aplicar `202610070001_whatsapp_chat.sql` antes de publicar `whatsapp-webhook`. Usar `OPENAI_CHAT_MODEL` com suporte a tools na Responses API; na ausência dele, usa o modelo de extração configurado. O processamento envia aviso de falha quando possível em vez de apenas retornar erro à Meta.
+
+A matriz completa de ações do app e pendências está em [docs/WHATSAPP-PARITY.md](docs/WHATSAPP-PARITY.md). Não há paridade total nesta revisão. Segurança, compartilhamento, empresa e várias operações especializadas ainda exigem o app. Lembretes proativos não são ativados.
+
+As descrições de comandos abaixo documentam o fluxo anterior e formatos de dados; texto/áudio não dependem mais deles. Escritas do novo chat sempre exigem confirmação, não usam gravação automática por confiança.
+
 ## Fluxo
 
 Webhook bruto → HMAC → validação do número de destino → claim idempotente → vínculo de conta → rate limit → texto ou mídia → extração estruturada → validação → confirmação/gravação → resposta.

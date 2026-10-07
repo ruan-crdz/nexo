@@ -1,21 +1,5 @@
 import { z } from 'zod';
-import { goalSchema, recurringRuleSchema, transactionSchema } from '../../../shared/domain.ts';
-import {
-  isFinancialQuestion,
-  isFinancialChartRequest,
-  isNextMonthForecastQuestion,
-  imageGenerationPrompt,
-  isSpendabilityQuestion,
-  answerFinancialQuestion,
-} from '../../../shared/financial-questions.ts';
-import {
-  merchantKey,
-  spendabilityAppAssumptions,
-  spendingAllowance,
-} from '../../../shared/financial-decisions.ts';
-import { readPages } from '../../../shared/pagination.ts';
-import { accountSchema } from '../../../shared/domain.ts';
-import { recurringTransactions } from '../../../shared/planning.ts';
+import { merchantKey } from '../../../shared/financial-decisions.ts';
 import { admin, env, HttpError, json } from '../_shared/http.ts';
 import {
   downloadMedia,
@@ -26,18 +10,9 @@ import {
   verifySignature,
 } from '../_shared/whatsapp.ts';
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
-import {
-  parseSpendabilityMessage,
-  parseTransaction,
-  spendabilityContextSchema,
-  generateWhatsAppImage,
-  transcribe,
-  readReceipt,
-} from '../_shared/openai.ts';
-import { civilDate, formatMoney, shiftDays, shiftMonths, sum } from '../../../shared/financial-engine.ts';
-import { monthlyFlow } from '../../../shared/insights.ts';
-import { financeChartPng } from '../_shared/finance-chart-svg.ts';
-import { isSummaryRequest, whatsappMonthSummary } from '../../../shared/whatsapp-summary.ts';
+import { transcribe, readReceipt } from '../_shared/openai.ts';
+import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
+import { chatWithWhatsApp } from '../_shared/whatsapp-chat.ts';
 
 const messageSchema = z.object({
   id: z.string().min(1).max(300),
@@ -89,70 +64,6 @@ function whatsappDate(date: string) {
     timeZone: 'UTC',
   }).format(new Date(`${date}T12:00:00Z`));
 }
-function spendabilityMissing(context: z.infer<typeof spendabilityContextSchema>) {
-  const missing: string[] = [];
-  if (context.purchase_amount === null) missing.push('o preço total da compra');
-  if (context.cash === null) missing.push('quanto dinheiro está disponível hoje');
-  if (context.next_income_date === null) missing.push('a data do próximo recebimento');
-  if (context.estimated_income === null) missing.push('o valor esperado desse recebimento (ou R$ 0)');
-  if (context.protected_reserve === null) missing.push('quanto quer manter como reserva (ou R$ 0)');
-  if (context.goal_allocation === null) missing.push('quanto já separou para metas (ou R$ 0)');
-  return missing;
-}
-function spendabilityPrompt(context: z.infer<typeof spendabilityContextSchema>) {
-  const missing = spendabilityMissing(context);
-  const purchase = context.purchase ? ` para ${context.purchase}` : ' para essa compra';
-  const price = context.purchase_amount === null ? '' : ` de ${formatMoney(context.purchase_amount)}`;
-  const known = [
-    ...(context.purchase ? [`Produto: ${context.purchase}.`] : []),
-    ...(context.purchase_amount !== null ? [`Preço total: ${formatMoney(context.purchase_amount)}.`] : []),
-    ...(context.cash !== null ? [`Saldo disponível informado: ${formatMoney(context.cash)}.`] : []),
-    ...(context.next_income_date
-      ? [`Próximo recebimento no app: ${whatsappDate(context.next_income_date)}.`]
-      : []),
-    ...(context.estimated_income !== null
-      ? [
-          `${context.income_source === 'profile' ? 'Renda mensal do perfil' : 'Valor previsto'}: ${formatMoney(context.estimated_income)}${context.income_source === 'user' ? ' (informado por você)' : ''}.`,
-        ]
-      : []),
-    ...(context.protected_reserve !== null
-      ? [`Reserva informada: ${formatMoney(context.protected_reserve)}.`]
-      : []),
-    ...(context.goal_allocation !== null
-      ? [
-          `${context.goal_allocation_source === 'app' ? 'Já guardado nas metas do app' : 'Separado para metas'}: ${formatMoney(context.goal_allocation)}.`,
-        ]
-      : []),
-  ];
-  const available = known.length
-    ? `Já encontrei no seu Nexo:\n${known.map((item) => `• ${item}`).join('\n')}\n\n`
-    : '';
-  return `Consigo avaliar${purchase}${price}. ${known.length ? 'Confira os dados que encontrei e me diga se algo mudou.' : ''}\n\nAinda preciso de:\n${missing.map((item) => `• ${item}`).join('\n')}\n\n${available}Pode responder em uma mensagem, por exemplo: “Disponível hoje R$ 12.000; reserva R$ 2.000.”`;
-}
-async function spendabilityAppContext(userId: string, today: string, monthlyIncome: number) {
-  const db = admin();
-  const [transactionRows, goalRows, recurringRows] = await Promise.all([
-    readPages((from, to) =>
-      db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
-    ),
-    readPages((from, to) => db.from('goals').select('*').eq('user_id', userId).order('id').range(from, to)),
-    readPages((from, to) =>
-      db.from('recurring_rules').select('*').eq('user_id', userId).order('id').range(from, to),
-    ),
-  ]);
-  const transactions = transactionSchema.array().parse(transactionRows);
-  const goals = goalSchema.array().parse(goalRows);
-  const recurringRules = recurringRuleSchema.array().parse(recurringRows);
-  const projected = recurringTransactions(recurringRules, transactions, today);
-  return spendabilityContextSchema.parse({
-    kind: 'spendability',
-    purchase: null,
-    purchase_amount: null,
-    cash: null,
-    protected_reserve: null,
-    ...spendabilityAppAssumptions(goals, [...transactions, ...projected], monthlyIncome),
-  });
-}
 async function processMessage(message: Message) {
   const db = admin();
   const claim = await db.rpc('claim_whatsapp', { message_key: message.id });
@@ -202,137 +113,6 @@ async function processMessage(message: Message) {
     if (stored.error) throw new HttpError(503, 'Não foi possível registrar a resposta visual.');
     committed = true;
     await deliverImageReply(message.id, message.from, image, reply, mimeType);
-  }
-  async function findPendingSpendability(userId: string) {
-    const pending = await db
-      .from('whatsapp_messages_metadata')
-      .select('message_id,pending_payload')
-      .eq('user_id', userId)
-      .eq('state', 'pending')
-      .gte('created_at', new Date(Date.now() - 10 * 60_000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(10);
-    if (pending.error) throw new HttpError(503, 'Não foi possível retomar a conversa.');
-    const match = pending.data.find(
-      (item) => spendabilityContextSchema.safeParse(item.pending_payload).success,
-    );
-    if (!match) return null;
-    const parsed = spendabilityContextSchema.safeParse(match.pending_payload);
-    return parsed.success ? { messageId: match.message_id, context: parsed.data } : null;
-  }
-  async function closePendingSpendability(messageId: string) {
-    const closed = await db
-      .from('whatsapp_messages_metadata')
-      .update({ state: 'complete', pending_payload: null, updated_at: new Date().toISOString() })
-      .eq('message_id', messageId);
-    if (closed.error) throw new HttpError(503, 'Não foi possível encerrar a avaliação pendente.');
-  }
-  async function holdSpendability(
-    context: z.infer<typeof spendabilityContextSchema>,
-    userId: string,
-    previousMessageId?: string,
-  ) {
-    if (previousMessageId && previousMessageId !== message.id)
-      await closePendingSpendability(previousMessageId);
-    const reply = spendabilityPrompt(context);
-    const stored = await db
-      .from('whatsapp_messages_metadata')
-      .update({
-        user_id: userId,
-        state: 'pending',
-        pending_payload: context,
-        reply,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('message_id', message.id);
-    if (stored.error) throw new HttpError(503, 'Não foi possível guardar as premissas da conversa.');
-    committed = true;
-    await deliverReply(message.id, message.from, reply);
-  }
-  async function answerSpendability(
-    context: z.infer<typeof spendabilityContextSchema>,
-    userId: string,
-    today: string,
-    pendingMessageId?: string,
-  ) {
-    const rows = transactionSchema
-      .array()
-      .parse(
-        await readPages((from, to) =>
-          db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
-        ),
-      );
-    let decision: ReturnType<typeof spendingAllowance>;
-    try {
-      decision = spendingAllowance(
-        {
-          cash: context.cash!,
-          confirmed_on: today,
-          next_income_date: context.next_income_date!,
-          protected_amount: context.protected_reserve!,
-          goal_amount: context.goal_allocation!,
-          estimated_income: context.estimated_income!,
-        },
-        rows,
-        today,
-      );
-    } catch {
-      await finish(
-        'Não consegui validar essa data de recebimento. Envie uma data futura, dentro dos próximos 12 meses.',
-        userId,
-      );
-      return;
-    }
-    if (pendingMessageId) await closePendingSpendability(pendingMessageId);
-    if (decision.needs_confirmation) {
-      await finish(
-        'Encontrei gastos sem conta vinculada e não consigo confirmar se o saldo informado está atualizado. Confira seus registros no app antes de decidir.',
-        userId,
-      );
-      return;
-    }
-    const remaining = decision.allowed - context.purchase_amount!;
-    const incomeSource =
-      context.income_source === 'planned'
-        ? 'renda de um recebimento planejado no app'
-        : context.income_source === 'profile'
-          ? 'renda mensal cadastrada no seu perfil'
-          : 'renda esperada que você informou';
-    const goalSource =
-      context.goal_allocation_source === 'app'
-        ? `${formatMoney(context.goal_allocation!)} já guardados nas metas do app`
-        : `${formatMoney(context.goal_allocation!)} separados para metas, como você informou`;
-    const lines = [
-      remaining >= 0
-        ? `Pelas premissas que você informou, a compra de ${formatMoney(context.purchase_amount!)} cabe. Depois dela, restariam ${formatMoney(remaining)} até o próximo recebimento.`
-        : `Com essas premissas, a compra não cabe sem mexer no dinheiro protegido. Faltariam ${formatMoney(Math.abs(remaining))} para cobrir o valor.`,
-      `Considerei ${formatMoney(context.cash!)} disponíveis hoje, ${formatMoney(context.protected_reserve!)} de reserva, ${goalSource} e as contas até ${whatsappDate(context.next_income_date!)}.`,
-      `Também encontrei ${formatMoney(context.estimated_income!)} em ${incomeSource}; esse valor não foi somado como dinheiro já recebido.`,
-      'É uma estimativa baseada nos valores que você informou; gastos não anotados podem mudar o resultado.',
-    ];
-    if (decision.bills.length)
-      lines.push(
-        '',
-        'Contas consideradas:',
-        ...decision.bills
-          .slice(0, 5)
-          .map((bill) => `• ${bill.description} · ${whatsappDate(bill.date)} · ${formatMoney(bill.amount)}`),
-      );
-    const chart = await financeChartPng({
-      title: 'Avaliação da compra',
-      subtitle: context.purchase ?? 'Compra consultada',
-      items: [
-        { label: 'Disponível após contas', value: decision.allowed, tone: 'income' },
-        { label: 'Preço da compra', value: context.purchase_amount!, tone: 'expense' },
-        {
-          label: remaining >= 0 ? 'Restaria' : 'Faltaria',
-          value: Math.abs(remaining),
-          tone: remaining >= 0 ? 'neutral' : 'warning',
-        },
-      ],
-      footer: 'Estimativa com as premissas informadas',
-    });
-    await finishImage(chart, lines.join('\n'), userId, 'image/png');
   }
   try {
     let text = message.text?.body?.trim() ?? '';
@@ -451,407 +231,52 @@ async function processMessage(message: Message) {
       );
       return;
     }
-    if (/^(?:ajuda|menu|oi|ola|olá|tutorial)[!.\s]*$/i.test(text)) {
-      await finish(whatsappWelcome, userId);
-      return;
-    }
-    if (isSummaryRequest(text)) {
-      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
-      const rows = await readPages((from, to) =>
-        db
-          .from('transactions')
-          .select('*')
-          .eq('user_id', userId)
-          .gte('date', `${today.slice(0, 7)}-01`)
-          .lte('date', today)
-          .order('id')
-          .range(from, to),
-      );
-      const transactions = transactionSchema.array().parse(rows);
-      const summary = whatsappMonthSummary(transactions, today);
-      const flow = monthlyFlow(transactions, today.slice(0, 7));
-      const month = new Intl.DateTimeFormat('pt-BR', {
-        month: 'long',
-        year: 'numeric',
-        timeZone: 'UTC',
-      }).format(new Date(`${today.slice(0, 7)}-01T12:00:00Z`));
-      const chart = await financeChartPng({
-        title: 'Resumo do mês',
-        subtitle: month,
-        items: [
-          { label: 'Entrou', value: flow.income, tone: 'income' },
-          { label: 'Saiu', value: flow.expenses, tone: 'expense' },
-          {
-            label: flow.net < 0 ? 'Faltou' : 'Sobrou',
-            value: Math.abs(flow.net),
-            tone: flow.net < 0 ? 'warning' : 'neutral',
-          },
-        ],
-        footer: 'Valores anotados no Nexo · Não é saldo bancário',
-      });
-      await finishImage(chart, summary, userId, 'image/png');
-      return;
-    }
-    if (isFinancialQuestion(text)) {
-      if (isSpendabilityQuestion(text)) {
-        const pending = await findPendingSpendability(userId);
-        const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
-        const [automatic, extracted] = await Promise.all([
-          spendabilityAppContext(userId, today, profile.data.monthly_income),
-          parseSpendabilityMessage(text, today, null, userId),
-        ]);
-        const context = spendabilityContextSchema.parse({
-          ...extracted,
-          next_income_date: extracted.next_income_date ?? automatic.next_income_date,
-          estimated_income: extracted.estimated_income ?? automatic.estimated_income,
-          income_source: extracted.estimated_income !== null ? 'user' : automatic.income_source,
-          goal_allocation: extracted.goal_allocation ?? automatic.goal_allocation,
-          goal_allocation_source:
-            extracted.goal_allocation !== null ? 'user' : automatic.goal_allocation_source,
-        });
-        if (spendabilityMissing(context).length) await holdSpendability(context, userId, pending?.messageId);
-        else await answerSpendability(context, userId, today, pending?.messageId);
-        return;
-      }
-      const forecastQuestion = isNextMonthForecastQuestion(text);
-      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
-      const forecastStart = shiftMonths(`${today.slice(0, 7)}-01`, 1);
-      const forecastEnd = shiftDays(shiftMonths(forecastStart, 1), -1);
-      const [rows, goals, accounts, recurringRows] = await Promise.all([
-        readPages((from, to) =>
-          db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
-        ),
-        readPages((from, to) =>
-          db.from('goals').select('*').eq('user_id', userId).order('id').range(from, to),
-        ),
-        readPages((from, to) =>
-          db.from('financial_accounts').select('*').eq('user_id', userId).order('id').range(from, to),
-        ),
-        forecastQuestion
-          ? readPages((from, to) =>
-              db.from('recurring_rules').select('*').eq('user_id', userId).order('id').range(from, to),
-            )
-          : Promise.resolve([]),
-      ]);
-      const transactions = transactionSchema.array().parse(rows);
-      const recurringRules = recurringRuleSchema.array().parse(recurringRows);
-      const occurrenceRows =
-        forecastQuestion && recurringRules.length
-          ? await readPages((from, to) =>
-              db
-                .from('recurring_occurrences')
-                .select('transaction_id')
-                .in(
-                  'rule_id',
-                  recurringRules.map((rule) => rule.id),
-                )
-                .gte('due_date', forecastStart)
-                .lte('due_date', forecastEnd)
-                .order('rule_id')
-                .order('due_date')
-                .range(from, to),
-            )
-          : [];
-      const reply = answerFinancialQuestion(
-        {
-          transactions,
-          goals: goalSchema.array().parse(goals),
-          financial_accounts: accountSchema.array().parse(accounts),
-          recurring_rules: recurringRules,
-          recurring_occurrences: occurrenceRows.flatMap((row) =>
-            row.transaction_id ? [row.transaction_id] : [],
-          ),
-        },
-        text,
-        today,
-      );
-      if (!reply)
-        throw new HttpError(422, 'Não consegui entender essa pergunta. Tente perguntar de outro jeito.');
-      const lines = [reply.answer, ...reply.calculation.slice(0, 8).map((line) => `• ${line}`)];
-      if (reply.records.length)
-        lines.push(
-          '',
-          'Lançamentos considerados:',
-          ...reply.records
-            .slice(0, 8)
-            .map(
-              (record) =>
-                `• ${forecastQuestion ? `${record.type === 'income' ? 'Entrada' : 'Gasto'} previsto · ` : ''}${record.description} · ${whatsappDate(record.date)} · ${formatMoney(record.amount)}`,
-            ),
-        );
-      if (reply.records.length > 8 || reply.calculation.length > 8)
-        lines.push('', 'Há mais detalhes no Histórico e em Perguntar ao Nexo no app.');
-      const normalized = text
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase();
-      let chartItems: {
-        label: string;
-        value: number;
-        maxValue?: number;
-        tone: 'income' | 'expense' | 'neutral' | 'warning';
-      }[];
-      let chartTitle = 'Consulta financeira';
-      if (/por que|porque|\bpq\b/.test(normalized) && /gastei.*mais/.test(normalized)) {
-        const currentStart = `${today.slice(0, 7)}-01`;
-        const previousEnd = shiftMonths(today, -1);
-        const previousStart = `${previousEnd.slice(0, 7)}-01`;
-        const current = sum(
-          reply.records
-            .filter((row) => row.date >= currentStart && row.date <= today)
-            .map((row) => row.amount),
-        );
-        const previous = sum(
-          reply.records
-            .filter((row) => row.date >= previousStart && row.date <= previousEnd)
-            .map((row) => row.amount),
-        );
-        chartTitle = 'Gastos por período';
-        chartItems = [
-          { label: 'Este mês', value: current, tone: 'expense' },
-          { label: 'Mesmo período do mês passado', value: previous, tone: 'neutral' },
-        ];
-      } else if (reply.goals.length) {
-        chartTitle = 'Progresso das metas';
-        chartItems = reply.goals.map((goal) => ({
-          label: goal.name,
-          value: goal.saved,
-          maxValue: goal.target,
-          tone: 'income',
-        }));
-      } else if (forecastQuestion) {
-        chartTitle = 'Previsões do próximo mês';
-        chartItems = [
-          {
-            label: 'Entradas previstas',
-            value: sum(reply.records.filter((row) => row.type === 'income').map((row) => row.amount)),
-            tone: 'income',
-          },
-          {
-            label: 'Gastos previstos',
-            value: sum(reply.records.filter((row) => row.type === 'expense').map((row) => row.amount)),
-            tone: 'expense',
-          },
-        ];
-      } else if (reply.records.length) {
-        chartTitle = 'Gastos por categoria';
-        const grouped = new Map<string, number>();
-        for (const record of reply.records)
-          grouped.set(record.category, (grouped.get(record.category) ?? 0) + record.amount);
-        chartItems = [...grouped.entries()]
-          .sort((first, second) => second[1] - first[1])
-          .slice(0, 6)
-          .map(([label, value]) => ({
-            label,
-            value,
-            tone: reply.records[0].type === 'income' ? 'income' : 'expense',
-          }));
-      } else {
-        chartItems = [{ label: 'SEM REGISTROS', value: 0, tone: 'neutral' }];
-      }
-      const canShowChart =
-        reply.records.length > 0 ||
-        reply.goals.length > 0 ||
-        isFinancialChartRequest(text) ||
-        /não encontrei (gastos pagos|entradas recebidas)/.test(reply.answer);
-      if (!canShowChart) {
-        await finish(lines.join('\n'), userId);
-        return;
-      }
-      const chartMonth = forecastQuestion
-        ? shiftMonths(`${today.slice(0, 7)}-01`, 1)
-        : `${today.slice(0, 7)}-01`;
-      const month = new Intl.DateTimeFormat('pt-BR', {
-        month: 'long',
-        year: 'numeric',
-        timeZone: 'UTC',
-      }).format(new Date(`${chartMonth}T12:00:00Z`));
-      const chart = await financeChartPng({
-        title: chartTitle,
-        subtitle: forecastQuestion ? month : `Até ${whatsappDate(today)} · ${month}`,
-        items: chartItems,
-        footer: 'Valores dos registros do Nexo',
-      });
-      const caption = [
-        reply.answer,
-        ...reply.calculation.slice(0, 3).map((line) => `• ${line}`),
-        ...(reply.records.length
-          ? [
-              'Lançamentos considerados:',
-              ...reply.records
-                .slice(0, 6)
-                .map(
-                  (record) =>
-                    `• ${record.description.replace(/\s+/g, ' ').slice(0, 48)} · ${whatsappDate(record.date)} · ${formatMoney(record.amount)}`,
-                ),
-              ...(reply.records.length > 6 ? ['Mais lançamentos em Histórico no app.'] : []),
-            ]
-          : []),
-      ].join('\n');
-      await finishImage(chart, caption, userId, 'image/png');
-      return;
-    }
-    const requestedImage = imageGenerationPrompt(text);
-    if (requestedImage) {
-      const imageLimit = await db.rpc('consume_rate_limit', {
-        subject: userId,
-        bucket_name: 'whatsapp-image',
-        max_requests: 3,
-      });
-      if (imageLimit.error || !imageLimit.data) {
-        await finish('Você já pediu algumas imagens agora. Aguarde um minuto e tente de novo.', userId);
-        return;
-      }
-      const typingRefresh = setInterval(() => void showTypingIndicator(message.id), 20_000);
+    if (message.type === 'text' || message.type === 'audio') {
+      const owned = await db
+        .from('whatsapp_messages_metadata')
+        .update({ user_id: userId })
+        .eq('message_id', message.id);
+      if (owned.error) throw new HttpError(503, 'Não consegui iniciar a conversa.');
+      let visual: { image: Uint8Array; mime: 'image/png' | 'image/jpeg' } | undefined;
+      const typingRefresh = setInterval(() => void showTypingIndicator(message.id), 20000);
       try {
-        const image = await generateWhatsAppImage(requestedImage);
-        await finishImage(
-          image,
-          'Aqui está a imagem que você pediu. A criação usa a cota de imagens do Nexo.',
+        const reply = await chatWithWhatsApp(text, {
           userId,
-          'image/jpeg',
-        );
-      } catch (error) {
-        if (committed) throw error;
-        await finish(
-          error instanceof HttpError
-            ? error.message
-            : 'Não consegui gerar essa imagem agora. Tente outra descrição.',
-          userId,
-        );
+          phone: message.from,
+          messageId: message.id,
+          today: civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
+          onCommit: () => {
+            committed = true;
+          },
+          onImage: (image, mime) => {
+            visual = { image, mime };
+          },
+        });
+        if (visual) await finishImage(visual.image, reply, userId, visual.mime);
+        else await finish(reply, userId);
       } finally {
         clearInterval(typingRefresh);
       }
       return;
     }
-    if (/^desfazer$/i.test(text)) {
-      const undone = await db.rpc('undo_whatsapp', { owner: userId });
-      if (undone.error) throw new Error('undo');
-      await finish(
-        undone.data
-          ? 'Desfeito. Removi o último registro feito pelo WhatsApp; confira o Histórico no app.'
-          : 'Não encontrei um registro feito pelo WhatsApp nas últimas 24 horas para desfazer.',
-        userId,
-      );
-      return;
-    }
-    if (/^confirmar$/i.test(text)) {
-      const pending = await db
-        .from('whatsapp_messages_metadata')
-        .select('message_id,pending_payload')
-        .eq('user_id', userId)
-        .eq('state', 'pending')
-        .gte('created_at', new Date(Date.now() - 10 * 60_000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(10);
-      if (pending.error) throw new Error('pending');
-      const transactionPending = pending.data.find((item) => Array.isArray(item.pending_payload));
-      if (!transactionPending) {
-        await finish('Não há nada aguardando confirmação. Envie o gasto ou recibo novamente.', userId);
-        return;
-      }
-      const saved = await db.rpc('commit_whatsapp', {
-        message_key: transactionPending.message_id,
-        owner: userId,
-        payload: transactionPending.pending_payload,
-      });
-      if (saved.error) throw new Error('commit');
-      await finish(
-        'Salvo! Confira em Histórico no app. Para cancelar, envie “desfazer” em até 24 horas.',
-        userId,
-      );
-      return;
-    }
-    const pendingSpendability = await findPendingSpendability(userId);
-    if (pendingSpendability && /^(?:cancelar|desistir)[!.\s]*$/i.test(text)) {
-      await closePendingSpendability(pendingSpendability.messageId);
-      await finish('Sem problema, cancelei essa avaliação. Não alterei seus registros.', userId);
-      return;
-    }
-    const newTransactionMessage = /\b(?:gastei|gaste|comprei|paguei|recebi|ganhei|entrou|saiu)\b/i.test(text);
-    if (pendingSpendability && !newTransactionMessage) {
-      const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
-      const context = await parseSpendabilityMessage(text, today, pendingSpendability.context, userId);
-      if (spendabilityMissing(context).length) {
-        await holdSpendability(context, userId, pendingSpendability.messageId);
-        return;
-      }
-      await answerSpendability(context, userId, today, pendingSpendability.messageId);
-      return;
-    }
-    const parsed = await parseTransaction(
-      text,
-      profile.data.timezone,
-      new Date(Number(message.timestamp) * 1000),
-      userId,
-    );
-    const preferences = await db
-      .from('category_preferences')
-      .select('merchant,category')
-      .eq('user_id', userId);
-    if (preferences.error) throw new HttpError(503, 'Não foi possível conferir preferências.');
-    for (const row of parsed.transactions) {
-      const preference = preferences.data.find((item) => item.merchant === merchantKey(row.description));
-      if (preference) row.category = preference.category;
-    }
-    if (parsed.parsed.intent === 'question') {
-      await finish(
-        'Posso ajudar com gastos, entradas, contas e metas. Para ver o mês, envie “resumo”; para conferir seus registros, abra Histórico no app. Não salvei nada com esta pergunta.',
-        userId,
-      );
-      return;
-    }
-    if (parsed.parsed.intent === 'unsupported') {
-      await finish(
-        'Ainda não consigo fazer isso por mensagem. Posso registrar gastos e entradas ou consultar seu resumo, suas contas e metas. Não salvei nada desta vez.',
-        userId,
-      );
-      return;
-    }
-    if (parsed.action === 'clarify') {
-      await finish(
-        parsed.parsed.clarification ??
-          'Não peguei todos os detalhes. Me diga o valor, o que foi e quando aconteceu. Por exemplo: “Gastei 25 reais no almoço hoje”.',
-        userId,
-      );
-      return;
-    }
-    const details = parsed.transactions
-      .map(
-        (t) =>
-          `${t.type === 'income' ? 'Entrada' : 'Gasto'}: ${formatMoney(t.amount)} · ${t.description} · ${t.date.split('-').reverse().join('/')}${t.status === 'planned' ? ' (ainda não aconteceu)' : ''}`,
-      )
-      .join('\n');
-    if (parsed.action === 'confirm') {
-      const reply = `Antes de salvar, entendi assim:\n${details}\n\nNada foi salvo ainda. Se estiver certo, envie “confirmar” em até 10 minutos. Se precisar corrigir, mande os dados novamente.`;
-      const pending = await db
-        .from('whatsapp_messages_metadata')
-        .update({ user_id: userId, state: 'pending', pending_payload: parsed.transactions, reply })
-        .eq('message_id', message.id);
-      if (pending.error) throw new Error('pending');
-      committed = true;
-      await deliverReply(message.id, message.from, reply);
-      return;
-    }
-    const saved = await db.rpc('commit_whatsapp', {
-      message_key: message.id,
-      owner: userId,
-      payload: parsed.transactions,
-    });
-    if (saved.error) throw new Error('commit');
-    committed = true;
-    await finish(
-      `Pronto, anotei:\n${details}\n\n${parsed.action === 'save-correctable' ? 'Confira se entendi direitinho. ' : ''}Para corrigir, abra Histórico no app. Para cancelar este registro, envie “desfazer” em até 24 horas.`,
-      userId,
-    );
   } catch {
     // Never retry a committed financial write. External delivery failure is kept
     // as metadata for operator reconciliation, without logging financial content.
-    if (!committed)
+    if (!committed) {
       await db
         .from('whatsapp_messages_metadata')
         .update({ state: 'failed', updated_at: new Date().toISOString() })
         .eq('message_id', message.id);
+      try {
+        await deliverReply(
+          message.id,
+          message.from,
+          'Não consegui concluir esse pedido. Nenhuma alteração foi confirmada. Confira seus registros antes de tentar novamente.',
+        );
+      } catch {
+        console.error(JSON.stringify({ event: 'whatsapp_failure_notice_failed' }));
+      }
+    }
     console.error(JSON.stringify({ event: 'whatsapp_failure', stage: committed ? 'reply' : 'processing' }));
     throw new HttpError(503, 'Falha no processamento.');
   }
