@@ -20,7 +20,14 @@ import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { goalSchema } from '../../shared/domain';
 import type { Goal } from '../../shared/domain';
 import { civilDate, parseMoney, shiftDays } from '../../shared/financial-engine';
-import { canAward, goalJourney, goalPresets, habitSummary } from '../../shared/journey';
+import {
+  canAward,
+  goalJourney,
+  goalMonthlyBudget,
+  goalMonthlyPlan,
+  goalPresets,
+  habitSummary,
+} from '../../shared/journey';
 
 export function JourneyGoalForm({
   existing,
@@ -43,10 +50,25 @@ export function JourneyGoalForm({
     existing ? String(existing.target / 100).replace('.', ',') : preset ? String(preset / 100) : '500',
   );
   const [saved, setSaved] = useState(existing ? String(existing.saved / 100).replace('.', ',') : '0');
-  const [weekly, setWeekly] = useState(String((existing?.weekly_amount ?? 500) / 100).replace('.', ','));
+  const [weekly, setWeekly] = useState(String((existing?.weekly_amount ?? 0) / 100).replace('.', ','));
   const [deadline, setDeadline] = useState(existing?.deadline ?? shiftDays(today, 90));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const budget = goalMonthlyBudget(app.data, today, app.data.profile.timezone);
+  const preview = (() => {
+    try {
+      const initialSaved = parseMoney(saved);
+      const available = Math.max(0, budget.available - (existing ? 0 : initialSaved));
+      return goalMonthlyPlan(
+        { target: parseMoney(target), saved: initialSaved, deadline },
+        today,
+        available,
+        budget.contributed[id] ?? 0,
+      );
+    } catch {
+      return null;
+    }
+  })();
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
@@ -77,7 +99,7 @@ export function JourneyGoalForm({
   }
   return (
     <Dialog
-      title={existing ? 'Ajustar minha meta' : 'Seu próximo marco'}
+      title={existing ? 'Ajustar minha meta' : 'Planejar minha meta'}
       onClose={() => {
         if (!pending) onClose();
       }}
@@ -127,21 +149,25 @@ export function JourneyGoalForm({
               required
               inputMode="decimal"
               value={saved}
+              readOnly={Boolean(existing)}
               onChange={(event) => setSaved(event.target.value)}
             />
           </label>
+          <details>
+            <summary>Passo semanal opcional</summary>
+            <label>
+              Passo semanal confortável (R$)
+              <input
+                required
+                inputMode="decimal"
+                value={weekly}
+                onChange={(event) => setWeekly(event.target.value)}
+              />
+              <small>Passo opcional, sem comprometer contas ou necessidades essenciais.</small>
+            </label>
+          </details>
           <label>
-            Passo semanal confortável (R$)
-            <input
-              required
-              inputMode="decimal"
-              value={weekly}
-              onChange={(event) => setWeekly(event.target.value)}
-            />
-            <small>Zero significa pausar aportes. Não comprometa contas ou necessidades essenciais.</small>
-          </label>
-          <label>
-            Data que quer revisar a meta
+            Data que quer alcançar a meta
             <input
               required
               type="date"
@@ -149,9 +175,24 @@ export function JourneyGoalForm({
               onChange={(event) => setDeadline(event.target.value)}
             />
           </label>
+          {preview && (
+            <div className="goal-plan-preview" aria-live="polite">
+              <p>
+                Para esse prazo: <strong>{displayMoney(preview.monthlyTarget)} por mês.</strong>
+              </p>
+              <p>
+                Na sobra atual, cabe <strong>{displayMoney(preview.suggested)}</strong> neste mês.
+              </p>
+              {preview.gap > 0 && (
+                <p>
+                  Faltam {displayMoney(preview.gap)} para a cota deste mês. Ajuste o prazo ou o valor se
+                  precisar.
+                </p>
+              )}
+            </div>
+          )}
           <p className="muted">
-            Metas grandes podem ter marcos pequenos. A data é um plano ajustável, não uma promessa de
-            rendimento ou prazo garantido.
+            A estimativa usa suas anotações, sem antecipar renda nem prometer rendimento. O prazo é ajustável.
           </p>
           {error && (
             <p className="error-message" role="alert">
@@ -182,13 +223,23 @@ function GoalMovement({
 }) {
   const app = useApp();
   const displayMoney = useMoneyDisplay();
+  const today = civilDate(new Date(), app.data.profile.timezone);
+  const budget = goalMonthlyBudget(app.data, today, app.data.profile.timezone);
+  const plan = goalMonthlyPlan(goal, today, budget.available, budget.contributed[goal.id] ?? 0);
   const [requestId] = useState(() => crypto.randomUUID());
   const [amount, setAmount] = useState(
-    reason === 'saving' && goal.weekly_amount ? String(goal.weekly_amount / 100).replace('.', ',') : '',
+    reason === 'saving' && plan.suggested ? String(plan.suggested / 100).replace('.', ',') : '',
   );
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const simulated = (() => {
+    try {
+      return parseMoney(amount);
+    } catch {
+      return null;
+    }
+  })();
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
@@ -248,6 +299,15 @@ function GoalMovement({
             }}
           />
         </label>
+        {reason === 'saving' && simulated !== null && (
+          <p className="goal-plan-preview" aria-live="polite">
+            Se separar {displayMoney(simulated)}, ficam{' '}
+            {displayMoney(Math.max(0, budget.available - simulated))} livres para planejar.
+            {simulated > budget.available &&
+              ' Esse valor supera a sobra registrada; confira suas contas antes de confirmar.'}{' '}
+            A prévia não salva nada.
+          </p>
+        )}
         {reason === 'emergency' && (
           <p>
             Uma reserva também existe para proteger você. Isso não apaga o que você aprendeu nem seus pontos.
@@ -259,8 +319,10 @@ function GoalMovement({
             checked={confirmed}
             onChange={(event) => setConfirmed(event.target.checked)}
           />
-          Esse valor já foi {reason === 'saving' ? 'separado de verdade' : 'usado'}. Isto atualiza minha meta,
-          não transfere dinheiro nem cria gasto duplicado.
+          {reason === 'withdrawal'
+            ? 'Esse valor não está mais separado'
+            : `Esse valor já foi ${reason === 'saving' ? 'separado de verdade' : 'usado'}`}
+          . Isto atualiza minha meta, não transfere dinheiro nem cria gasto duplicado.
         </label>
         {error && (
           <p role="alert" className="error-message">
@@ -339,6 +401,8 @@ export function GoalJourney() {
   const journey = goal
     ? goalJourney(goal, goal.weekly_amount ?? 0, Math.max(goal.high_water ?? 0, goal.saved))
     : null;
+  const budget = goalMonthlyBudget(app.data, today, app.data.profile.timezone);
+  const plan = goal ? goalMonthlyPlan(goal, today, budget.available, budget.contributed[goal.id] ?? 0) : null;
   const [setup, setSetup] = useState<{ existing?: Goal; preset?: number } | null>(null);
   const [movement, setMovement] = useState<'saving' | 'withdrawal' | 'emergency' | null>(null);
   const [review, setReview] = useState(false);
@@ -393,7 +457,7 @@ export function GoalJourney() {
     >
       <div className="journey-title-row">
         <div>
-          <p className="eyebrow">Seu próximo marco</p>
+          <p className="eyebrow">Seu plano por mês</p>
           <h2 id="goal-journey-title">{goal ? goal.name : 'Qual é o primeiro passo que você quer dar?'}</h2>
         </div>
         <Button
@@ -405,7 +469,7 @@ export function GoalJourney() {
           <Settings2 size={20} />
         </Button>
       </div>
-      {goal && journey ? (
+      {goal && journey && plan ? (
         <>
           <p className="journey-purpose">{goal.purpose || 'Ter mais tranquilidade nas suas escolhas.'}</p>
           <div className="journey-main">
@@ -414,33 +478,67 @@ export function GoalJourney() {
                 <strong>{displayMoney(goal.saved)}</strong>
                 <span>de {displayMoney(goal.target)}</span>
               </div>
-              <Progress
-                value={journey.milestonePercent}
-                label={`Progresso do marco de ${displayMoney(journey.milestone)}`}
-              />
+              <Progress value={journey.percent} label={`Progresso total de ${goal.name}`} />
               <p className="journey-estimate muted">
-                {Math.round(journey.milestonePercent)}% deste marco. A barra representa o próximo passo, não o
-                total da meta.
+                {Math.round(journey.percent)}% da meta · faltam {displayMoney(plan.remaining)}.
               </p>
-              <p className="journey-next">
-                <Flag size={18} />
-                Próximo marco: {displayMoney(journey.milestone)} · faltam{' '}
-                {displayMoney(Math.max(0, journey.milestone - goal.saved))}
-              </p>
+              <dl className="goal-monthly-plan">
+                <div className="goal-next-contribution">
+                  <dt>Próximo aporte neste mês</dt>
+                  <dd>{displayMoney(plan.suggested)}</dd>
+                </div>
+                <div>
+                  <dt>Prazo</dt>
+                  <dd>
+                    {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+                      new Date(`${goal.deadline}T12:00:00Z`),
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Cota mensal para o prazo</dt>
+                  <dd>{displayMoney(plan.monthlyTarget)}</dd>
+                </div>
+                <div>
+                  <dt>Aportes registrados neste mês</dt>
+                  <dd>{displayMoney(plan.savedThisMonth)}</dd>
+                </div>
+                <div>
+                  <dt>Livre para planejar agora</dt>
+                  <dd>{displayMoney(budget.available)}</dd>
+                </div>
+              </dl>
+              {plan.remaining > 0 && !plan.feasibleNow && (
+                <p className="goal-plan-warning">
+                  {plan.overdue ? 'O prazo escolhido já passou. ' : ''}
+                  Faltam {displayMoney(plan.gap)} para completar a cota deste mês com a sobra atual.
+                  {plan.projectedMonth
+                    ? ` Se essa capacidade se repetisse, a meta chegaria em ${new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${plan.projectedMonth}-01T12:00:00Z`))}.`
+                    : ' Não há sobra registrada para sugerir um aporte agora.'}{' '}
+                  Ajuste o prazo ou o valor sem comprometer contas essenciais.
+                </p>
+              )}
+              <small className="muted">
+                Estimativa pelas anotações. Contas não registradas podem mudar o plano; renda prevista não é
+                dinheiro recebido.
+              </small>
               <p className="journey-coaching">
                 {paused
                   ? 'Seus lembretes da jornada estão pausados. Seu progresso continua aqui, sem cobrança.'
                   : app.data.profile.journey_mode === 'recovery' || journey.recovering
-                    ? 'Você não precisa recuperar tudo de uma vez. ' + journey.message
-                    : journey.message}
+                    ? `Seu esforço não foi apagado. Você já chegou a ${displayMoney(journey.peak)}. Vamos retomar sem tirar dinheiro do essencial.`
+                    : plan.remaining === 0
+                      ? 'Meta alcançada.'
+                      : plan.required === 0
+                        ? 'Você já completou a cota deste mês.'
+                        : `Neste mês, cabe um próximo aporte de ${displayMoney(plan.suggested)} com a sobra atual.`}
               </p>
-              {journey.weeks !== null && journey.remaining > 0 && (
-                <p className="muted journey-estimate">
-                  {journey.weeks <= 104
-                    ? `No ritmo escolhido: cerca de ${journey.weeks} semanas, sem retiradas ou rendimentos.`
-                    : 'Esta é uma meta de longo prazo. O foco agora é o próximo marco, não uma promessa de chegada.'}
+              <details>
+                <summary>Marcos do caminho</summary>
+                <p>
+                  <Flag size={18} /> Próximo marco: {displayMoney(journey.milestone)}.
                 </p>
-              )}
+              </details>
             </div>
             <div className="journey-actions">
               <Button onClick={() => setMovement('saving')}>
@@ -452,7 +550,10 @@ export function GoalJourney() {
                 Precisei usar numa urgência
               </Button>
               <Button variant="ghost" onClick={() => setSetup({ existing: goal })}>
-                Ajustar meu passo
+                Ajustar valor e prazo
+              </Button>
+              <Button variant="ghost" onClick={() => setMovement('withdrawal')}>
+                Corrigir valor separado
               </Button>
             </div>
           </div>

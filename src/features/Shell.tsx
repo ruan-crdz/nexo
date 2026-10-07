@@ -13,6 +13,8 @@ import {
   PenLine,
   ArrowUpRight,
   ArrowDownLeft,
+  Target,
+  CalendarDays,
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
@@ -26,6 +28,9 @@ export { Brand } from '../design-system/components';
 const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
+  { to: '/metas', label: 'Metas', icon: Target },
+  { to: '/planejar', label: 'Planejar', icon: CalendarDays },
+  { to: '/nexo', label: 'Nexo', icon: MessageCircle },
   { to: '/perfil', label: 'Você', icon: Settings },
 ];
 export function Shell() {
@@ -95,7 +100,13 @@ export function Shell() {
           <Brand />
         </Link>
         {navigation.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end className={to === '/perfil' ? 'profile-nav-link' : undefined}>
+          <NavLink
+            key={to}
+            to={to}
+            end
+            className={to === '/perfil' ? 'profile-nav-link' : undefined}
+            aria-label={to === '/nexo' ? 'Perguntar ao Nexo' : undefined}
+          >
             <Icon size={24} />
             <span>{label}</span>
           </NavLink>

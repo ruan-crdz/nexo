@@ -33,6 +33,14 @@ DRE usa premissas, não soma movimentos reais novamente. Fixos excluem folha/pr�
 
 ## Score e jornada
 
+### Plano mensal das metas
+
+`goalMonthlyBudget` e `goalMonthlyPlan`, em `shared/journey.ts`, calculam o plano sem IA. O prazo inclui o mês atual e os meses até a data escolhida; a cota em centavos é arredondada para cima. Aportes líquidos já registrados no mês reduzem a cota que falta, usando o fuso do perfil.
+
+Livre para planejar = resultado dos movimentos pagos até hoje − alocações protegidas em metas − despesas reservadas, limitado a zero. Alocações incluem aportes líquidos do mês e saldos iniciais sem histórico datado; aportes datados de meses anteriores não são descontados novamente como novos. Despesas reservadas usam o maior entre contas pendentes até o fim do mês (incluindo atrasadas) e despesas fixas do perfil ainda não cobertas pelos gastos pagos, evitando descontar ambas duas vezes.
+
+O próximo aporte é o menor entre restante da meta, cota ainda não cumprida e valor livre. Se o prazo não couber na sobra atual, o app mostra a diferença e uma projeção condicional caso essa capacidade se repita, até 600 meses. Não antecipa renda prevista nem rendimento; não é saldo bancário ou garantia de prazo. Uma prévia não persiste progresso, e guardar dinheiro não cria despesa duplicada.
+
 Pesos: liquidez 15, dívida 15, comprometimento 10, reserva 20, consistência 5, evolução 10, poupança 15, metas 10. Valores limitados a 0–100; pesos conhecidos renormalizados. Cobertura mostra os dados disponíveis. Evolução não é pontuada na interface sem snapshot confiável. É heurística, não score de crédito nem escala validada.
 
 Jornada prioriza dívida cara (regra explícita de produto: 3% a.m.), patrimônio negativo, colchão, reserva e patrimônio. Reserva contextual considera variabilidade, dependentes e proteção; as faixas não são universais.

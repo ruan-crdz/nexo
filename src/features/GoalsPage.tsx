@@ -6,10 +6,7 @@ export function GoalsPage() {
     <>
       <header className="simple-heading">
         <h1>Minhas metas</h1>
-        <p>Guarde no seu ritmo. Esta parte é opcional.</p>
-        <Link className="text-link" to="/inicio">
-          Voltar ao meu dinheiro
-        </Link>
+        <p>Um objetivo com prazo e aportes que caibam no seu momento.</p>
       </header>
       <GoalJourney />
       <Link className="button button-secondary" to="/planejar">

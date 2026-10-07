@@ -932,6 +932,70 @@ label {
   font-size: 22px;
   font-variant-numeric: tabular-nums;
 }
+.home-budget-breakdown {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.home-budget-breakdown > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.home-budget-breakdown dt {
+  color: var(--muted);
+  min-width: 0;
+}
+.home-budget-breakdown dd {
+  margin: 0;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.goal-next-contribution {
+  color: var(--moss);
+}
+.goal-monthly-plan {
+  display: grid;
+  gap: 0;
+  margin: 20px 0;
+}
+.goal-monthly-plan > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: baseline;
+}
+.goal-monthly-plan dt {
+  font-size: 15px;
+  color: var(--muted);
+}
+.goal-monthly-plan dd {
+  margin: 0;
+  text-align: right;
+  font-size: 18px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.goal-monthly-plan .money-value {
+  white-space: normal;
+}
+.goal-monthly-plan .goal-next-contribution {
+  border-left: 3px solid var(--moss);
+  padding-left: 10px;
+}
+.goal-plan-preview {
+  padding: 12px 0 12px 16px;
+  border-left: 3px solid var(--moss);
+  font-size: 16px;
+}
+.goal-plan-warning {
+  color: var(--terra);
+  font-size: 16px;
+}
 .home-recent {
   min-width: 0;
 }
@@ -1796,6 +1860,10 @@ label {
   }
   .simple-nav .profile-nav-link {
     margin-top: 0;
+    display: none;
+  }
+  .simple-shell .simple-nav a span {
+    font-size: 12px;
   }
   .home-layout {
     gap: 18px;

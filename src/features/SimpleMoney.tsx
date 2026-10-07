@@ -22,7 +22,7 @@ import { categories, transactionSchema } from '../../shared/domain';
 import type { Transaction } from '../../shared/domain';
 import { civilDate, parseMoney, shiftDays, shiftMonths, sum } from '../../shared/financial-engine';
 import { monthlyFlow } from '../../shared/insights';
-import { goalJourney } from '../../shared/journey';
+import { goalMonthlyBudget, goalMonthlyPlan } from '../../shared/journey';
 import { merchantKey } from '../../shared/financial-decisions';
 import { useCaptureFlow } from '../design-system/capture-flow';
 
@@ -308,6 +308,7 @@ export function SimpleHome() {
   const currentMonth = today.slice(0, 7);
   const posted = app.data.transactions.filter((transaction) => transaction.date <= today);
   const flow = monthlyFlow(posted, currentMonth);
+  const goalBudget = goalMonthlyBudget(app.data, today, app.data.profile.timezone);
   const due = app.data.transactions.filter(
     (transaction) =>
       transaction.status === 'planned' &&
@@ -319,7 +320,7 @@ export function SimpleHome() {
     app.data.goals.find((goal) => goal.saved < goal.target) ??
     null;
   const goalProgress = activeGoal
-    ? goalJourney(activeGoal, activeGoal.weekly_amount, activeGoal.high_water)
+    ? goalMonthlyPlan(activeGoal, today, goalBudget.available, goalBudget.contributed[activeGoal.id] ?? 0)
     : null;
   const recent = app.data.transactions
     .filter((t) => t.date <= today)
@@ -369,15 +370,31 @@ export function SimpleHome() {
           <p className="eyebrow">{monthLabel(currentMonth)}</p>
           <h1 id="monthly-summary-title">Seu mês</h1>
           <div className="home-month-result" data-month={currentMonth}>
-            <strong>{displayMoney(Math.abs(flow.net))}</strong>
-            <span>
-              {flow.net < 0 ? 'faltou nos movimentos deste mês' : 'sobrou nos movimentos deste mês'}
-            </span>
+            <strong>{displayMoney(flow.net < 0 ? Math.abs(flow.net) : goalBudget.available)}</strong>
+            <span>{flow.net < 0 ? 'faltou nos movimentos deste mês' : 'livre para planejar neste mês'}</span>
           </div>
           <p className="home-flow-line">
             Entrou {displayMoney(flow.income)} · Saiu {displayMoney(flow.expenses)}
           </p>
-          <small className="muted">Com base no que você registrou no Nexo.</small>
+          <dl className="home-budget-breakdown">
+            <div className="home-gross-result">
+              <dt>Resultado dos movimentos</dt>
+              <dd>
+                <strong>{displayMoney(flow.net)}</strong>
+              </dd>
+            </div>
+            <div>
+              <dt>Protegido em metas</dt>
+              <dd>{displayMoney(goalBudget.allocated)}</dd>
+            </div>
+            <div>
+              <dt>Reservado para contas e despesas essenciais</dt>
+              <dd>{displayMoney(goalBudget.reservedExpenses)}</dd>
+            </div>
+          </dl>
+          <small className="muted">
+            Estimativa pelas anotações, não saldo bancário. Renda prevista não entra no valor livre.
+          </small>
           {flow.count === 0 && <p className="muted">Mande uma mensagem para começar.</p>}
         </section>
         {whatsapp.data?.connected ? (
@@ -453,6 +470,18 @@ export function SimpleHome() {
                   {Math.round((activeGoal.saved / activeGoal.target) * 100)}% · faltam{' '}
                   {displayMoney(goalProgress.remaining)}
                 </small>
+                <p className="goal-next-contribution">
+                  <strong>Este mês: {displayMoney(goalProgress.suggested)}</strong> para sua meta.
+                </p>
+                <small>
+                  Para chegar até {fullDateLabel(activeGoal.deadline)}:{' '}
+                  {displayMoney(goalProgress.monthlyTarget)} por mês.
+                </small>
+                {!goalProgress.feasibleNow && goalProgress.remaining > 0 && (
+                  <p className="muted">
+                    O prazo exige mais que a sobra atual. Você pode ajustar o prazo ou o valor da meta.
+                  </p>
+                )}
               </div>
               <Link className="button button-secondary" to="/metas">
                 Ver meta <ChevronRight size={18} />

@@ -385,7 +385,7 @@ export function PlanningHub() {
                   </p>
                   <Progress value={(goal.saved / goal.target) * 100} label={`Progresso de ${goal.name}`} />
                   <p className="muted">
-                    Faltam {displayMoney(Math.max(0, goal.target - goal.saved))} · revisar em{' '}
+                    Faltam {displayMoney(Math.max(0, goal.target - goal.saved))} · alcançar até{' '}
                     {goal.deadline.split('-').reverse().join('/')}
                   </p>
                 </div>

@@ -1,5 +1,105 @@
-import type { Goal, HabitEvent } from './domain.ts';
-import { formatMoney, money } from './financial-engine.ts';
+import type { Dataset, Goal, HabitEvent } from './domain.ts';
+import { civilDate, formatMoney, money, shiftMonths, sum, validDate } from './financial-engine.ts';
+import { monthlyFlow } from './insights.ts';
+
+export function goalMonthlyBudget(
+  data: Pick<Dataset, 'transactions' | 'goal_events'> & {
+    goals?: Pick<Goal, 'id' | 'saved'>[];
+    profile?: Pick<Dataset['profile'], 'fixed_expenses'>;
+  },
+  today: string,
+  timezone = 'America/Sao_Paulo',
+) {
+  if (!validDate(today)) throw new Error('Data inválida.');
+  const month = today.slice(0, 7);
+  const flow = monthlyFlow(
+    data.transactions.filter((row) => row.date <= today),
+    month,
+  );
+  const events = data.goal_events.filter(
+    (event) => !data.goals || data.goals.some((goal) => goal.id === event.goal_id),
+  );
+  const initialAllocation = sum(
+    (data.goals ?? []).map((goal) =>
+      Math.max(
+        0,
+        goal.saved - sum(events.filter((event) => event.goal_id === goal.id).map((event) => event.delta)),
+      ),
+    ),
+  );
+  const monthEvents = events.filter((event) => {
+    const day = civilDate(new Date(event.created_at), timezone);
+    return day >= `${month}-01` && day <= today;
+  });
+  const contributed: Record<string, number> = {};
+  for (const event of monthEvents)
+    contributed[event.goal_id] = sum([contributed[event.goal_id] ?? 0, event.delta]);
+  const allocatedThisMonth = sum(monthEvents.map((event) => event.delta));
+  const allocated = Math.max(0, sum([initialAllocation, allocatedThisMonth]));
+  const bills = sum(
+    data.transactions
+      .filter(
+        (row) =>
+          row.status === 'planned' && row.type === 'expense' && row.date < shiftMonths(`${month}-01`, 1),
+      )
+      .map((row) => row.amount),
+  );
+  const essentialRemaining = Math.max(0, (data.profile?.fixed_expenses ?? 0) - flow.expenses);
+  const reservedExpenses = Math.max(bills, essentialRemaining);
+  return {
+    ...flow,
+    allocated,
+    initialAllocation,
+    allocatedThisMonth,
+    contributed,
+    bills,
+    reservedExpenses,
+    available: Math.max(0, sum([flow.net, -allocated, -reservedExpenses])),
+  };
+}
+
+export function goalMonthlyPlan(
+  goal: Pick<Goal, 'target' | 'saved' | 'deadline'>,
+  today: string,
+  available: number,
+  contributed = 0,
+) {
+  money(goal.target);
+  money(goal.saved);
+  money(available);
+  money(contributed);
+  if (goal.target <= 0 || goal.saved < 0 || available < 0 || !validDate(today) || !validDate(goal.deadline))
+    throw new Error('Valores de planejamento inválidos.');
+  const remaining = Math.max(0, goal.target - goal.saved);
+  const months = Math.max(
+    1,
+    (Number(goal.deadline.slice(0, 4)) - Number(today.slice(0, 4))) * 12 +
+      Number(goal.deadline.slice(5, 7)) -
+      Number(today.slice(5, 7)) +
+      1,
+  );
+  const savedThisMonth = Math.max(0, contributed);
+  const monthlyTarget = remaining > 0 ? Math.ceil(sum([remaining, savedThisMonth]) / months) : 0;
+  const required = Math.max(0, monthlyTarget - savedThisMonth);
+  const suggested = Math.min(remaining, required, available);
+  const gap = Math.max(0, required - suggested);
+  const monthsAtCurrentCapacity = available > 0 ? Math.ceil(remaining / available) : null;
+  return {
+    remaining,
+    months,
+    required,
+    suggested,
+    gap,
+    monthlyTarget,
+    savedThisMonth,
+    overdue: goal.deadline < today && remaining > 0,
+    feasibleNow: gap === 0 && (goal.deadline >= today || remaining === 0),
+    projectedMonth:
+      monthsAtCurrentCapacity !== null && monthsAtCurrentCapacity > 0 && monthsAtCurrentCapacity <= 600
+        ? shiftMonths(`${today.slice(0, 7)}-01`, monthsAtCurrentCapacity - 1).slice(0, 7)
+        : null,
+  };
+}
 
 export const goalPresets = [500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000000].map(
   (value) => value * 100,
