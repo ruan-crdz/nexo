@@ -43,6 +43,7 @@ beforeAll(async () => {
   await db.exec(readFileSync('supabase/migrations/202610070003_whatsapp_reply_buttons.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610070004_whatsapp_batch.sql', 'utf8'));
   await db.exec(readFileSync('supabase/migrations/202610070005_whatsapp_direct_actions.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610070006_whatsapp_goal_progress.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -54,6 +55,134 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('WhatsApp guarda 10 na meta ativa, mantém histórico e não cria gasto nem duplica aporte', async () => {
+    await db.exec('reset role');
+    const goal = crypto.randomUUID();
+    const request = crypto.randomUUID();
+    await db.query(
+      "insert into goals(id,user_id,name,target,saved,monthly_contribution,deadline,priority) values($1,$2,'Reserva WhatsApp',50000,0,0,'2026-12-31','high')",
+      [goal, alice],
+    );
+    await db.query('update profiles set active_goal_id=$1 where id=$2', [goal, alice]);
+    await db.query(
+      "insert into whatsapp_connections(user_id,phone,consent_at) values($1,'5511999996666',now()) on conflict(user_id) do update set phone=excluded.phone,consent_at=excluded.consent_at",
+      [alice],
+    );
+    await db.query("insert into whatsapp_messages_metadata(message_id,user_id) values('goal-save',$1)", [
+      alice,
+    ]);
+    const first = await db.query<{ result: { status: string; goal_saved: number } }>(
+      "select save_whatsapp_goal_progress($1,'5511999996666','goal-save',null,1000,'saving',$2) result",
+      [alice, request],
+    );
+    expect(first.rows[0].result.status).toBe('applied');
+    expect(Number(first.rows[0].result.goal_saved)).toBe(1000);
+    await db.query(
+      "select save_whatsapp_goal_progress($1,'5511999996666','goal-save',null,1000,'saving',$2)",
+      [alice, request],
+    );
+    expect((await db.query('select * from goal_events where goal_id=$1', [goal])).rows).toHaveLength(1);
+    expect((await db.query('select * from transactions where user_id=$1', [alice])).rows).toHaveLength(0);
+    const saved = (
+      await db.query<{ saved: number; high_water: number }>(
+        'select saved,high_water from goals where id=$1',
+        [goal],
+      )
+    ).rows[0];
+    expect(Number(saved.saved)).toBe(1000);
+    expect(Number(saved.high_water)).toBe(1000);
+    await expect(
+      db.query("select save_whatsapp_goal_progress($1,'5511999996666','goal-save',null,2000,'saving',$2)", [
+        alice,
+        request,
+      ]),
+    ).rejects.toThrow(/different action/);
+    await db.query("insert into whatsapp_messages_metadata(message_id,user_id) values('goal-withdraw',$1)", [
+      alice,
+    ]);
+    await expect(
+      db.query(
+        "select save_whatsapp_goal_progress($1,'5511999996666','goal-withdraw',$2,-2000,'withdrawal',$3)",
+        [alice, goal, crypto.randomUUID()],
+      ),
+    ).rejects.toThrow(/invalid balance/);
+    await db.query(
+      "select save_whatsapp_goal_progress($1,'5511999996666','goal-withdraw',$2,-1000,'withdrawal',$3)",
+      [alice, goal, crypto.randomUUID()],
+    );
+    const withdrawn = (
+      await db.query<{ saved: number; high_water: number }>(
+        'select saved,high_water from goals where id=$1',
+        [goal],
+      )
+    ).rows[0];
+    expect(Number(withdrawn.saved)).toBe(0);
+    expect(Number(withdrawn.high_water)).toBe(1000);
+    await asUser(alice);
+    await expect(
+      db.query("select save_whatsapp_goal_progress($1,'5511999996666','goal-save',null,1000,'saving',$2)", [
+        alice,
+        request,
+      ]),
+    ).rejects.toThrow(/permission denied/);
+    await db.exec('reset role');
+    await db.query('update profiles set active_goal_id=null where id=$1', [alice]);
+    await db.query('delete from goals where id=$1', [goal]);
+    await db.query(
+      "delete from whatsapp_messages_metadata where message_id in ('goal-save','goal-withdraw')",
+    );
+    await db.query('delete from habit_events where user_id=$1 and source_key=$2', [
+      alice,
+      `saving:${request}`,
+    ]);
+  });
+  it('WhatsApp pergunta qual meta quando não há foco e impede alterar a meta de outra pessoa', async () => {
+    await db.exec('reset role');
+    const first = crypto.randomUUID(),
+      second = crypto.randomUUID(),
+      foreign = crypto.randomUUID();
+    for (const [identifier, owner] of [
+      [first, alice],
+      [second, alice],
+      [foreign, bob],
+    ])
+      await db.query(
+        "insert into goals(id,user_id,name,target,saved,monthly_contribution,deadline,priority) values($1,$2,'Meta sem foco',50000,0,0,'2026-12-31','medium')",
+        [identifier, owner],
+      );
+    await db.query('update profiles set active_goal_id=null where id=$1', [alice]);
+    await db.query("insert into whatsapp_messages_metadata(message_id,user_id) values('goal-ambiguous',$1)", [
+      alice,
+    ]);
+    const result = (
+      await db.query<{ result: { status: string } }>(
+        "select save_whatsapp_goal_progress($1,'5511999996666','goal-ambiguous',null,1000,'saving',$2) result",
+        [alice, crypto.randomUUID()],
+      )
+    ).rows[0].result;
+    expect(result.status).toBe('needs_goal');
+    expect(
+      (await db.query('select * from goal_events where goal_id=any($1::uuid[])', [[first, second]])).rows,
+    ).toHaveLength(0);
+    await expect(
+      db.query(
+        "select save_whatsapp_goal_progress($1,'5511999996666','goal-ambiguous',$2,1000,'saving',$3)",
+        [alice, foreign, crypto.randomUUID()],
+      ),
+    ).rejects.toThrow(/ownership/);
+    await db.query('delete from goals where id=$1', [second]);
+    const unique = (
+      await db.query<{ result: { status: string; goal_id: string } }>(
+        "select save_whatsapp_goal_progress($1,'5511999996666','goal-ambiguous',null,1000,'saving',$2) result",
+        [alice, crypto.randomUUID()],
+      )
+    ).rows[0].result;
+    expect(unique.status).toBe('applied');
+    expect(unique.goal_id).toBe(first);
+    await db.query('delete from goals where id=any($1::uuid[])', [[first, foreign]]);
+    await db.query("delete from whatsapp_messages_metadata where message_id='goal-ambiguous'");
+    await db.query("delete from habit_events where user_id=$1 and kind='saving'", [alice]);
+  });
   it('fluxo direto cria conta e meta, edita e exclui com autorização e proteção contra dados antigos', async () => {
     await db.exec('reset role');
     await db.query(

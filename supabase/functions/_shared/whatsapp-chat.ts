@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { v5 as uuid } from 'uuid';
 import {
   chatEntities,
   chatEntitySchema,
@@ -33,6 +34,16 @@ type ChatContext = {
 };
 type Tool = { name: string; description: string; properties: Record<string, unknown> };
 const tools: Tool[] = [
+  {
+    name: 'goal_progress',
+    description:
+      'Registra dinheiro realmente separado para uma meta (guardei, juntei, coloquei na reserva) ou retirado dela, sem criar gasto ou entrada. amount é positivo em centavos; saving soma, withdrawal/emergency retira. goal_id=null usa a meta em foco ou a única meta possível; se houver ambiguidade retorna needs_goal, sem salvar. Para meta explicitamente nomeada consulte goals para usar o ID real. Nunca use para intenção futura, simulação ou pergunta. Mostre o novo total guardado e o dinheiro livre após a operação. Não misture esta operação com save_records/apply_changes no mesmo turno de gravação; se já houver outra operação aplicada, informe o que falta sem afirmar conclusão.',
+    properties: {
+      goal_id: { type: ['string', 'null'] },
+      amount: { type: 'integer' },
+      reason: { type: 'string', enum: ['saving', 'withdrawal', 'emergency'] },
+    },
+  },
   {
     name: 'compare_money',
     description:
@@ -120,7 +131,7 @@ const tools: Tool[] = [
   {
     name: 'prepare_change',
     description:
-      'Valida e prepara uma alteração; não salva. Para create id=null; update/delete exigem o ID real obtido na consulta. values é uma string JSON; valores em centavos. Para recorrência exija vencimento/start_date, descrição, valor, frequência; conta a pagar permite type=expense e categoria sugerida pela descrição, apresentados para confirmação. active=true ao cadastrar uma recorrência nova. Para registro inclua description,amount,type,category,date,status,account_id(null se não informado),source=whatsapp. Metas exigem nome,valor alvo,prazo,prioridade e contribuição explícita; progresso guardado exige app. Perfil só update dos campos permitidos. Se faltar um dado financeiro pergunte antes, sem inventar.',
+      'Valida e prepara uma alteração; não salva. Para create id=null; update/delete exigem o ID real obtido na consulta. values é uma string JSON; valores em centavos. Para recorrência exija vencimento/start_date, descrição, valor, frequência; conta a pagar permite type=expense e categoria sugerida pela descrição, apresentados para confirmação. active=true ao cadastrar uma recorrência nova. Para registro inclua description,amount,type,category,date,status,account_id(null se não informado),source=whatsapp. Metas exigem nome,valor alvo,prazo,prioridade e contribuição explícita; dinheiro guardado usa goal_progress. Perfil só update dos campos permitidos. Se faltar um dado financeiro pergunte antes, sem inventar.',
     properties: {
       entity: { type: 'string', enum: chatEntities },
       action: { type: 'string', enum: ['create', 'update', 'delete'] },
@@ -175,6 +186,32 @@ function displayRecords(entity: keyof typeof chatSchemas, rows: Record<string, u
 
 export async function executeChatTool(name: string, raw: unknown, context: ChatContext) {
   const db = admin();
+  if (name === 'goal_progress') {
+    const args = z
+      .object({
+        goal_id: z.string().uuid().nullable(),
+        amount: centsSchema.positive(),
+        reason: z.enum(['saving', 'withdrawal', 'emergency']),
+      })
+      .strict()
+      .parse(raw);
+    const result = await db.rpc('save_whatsapp_goal_progress', {
+      owner: context.userId,
+      sender: context.phone,
+      message_key: context.messageId,
+      selected_goal: args.goal_id,
+      amount_delta: args.reason === 'saving' ? args.amount : -args.amount,
+      event_reason: args.reason,
+      request_id: uuid(context.messageId, 'c82ad29a-b5b6-4f8f-9c84-3d0af99a82e2'),
+    });
+    if (result.error)
+      throw new HttpError(
+        503,
+        'Não consegui atualizar a meta. Confira a meta, o valor guardado e se este pedido já executou outra ação antes de tentar novamente.',
+      );
+    if (result.data?.status === 'applied') context.onCommit();
+    return result.data;
+  }
   if (name === 'money_snapshot') {
     z.object({}).strict().parse(raw);
     return whatsappMoneySnapshot(context.userId, context.today);

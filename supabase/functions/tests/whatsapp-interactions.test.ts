@@ -289,6 +289,148 @@ Deno.test('falha ao consultar sobra não apaga confirmação nem inventa zero', 
   );
 });
 
+Deno.test('guardei 10 aumenta a meta e deixa 54,08 livres sem registrar despesa', async () => {
+  let saved = false,
+    modelCalls = 0,
+    committed = false;
+  const goal = {
+    id: proposal,
+    name: 'Reserva',
+    target: 50000,
+    saved: 0,
+    high_water: 0,
+    monthly_contribution: 0,
+    weekly_amount: 0,
+    deadline: '2026-12-31',
+    priority: 'high',
+  };
+  await mocked(
+    async (requests) => {
+      const reply = await chatWithWhatsApp('Guardei 10 reais', {
+        ...context,
+        onCommit: () => {
+          committed = true;
+        },
+      });
+      assert.ok(committed);
+      assert.match(reply, /10,00 na meta/);
+      const delivered = await replyWithMoneySnapshot(reply, context.userId, context.today);
+      assert.match(delivered, /Sobrou nos movimentos deste mês: R\$\s64,08/);
+      assert.match(delivered, /Livre para planejar: R\$\s54,08/);
+      const writes = requests.filter((request) => request.url.pathname.includes('/rpc/'));
+      assert.equal(writes.length, 1);
+      assert.ok(writes[0].url.pathname.endsWith('save_whatsapp_goal_progress'));
+      assert.equal(writes[0].body.amount_delta, 1000);
+      assert.equal(writes[0].body.selected_goal, null);
+      assert.equal(writes[0].body.event_reason, 'saving');
+    },
+    (url, body) => {
+      if (url.hostname === 'api.openai.com') {
+        if (++modelCalls === 1)
+          return {
+            status: 'completed',
+            output: [
+              {
+                type: 'function_call',
+                call_id: 'saving',
+                name: 'goal_progress',
+                arguments: '{"goal_id":null,"amount":1000,"reason":"saving"}',
+              },
+            ],
+          };
+        const output = (body.input as { type: string; output: string }[]).find(
+          (item) => item.type === 'function_call_output',
+        )!;
+        const result = JSON.parse(output.output);
+        assert.equal(result.goal_saved, 1000);
+        assert.equal(result.money_snapshot_after_save.free_to_plan, 5408);
+        return {
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'Registrei R$ 10,00 na meta Reserva. Total guardado: R$ 10,00.',
+                },
+              ],
+            },
+          ],
+        };
+      }
+      if (url.pathname.endsWith('save_whatsapp_goal_progress')) {
+        saved = true;
+        return {
+          status: 'applied',
+          kind: 'goal_progress',
+          goal_id: proposal,
+          goal_name: 'Reserva',
+          goal_saved: 1000,
+          no_transaction_created: true,
+        };
+      }
+      if (url.pathname.endsWith('transactions'))
+        return [
+          {
+            id: proposal,
+            description: 'Recebimento',
+            amount: 6408,
+            type: 'income',
+            category: 'Outros',
+            date: '2026-10-07',
+            status: 'paid',
+            source: 'manual',
+            account_id: null,
+          },
+        ];
+      if (url.pathname.endsWith('goals'))
+        return [{ ...goal, saved: saved ? 1000 : 0, high_water: saved ? 1000 : 0 }];
+      if (url.pathname.endsWith('goal_events'))
+        return saved
+          ? [
+              {
+                id: proposal,
+                goal_id: proposal,
+                delta: 1000,
+                reason: 'saving',
+                balance_after: 1000,
+                created_at: '2026-10-07T12:00:00Z',
+              },
+            ]
+          : [];
+      if (url.pathname.endsWith('profiles')) return { fixed_expenses: 0, timezone: 'America/Sao_Paulo' };
+      if (url.pathname.endsWith('whatsapp_chat_sessions')) return body.history ? {} : null;
+      return [];
+    },
+  );
+});
+
+Deno.test('aporte com meta ambígua não declara gravação e valida valores antes do banco', async () => {
+  let committed = false;
+  await mocked(
+    async (requests) => {
+      await assert.rejects(() =>
+        executeChatTool('goal_progress', { goal_id: null, amount: 0, reason: 'saving' }, context),
+      );
+      assert.equal(requests.length, 0);
+      const result = (await executeChatTool(
+        'goal_progress',
+        { goal_id: null, amount: 1000, reason: 'saving' },
+        {
+          ...context,
+          onCommit: () => {
+            committed = true;
+          },
+        },
+      )) as { status: string };
+      assert.equal(result.status, 'needs_goal');
+      assert.equal(committed, false);
+    },
+    () => ({ status: 'needs_goal', message: 'Qual meta?' }),
+  );
+});
+
 Deno.test('botão confirma apenas proposta vigente da pessoa e não chama IA', async () => {
   let committed = false;
   await mocked(

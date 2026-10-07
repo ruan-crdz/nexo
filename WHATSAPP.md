@@ -22,6 +22,14 @@ Depois de uma operação salva, a resposta recebe pelo código o resultado dos m
 
 O contexto monetário é atualizado após gravações. O resumo pós-gravação é reutilizado no envio final quando disponível; cada consulta tem limite de oito segundos e respeita o usuário vinculado.
 
+## Dinheiro guardado em metas
+
+Aplicar `202610070006_whatsapp_goal_progress.sql` antes do webhook atualizado. “Guardei R$ 10” usa `goal_progress`: aumenta o guardado da meta e insere um evento de progresso, sem criar despesa, entrada ou transferência bancária. A Home reduz o valor livre para planejar pela alocação registrada, mantendo o resultado bruto dos movimentos intacto. A resposta mostra o total guardado e o resumo atualizado.
+
+Se a pessoa não nomear a meta, usa a meta em foco; sem foco, usa a única meta possível. Ambiguidade ou ausência de meta gera pergunta, sem gravação. “Pretendo guardar” e simulações não autorizam aporte. Retiradas e urgências usam a mesma operação com sinal negativo, preservando conquistas e impedindo saldo guardado negativo.
+
+App e WhatsApp compartilham `update_goal_progress_for`, chamado por wrappers que preservam autenticação/MFA no app e vínculo/consentimento no WhatsApp. Message ID e request UUID determinístico impedem duplicação em retries. Uma operação de progresso não é misturada com outro lote de gravação na mesma mensagem; o chat deve informar o que falta e pedir a ação restante em outra mensagem, nunca afirmar que ambos foram executados.
+
 ## Recuperação de respostas visuais
 
 Aplicar `202610070002_whatsapp_reply_media.sql` antes do webhook atualizado. Novas imagens ficam em cache privado por até 24 horas para recuperar rejeições confirmadas sem gerar novamente nem repetir ações financeiras. O retry verifica o vínculo e um claim atômico reserva a entrega. Resultado ambíguo (timeout após envio, resposta 5xx ou ausência do ID remoto) fica em `reconcile`, sem reenvio automático, para evitar duplicatas. Depois da expiração, o bot informa que a imagem não pode mais ser recuperada; não substitui silenciosamente a imagem pela legenda.
