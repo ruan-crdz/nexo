@@ -4,6 +4,7 @@ import {
   hashToken,
   sendText,
   sendFinancialTemplate,
+  showTypingIndicator,
   WhatsAppDeliveryError,
 } from '../_shared/whatsapp.ts';
 import { authorizeJob } from '../_shared/http.ts';
@@ -113,6 +114,34 @@ Deno.test('destinatário não autorizado mantém o código de erro da Meta', asy
       if (value === undefined) Deno.env.delete(name!);
       else Deno.env.set(name!, value);
     }
+  }
+});
+
+Deno.test('indicador de digitação marca a mensagem recebida como lida', async () => {
+  const names = ['WHATSAPP_GRAPH_VERSION', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ACCESS_TOKEN'];
+  const previous = names.map((name) => Deno.env.get(name));
+  const originalFetch = globalThis.fetch;
+  try {
+    ['v23.0', '123456', 'test-only-token'].forEach((value, index) => Deno.env.set(names[index], value));
+    globalThis.fetch = async (input, init) => {
+      assert.equal(String(input), 'https://graph.facebook.com/v23.0/123456/messages');
+      assert.equal(init?.method, 'POST');
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: 'wamid.test-incoming',
+        typing_indicator: { type: 'text' },
+      });
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    };
+    await showTypingIndicator('wamid.test-incoming');
+  } finally {
+    globalThis.fetch = originalFetch;
+    names.forEach((name, index) => {
+      const value = previous[index];
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    });
   }
 });
 

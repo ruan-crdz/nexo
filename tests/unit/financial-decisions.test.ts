@@ -4,6 +4,7 @@ import {
   merchantKey,
   reconciliationMatches,
   spendingAllowance,
+  spendabilityAppAssumptions,
   spendingSignals,
 } from '../../shared/financial-decisions';
 import { recurringTransactions } from '../../shared/planning';
@@ -50,6 +51,43 @@ it('saldo confirmado protege contas, reservas e metas sem antecipar renda', () =
       '2026-10-05',
     ),
   ).toThrow(/Confirme/);
+});
+it('reaproveita metas guardadas e recebimentos previstos sem inferir saldo disponível', () => {
+  const goal = {
+    id: crypto.randomUUID(),
+    name: 'Reserva',
+    target: 100000,
+    saved: 25000,
+    deadline: '2026-12-01',
+    monthly_contribution: 0,
+    priority: 'medium' as const,
+    weekly_amount: 0,
+    high_water: 25000,
+  };
+  const assumptions = spendabilityAppAssumptions(
+    [goal],
+    [
+      row({ type: 'income', status: 'planned', date: '2026-10-12', amount: 400000 }),
+      row({ type: 'income', status: 'planned', date: '2026-10-12', amount: 50000 }),
+      row({ type: 'income', status: 'planned', date: '2026-10-20', amount: 300000 }),
+    ],
+    600000,
+  );
+  expect(assumptions).toEqual({
+    goal_allocation: 25000,
+    goal_allocation_source: 'app',
+    next_income_date: '2026-10-12',
+    estimated_income: 450000,
+    income_source: 'planned',
+  });
+  expect('cash' in assumptions).toBe(false);
+  expect(spendabilityAppAssumptions([goal], [], 600000)).toMatchObject({
+    goal_allocation: 25000,
+    goal_allocation_source: 'app',
+    next_income_date: null,
+    estimated_income: 600000,
+    income_source: 'profile',
+  });
 });
 it('conciliação sugere fontes diferentes sem apagar compras iguais', () => {
   const incoming = row({ description: 'PIX NETFLIX 012345', source: 'import' });

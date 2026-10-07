@@ -1,15 +1,26 @@
 import { z } from 'zod';
-import { goalSchema } from '../../../shared/domain.ts';
+import { goalSchema, recurringRuleSchema, transactionSchema } from '../../../shared/domain.ts';
 import {
   isFinancialQuestion,
   isSpendabilityQuestion,
   answerFinancialQuestion,
 } from '../../../shared/financial-questions.ts';
-import { merchantKey, spendingAllowance } from '../../../shared/financial-decisions.ts';
+import {
+  merchantKey,
+  spendabilityAppAssumptions,
+  spendingAllowance,
+} from '../../../shared/financial-decisions.ts';
 import { readPages } from '../../../shared/pagination.ts';
 import { accountSchema } from '../../../shared/domain.ts';
+import { recurringTransactions } from '../../../shared/planning.ts';
 import { admin, env, HttpError, json } from '../_shared/http.ts';
-import { downloadMedia, hashToken, deliverReply, verifySignature } from '../_shared/whatsapp.ts';
+import {
+  downloadMedia,
+  hashToken,
+  deliverReply,
+  showTypingIndicator,
+  verifySignature,
+} from '../_shared/whatsapp.ts';
 import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link.ts';
 import {
   parseSpendabilityMessage,
@@ -19,7 +30,6 @@ import {
   readReceipt,
 } from '../_shared/openai.ts';
 import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
-import { transactionSchema } from '../../../shared/domain.ts';
 import { isSummaryRequest, whatsappMonthSummary } from '../../../shared/whatsapp-summary.ts';
 
 const messageSchema = z.object({
@@ -86,7 +96,55 @@ function spendabilityPrompt(context: z.infer<typeof spendabilityContextSchema>) 
   const missing = spendabilityMissing(context);
   const purchase = context.purchase ? ` para ${context.purchase}` : ' para essa compra';
   const price = context.purchase_amount === null ? '' : ` de ${formatMoney(context.purchase_amount)}`;
-  return `Consigo avaliar${purchase}${price}, mas ainda faltam alguns dados para não chutar:\n${missing.map((item) => `• ${item}`).join('\n')}\n\nPode mandar tudo em uma mensagem, por exemplo: “Disponível hoje R$ 12.000; recebo R$ 4.000 em 10/10; reserva R$ 2.000; metas R$ 500.”`;
+  const known = [
+    ...(context.purchase ? [`Produto: ${context.purchase}.`] : []),
+    ...(context.purchase_amount !== null ? [`Preço total: ${formatMoney(context.purchase_amount)}.`] : []),
+    ...(context.cash !== null ? [`Saldo disponível informado: ${formatMoney(context.cash)}.`] : []),
+    ...(context.next_income_date
+      ? [`Próximo recebimento no app: ${whatsappDate(context.next_income_date)}.`]
+      : []),
+    ...(context.estimated_income !== null
+      ? [
+          `${context.income_source === 'profile' ? 'Renda mensal do perfil' : 'Valor previsto'}: ${formatMoney(context.estimated_income)}${context.income_source === 'user' ? ' (informado por você)' : ''}.`,
+        ]
+      : []),
+    ...(context.protected_reserve !== null
+      ? [`Reserva informada: ${formatMoney(context.protected_reserve)}.`]
+      : []),
+    ...(context.goal_allocation !== null
+      ? [
+          `${context.goal_allocation_source === 'app' ? 'Já guardado nas metas do app' : 'Separado para metas'}: ${formatMoney(context.goal_allocation)}.`,
+        ]
+      : []),
+  ];
+  const available = known.length
+    ? `Já encontrei no seu Nexo:\n${known.map((item) => `• ${item}`).join('\n')}\n\n`
+    : '';
+  return `Consigo avaliar${purchase}${price}. ${known.length ? 'Confira os dados que encontrei e me diga se algo mudou.' : ''}\n\nAinda preciso de:\n${missing.map((item) => `• ${item}`).join('\n')}\n\n${available}Pode responder em uma mensagem, por exemplo: “Disponível hoje R$ 12.000; reserva R$ 2.000.”`;
+}
+async function spendabilityAppContext(userId: string, today: string, monthlyIncome: number) {
+  const db = admin();
+  const [transactionRows, goalRows, recurringRows] = await Promise.all([
+    readPages((from, to) =>
+      db.from('transactions').select('*').eq('user_id', userId).order('id').range(from, to),
+    ),
+    readPages((from, to) => db.from('goals').select('*').eq('user_id', userId).order('id').range(from, to)),
+    readPages((from, to) =>
+      db.from('recurring_rules').select('*').eq('user_id', userId).order('id').range(from, to),
+    ),
+  ]);
+  const transactions = transactionSchema.array().parse(transactionRows);
+  const goals = goalSchema.array().parse(goalRows);
+  const recurringRules = recurringRuleSchema.array().parse(recurringRows);
+  const projected = recurringTransactions(recurringRules, transactions, today);
+  return spendabilityContextSchema.parse({
+    kind: 'spendability',
+    purchase: null,
+    purchase_amount: null,
+    cash: null,
+    protected_reserve: null,
+    ...spendabilityAppAssumptions(goals, [...transactions, ...projected], monthlyIncome),
+  });
 }
 async function processMessage(message: Message) {
   const db = admin();
@@ -210,12 +268,22 @@ async function processMessage(message: Message) {
       return;
     }
     const remaining = decision.allowed - context.purchase_amount!;
+    const incomeSource =
+      context.income_source === 'planned'
+        ? 'renda de um recebimento planejado no app'
+        : context.income_source === 'profile'
+          ? 'renda mensal cadastrada no seu perfil'
+          : 'renda esperada que você informou';
+    const goalSource =
+      context.goal_allocation_source === 'app'
+        ? `${formatMoney(context.goal_allocation!)} já guardados nas metas do app`
+        : `${formatMoney(context.goal_allocation!)} separados para metas, como você informou`;
     const lines = [
       remaining >= 0
         ? `Pelas premissas que você informou, a compra de ${formatMoney(context.purchase_amount!)} cabe. Depois dela, restariam ${formatMoney(remaining)} até o próximo recebimento.`
         : `Com essas premissas, a compra não cabe sem mexer no dinheiro protegido. Faltariam ${formatMoney(Math.abs(remaining))} para cobrir o valor.`,
-      `Considerei ${formatMoney(context.cash!)} disponíveis hoje, ${formatMoney(context.protected_reserve!)} de reserva, ${formatMoney(context.goal_allocation!)} separados para metas e as contas até ${whatsappDate(context.next_income_date!)}.`,
-      `Não somei os ${formatMoney(context.estimated_income!)} esperados como dinheiro já recebido.`,
+      `Considerei ${formatMoney(context.cash!)} disponíveis hoje, ${formatMoney(context.protected_reserve!)} de reserva, ${goalSource} e as contas até ${whatsappDate(context.next_income_date!)}.`,
+      `Também encontrei ${formatMoney(context.estimated_income!)} em ${incomeSource}; esse valor não foi somado como dinheiro já recebido.`,
       'É uma estimativa baseada nos valores que você informou; gastos não anotados podem mudar o resultado.',
     ];
     if (decision.bills.length)
@@ -267,9 +335,10 @@ async function processMessage(message: Message) {
       await finish('Recebi várias mensagens seguidas. Aguarde um minuto e tente de novo.', userId);
       return;
     }
+    await showTypingIndicator(message.id);
     const profile = await db
       .from('profiles')
-      .select('timezone,show_journey_points')
+      .select('timezone,show_journey_points,monthly_income')
       .eq('id', userId)
       .single();
     if (profile.error) throw new Error('profile');
@@ -367,7 +436,19 @@ async function processMessage(message: Message) {
       if (isSpendabilityQuestion(text)) {
         const pending = await findPendingSpendability(userId);
         const today = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
-        const context = await parseSpendabilityMessage(text, today, null, userId);
+        const [automatic, extracted] = await Promise.all([
+          spendabilityAppContext(userId, today, profile.data.monthly_income),
+          parseSpendabilityMessage(text, today, null, userId),
+        ]);
+        const context = spendabilityContextSchema.parse({
+          ...extracted,
+          next_income_date: extracted.next_income_date ?? automatic.next_income_date,
+          estimated_income: extracted.estimated_income ?? automatic.estimated_income,
+          income_source: extracted.estimated_income !== null ? 'user' : automatic.income_source,
+          goal_allocation: extracted.goal_allocation ?? automatic.goal_allocation,
+          goal_allocation_source:
+            extracted.goal_allocation !== null ? 'user' : automatic.goal_allocation_source,
+        });
         if (spendabilityMissing(context).length) await holdSpendability(context, userId, pending?.messageId);
         else await answerSpendability(context, userId, today, pending?.messageId);
         return;

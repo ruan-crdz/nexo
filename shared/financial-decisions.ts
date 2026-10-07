@@ -1,4 +1,4 @@
-import type { Transaction } from './domain.ts';
+import type { Goal, Transaction } from './domain.ts';
 import { formatMoney, shiftDays, sum, validDate } from './financial-engine.ts';
 
 export type CashAssumptions = {
@@ -9,6 +9,32 @@ export type CashAssumptions = {
   goal_amount: number;
   estimated_income: number;
 };
+export function spendabilityAppAssumptions(
+  goals: Goal[],
+  plannedIncome: Transaction[],
+  monthlyIncome: number,
+) {
+  const upcoming = plannedIncome
+    .filter((transaction) => transaction.type === 'income' && transaction.status === 'planned')
+    .sort((first, second) => first.date.localeCompare(second.date));
+  const nextDate = upcoming[0]?.date ?? null;
+  const nextDateIncome = nextDate
+    ? sum(
+        upcoming
+          .filter((transaction) => transaction.date === nextDate)
+          .map((transaction) => transaction.amount),
+      )
+    : null;
+  return {
+    goal_allocation: sum(goals.map((goal) => goal.saved)),
+    goal_allocation_source: 'app' as const,
+    next_income_date: nextDate,
+    estimated_income: nextDateIncome ?? (monthlyIncome > 0 ? monthlyIncome : null),
+    income_source:
+      nextDateIncome !== null ? ('planned' as const) : monthlyIncome > 0 ? ('profile' as const) : null,
+  };
+}
+
 export function spendingAllowance(input: CashAssumptions, transactions: Transaction[], today: string) {
   if (
     !validDate(input.confirmed_on) ||

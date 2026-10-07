@@ -32,6 +32,28 @@ export function graphUrl(path: string) {
   if (!/^v\d+\.\d+$/.test(version)) throw new HttpError(503, 'Configure uma versão válida da Graph API.');
   return `https://graph.facebook.com/${version}/${path}`;
 }
+export async function showTypingIndicator(messageId: string) {
+  try {
+    const response = await fetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/messages`), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env('WHATSAPP_ACCESS_TOKEN')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+        typing_indicator: { type: 'text' },
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok)
+      console.error(JSON.stringify({ event: 'whatsapp_typing_indicator_failed', status: response.status }));
+  } catch {
+    console.error(JSON.stringify({ event: 'whatsapp_typing_indicator_failed', status: 'network' }));
+  }
+}
 export async function sendText(phone: string, text: string) {
   if (!/^\d{8,15}$/.test(phone)) throw new HttpError(400, 'Número inválido.');
   const response = await fetch(graphUrl(`${env('WHATSAPP_PHONE_NUMBER_ID')}/messages`), {
@@ -155,13 +177,13 @@ export async function downloadMedia(mediaId: string): Promise<File> {
       ? 'm4a'
       : mime === 'audio/mpeg'
         ? 'mp3'
-          : mime === 'audio/wav' || mime === 'audio/x-wav'
-            ? 'wav'
-        : mime === 'audio/webm'
-          ? 'webm'
-          : mime === 'application/pdf'
-            ? 'pdf'
-            : 'media';
+        : mime === 'audio/wav' || mime === 'audio/x-wav'
+          ? 'wav'
+          : mime === 'audio/webm'
+            ? 'webm'
+            : mime === 'application/pdf'
+              ? 'pdf'
+              : 'media';
   return new File([bytes], `whatsapp.${extension}`, {
     type: mime,
   });

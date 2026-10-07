@@ -21,6 +21,7 @@ Usuário autenticado toca em “Conectar meu WhatsApp”. `whatsapp-link` gera c
 - “Desfazer” remove o último lote da conta registrado por WhatsApp nas últimas vinte e quatro horas.
 - “Resumo”, “saldo” ou “quanto gastei este mês?” retornam entradas, gastos e diferença do mês, calculados em centavos, sem chamada de IA. Consulta usa usuário vinculado e seu fuso, desconsiderando previsões e datas futuras. Não representa saldo bancário.
 - “Posso comprar um Play 5 por R$ 5.000?” abre uma avaliação em etapas. O Nexo pede preço, dinheiro confirmado hoje, próximo recebimento, reserva e valor separado para metas; a conversa expira em dez minutos. O cálculo usa as contas pendentes, nunca trata renda esperada como dinheiro recebido e não salva compra. “Cancelar” encerra a avaliação.
+- Na avaliação de compra, metas já guardadas, renda do perfil e recebimentos/recorrências futuros são reaproveitados quando disponíveis. Saldo de hoje e reserva não são inferidos; a pessoa precisa informá-los. A resposta identifica quando uma premissa veio do app.
 - “Ajuda” e “oi” retornam instruções curtas. Outras perguntas recebem orientação sobre as funções disponíveis; não encaminham a simuladores removidos.
 
 Perguntas “por que gastei mais?”, “quanto falta para minha meta?” e “quais contas ainda vencem?” usam cálculos determinísticos, com períodos e registros de origem. O app mostra a evidência completa; o WhatsApp limita a lista e aponta para a consulta completa quando necessário. Nenhuma anotação é criada ao consultar.
@@ -30,6 +31,8 @@ Consultas também aceitam hoje/ontem/mês passado/últimos N dias e filtros conh
 JPG/PNG/WEBP de recibos até 5 MB usam `OPENAI_VISION_MODEL`: a imagem gera prévia pendente; “confirmar” não comprova pagamento. O usuário marca como pago no app depois de conferir. Imagens ilegíveis ou sem valor/data confiáveis pedem esclarecimento. Não há conteúdo de imagem em logs.
 
 As respostas do bot são texto com listas legíveis no WhatsApp. Envio de gráficos ou imagens gerados pelo Nexo ainda não está implementado.
+
+Quando o processamento pode levar alguns segundos, o webhook marca a mensagem como lida e mostra o indicador nativo de digitação da Meta. Ele expira após 25 segundos ou quando a resposta chega.
 
 Não suportado ainda: empréstimos entre pessoas, alteração de cartão/metas ou criação de lembretes por mensagem e Open Finance. O parser devolve `unsupported` e orienta o usuário; não inventa execução.
 

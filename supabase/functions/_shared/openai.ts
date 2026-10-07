@@ -17,6 +17,8 @@ const spendabilitySchema = z.object({
 });
 export const spendabilityContextSchema = spendabilitySchema.extend({
   kind: z.literal('spendability'),
+  income_source: z.enum(['planned', 'profile', 'user']).nullable().optional(),
+  goal_allocation_source: z.enum(['app', 'user']).nullable().optional(),
 });
 export type SpendabilityContext = z.infer<typeof spendabilityContextSchema>;
 const spendabilityJsonSchema = {
@@ -139,6 +141,9 @@ export async function parseSpendabilityMessage(
     estimated_income: current.estimated_income ?? previous?.estimated_income ?? null,
     protected_reserve: current.protected_reserve ?? previous?.protected_reserve ?? null,
     goal_allocation: current.goal_allocation ?? previous?.goal_allocation ?? null,
+    income_source: current.estimated_income !== null ? 'user' : (previous?.income_source ?? null),
+    goal_allocation_source:
+      current.goal_allocation !== null ? 'user' : (previous?.goal_allocation_source ?? null),
   };
 }
 export async function embed(text: string): Promise<number[]> {
