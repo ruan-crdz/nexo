@@ -104,7 +104,7 @@ it('meta ultrapassada não inventa uma subtração com resultado zero', () => {
     'Quanto falta para minha meta?',
     '2026-10-05',
   )!;
-  expect(result.calculation[0]).toContain('meta atingida');
+  expect(result.calculation[0]).toContain('alvo alcançado');
   expect(result.calculation[0]).not.toContain(' - ');
 });
 it('resumo semanal cobre a última semana completa e conserva centavos', () => {

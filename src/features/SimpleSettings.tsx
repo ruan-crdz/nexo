@@ -176,7 +176,7 @@ export function SimpleSettings() {
           <ChevronRight />
         </Link>
         <Link to="/metas">
-          <span>Metas</span>
+          <span>Caixinhas</span>
           <ChevronRight />
         </Link>
         <Link to="/controle">

@@ -5,12 +5,12 @@ export function GoalsPage() {
   return (
     <>
       <header className="simple-heading">
-        <h1>Minhas metas</h1>
-        <p>Um objetivo com prazo e aportes que caibam no seu momento.</p>
+        <h1>Caixinhas</h1>
+        <p>Separe dinheiro para o que importa. Com ou sem prazo.</p>
       </header>
       <GoalJourney />
       <Link className="button button-secondary" to="/planejar">
-        Ver todas as metas e planejamento
+        Ver planejamento completo
       </Link>
     </>
   );

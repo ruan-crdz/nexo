@@ -148,7 +148,7 @@ export function notificationCandidates(
       candidates.push({
         key: `weekly:${weekly.start}`,
         kind: 'weekly',
-        text: `Resumo da semana, de ${formatDate(weekly.start)} a ${formatDate(weekly.end)}: entrou ${formatMoney(weekly.income)}, saiu ${formatMoney(weekly.expenses)}. Diferença nas anotações: ${formatMoney(weekly.net)}; não é saldo bancário.${focus && journey ? ` Meta ${focus.name}: ${formatMoney(focus.saved)} de ${formatMoney(focus.target)}. ${paused ? 'Seus lembretes estão pausados; seu progresso continua.' : journey.message}` : ''}`,
+        text: `Resumo da semana, de ${formatDate(weekly.start)} a ${formatDate(weekly.end)}: entrou ${formatMoney(weekly.income)}, saiu ${formatMoney(weekly.expenses)}. Diferença nas anotações: ${formatMoney(weekly.net)}; não é saldo bancário.${focus && journey ? ` Caixinha ${focus.name}: ${formatMoney(focus.saved)} de ${formatMoney(focus.target)}. ${paused ? 'Seus lembretes estão pausados; seu progresso continua.' : journey.message}` : ''}`,
       });
   }
   if (data.profile.journey_reminders && !paused && focus && journey && journey.remaining > 0) {
@@ -164,7 +164,7 @@ export function notificationCandidates(
       candidates.push({
         key: `journey:${focus.id}:${data.profile.checkin_frequency === 'weekly' ? start : today}`,
         kind: 'journey',
-        text: `Se quiser, faça seu check-in da meta ${focus.name}. Você informou ${formatMoney(focus.saved)} guardados. ${journey.message} É um convite, não uma cobrança; não precisa guardar dinheiro hoje.`,
+        text: `Se quiser, faça seu check-in da Caixinha ${focus.name}. Você informou ${formatMoney(focus.saved)} guardados. ${journey.message} É um convite, não uma cobrança; não precisa guardar dinheiro hoje.`,
       });
   }
   return candidates;
@@ -177,7 +177,7 @@ export function isVerifiedQuestion(question: string) {
     .trim();
   return (
     /^(?:por que|porque|pq)\s+(?:eu\s+)?gastei\s+mais[?!.\s]*$/.test(normalized) ||
-    /^(?:quanto falta|como esta).*(?:meta|minhas metas)/.test(normalized) ||
+    /^(?:quanto falta|como esta).*(?:meta|minhas metas|caixinha|minhas caixinhas)/.test(normalized) ||
     /^(?:quais|que|quanto).*(?:contas|vencem|vencer)/.test(normalized)
   );
 }
@@ -191,15 +191,15 @@ export function verifiedReply(
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
-  if (/meta/.test(normalized)) {
+  if (/meta|caixinha/.test(normalized)) {
     const goals = data.goals;
     return {
       answer: goals.length
-        ? 'Veja quanto falta para chegar a cada meta:'
-        : 'Você ainda não tem metas cadastradas. Pode criar uma no app quando quiser.',
+        ? 'Veja quanto falta para chegar a cada Caixinha:'
+        : 'Você ainda não tem Caixinhas. Pode criar uma no app quando quiser.',
       calculation: goals.map((goal) =>
         goal.saved >= goal.target
-          ? `${goal.name}: meta atingida. Você informou ${formatMoney(goal.saved)} guardados.`
+          ? `${goal.name}: alvo alcançado. Você informou ${formatMoney(goal.saved)} guardados.`
           : `${goal.name}: faltam ${formatMoney(goal.target - goal.saved)}. Guardado: ${formatMoney(goal.saved)} de ${formatMoney(goal.target)}.`,
       ),
       records: [],

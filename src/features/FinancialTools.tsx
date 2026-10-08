@@ -228,7 +228,7 @@ export function FinancialTools() {
             />
           </label>
           <label>
-            Separado para metas (R$)
+            Separado em Caixinhas (R$)
             <input
               inputMode="decimal"
               value={goals}

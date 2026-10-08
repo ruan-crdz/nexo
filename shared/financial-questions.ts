@@ -20,7 +20,7 @@ export function isFinancialChartRequest(text: string) {
     .toLowerCase();
   return (
     /\b(?:grafico|graficos|imagem|foto|visual)\b/.test(normalized) &&
-    /\b(?:gastos?|gastei|recebi|entradas?|saidas?|resumo|mes|contas?|metas?|dinheiro|saldo|financas?)\b/.test(
+    /\b(?:gastos?|gastei|recebi|entradas?|saidas?|resumo|mes|contas?|metas?|meta|caixinhas?|dinheiro|saldo|financas?)\b/.test(
       normalized,
     )
   );
@@ -90,7 +90,7 @@ export function isFinancialQuestion(text: string) {
     isNextMonthForecastQuestion(normalized) ||
     isVerifiedQuestion(text) ||
     (/^(quanto|quais|como|por que|porque|mostre|me mostre|posso)\b/.test(normalized) &&
-      /gast|receb|entrou|saiu|conta|meta|dinheiro|saldo/.test(normalized)) ||
+      /gast|receb|entrou|saiu|conta|meta|caixinha|dinheiro|saldo/.test(normalized)) ||
     /^(?:tive|houve|encontrei|achei)\b.*\b(?:gastos?|despesas?|compras?|pagamentos?|lancamentos?)\b/.test(
       normalized,
     )
@@ -110,7 +110,7 @@ export function answerFinancialQuestion(
   if (isSpendabilityQuestion(normalized))
     return {
       answer:
-        'Posso te ajudar a avaliar essa compra, mas não vou chutar com base só nos gastos anotados. Para calcular com segurança, preciso do dinheiro disponível confirmado hoje, da data do próximo recebimento, das contas até lá, da reserva que você quer proteger e do valor separado para metas. “Posso gastar?” no app calcula isso com esses dados.',
+        'Posso te ajudar a avaliar essa compra, mas não vou chutar com base só nos gastos anotados. Para calcular com segurança, preciso do dinheiro disponível confirmado hoje, da data do próximo recebimento, das contas até lá, da reserva que você quer proteger e do valor separado para Caixinhas. “Posso gastar?” no app calcula isso com esses dados.',
       calculation: [],
       records: [],
       goals: [],
@@ -183,7 +183,8 @@ export function answerFinancialQuestion(
       records: [],
       goals: [],
     };
-  if (/meta/.test(normalized)) return verifiedReply(data, 'Quanto falta para minha meta?', today);
+  if (/meta|caixinha/.test(normalized))
+    return verifiedReply(data, 'Quanto falta para minha Caixinha?', today);
   const period = questionPeriod(normalized, today);
   if ('error' in period) return { answer: period.error, calculation: [], records: [], goals: [] };
   if (isVerifiedQuestion(text) && !/paguei|pagas|pagos|recebi/.test(normalized) && !period.explicit)

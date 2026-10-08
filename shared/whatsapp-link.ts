@@ -21,7 +21,7 @@ export function whatsappUrl(phone: string, message?: string) {
 
 export const whatsappWelcome =
   '*Seu WhatsApp está conectado!* 🌿\n\n' +
-  'Sou o Nexo. Vou ajudar você a anotar gastos, acompanhar seu dinheiro e cuidar das suas metas.\n\n' +
+  'Sou o Nexo. Vou ajudar você a anotar gastos, acompanhar seu dinheiro e cuidar das suas Caixinhas.\n\n' +
   'Toque em *Ver opções* para começar. Ou mande um texto ou áudio, como: “Paguei 35 reais na farmácia hoje”.\n\n' +
   'Pedidos completos são salvos direto. Se faltar alguma informação, eu pergunto. Seus registros ficam disponíveis no app.\n\n' +
   'O que deseja fazer a seguir?';

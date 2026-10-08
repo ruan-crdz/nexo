@@ -33,11 +33,11 @@ export function TypingIndicator() {
 const labels: Record<string, string> = {
   balance: 'Saldo estimado nos registros',
   recorded_surplus: 'Resultado dos movimentos',
-  protected_goals: 'Protegido em metas',
-  goal_name: 'Meta em foco',
-  goal_saved: 'Guardado na meta',
-  goal_remaining: 'Falta para a meta',
-  goal_deadline: 'Prazo da meta',
+  protected_goals: 'Guardado em Caixinhas',
+  goal_name: 'Caixinha em foco',
+  goal_saved: 'Guardado na Caixinha',
+  goal_remaining: 'Falta para a Caixinha',
+  goal_deadline: 'Prazo da Caixinha',
   goal_monthly_required: 'Cota mensal para o prazo',
   goal_next_contribution: 'Próximo aporte que cabe agora',
   income: 'Entradas',
@@ -86,8 +86,19 @@ export function AssistantPage() {
         const plan = goal
           ? goalMonthlyPlan(goal, today, budget.available, budget.contributed[goal.id] ?? 0)
           : null;
+        const demoAnswer = !goal || !plan
+          ? `Há ${displayMoney(budget.available)} livres para planejar. Antes de escolher uma Caixinha, confira as contas e necessidades ainda não registradas.`
+          : plan.remaining === 0
+            ? `Você chegou à Caixinha ${goal.name}. Pode rever o nome ou manter o valor guardado.`
+            : !goal.deadline
+              ? `Na Caixinha ${goal.name}, faltam ${displayMoney(plan.remaining)}. Você pode guardar no seu ritmo, sem prazo ou cota mensal obrigatória.`
+              : plan.required === 0
+                ? `A cota deste mês para a Caixinha ${goal.name} já foi cumprida. Você pode manter o valor guardado sem se pressionar por outro aporte.`
+                : plan.suggested > 0
+                  ? `Na Caixinha ${goal.name}, faltam ${displayMoney(plan.remaining)}. Pelas anotações atuais, cabe guardar ${displayMoney(plan.suggested)} neste mês.${plan.gap > 0 ? ' O prazo pede mais que a sobra atual; você pode ajustar o prazo ou o valor da Caixinha.' : ''}`
+                  : `Na Caixinha ${goal.name}, ainda faltam ${displayMoney(plan.remaining)}, mas não há sobra registrada para guardar agora. Confira as despesas e ajuste o plano sem comprometer o essencial.`;
         reply = {
-          answer: `Esta é uma leitura local dos dados de exemplo, sem chamada de IA.\n\n${goal && plan ? (plan.remaining === 0 ? `Você já atingiu a meta ${goal.name}. Pode revisar o objetivo ou manter o valor protegido.` : plan.required === 0 ? `A cota deste mês para ${goal.name} já foi cumprida. Você pode manter o valor protegido sem se pressionar por outro aporte.` : plan.suggested > 0 ? `Para ${goal.name}, faltam ${displayMoney(plan.remaining)}. Pelas anotações atuais, cabe um próximo aporte de ${displayMoney(plan.suggested)} neste mês.${plan.gap > 0 ? ' O prazo pede mais que a sobra atual; você pode ajustar o prazo ou o valor da meta.' : ''}` : `Para ${goal.name}, ainda faltam ${displayMoney(plan.remaining)}, mas não há sobra registrada para um novo aporte agora. Confira as despesas e ajuste o prazo sem comprometer o essencial.`) : `Há ${displayMoney(budget.available)} livres para planejar. Antes de escolher uma meta, confira as contas e necessidades ainda não registradas.`}\n\nNão é saldo bancário confirmado. Para avaliar uma compra, use “Posso gastar?”.`,
+          answer: `Esta é uma leitura local dos dados de exemplo, sem chamada de IA.\n\n${demoAnswer}\n\nNão é saldo bancário confirmado. Para avaliar uma compra, use “Posso gastar?”.`,
           metrics: {
             recorded_surplus: displayMoney(budget.net),
             free: displayMoney(budget.available),

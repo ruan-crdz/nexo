@@ -92,7 +92,7 @@ const fields: Record<GuideKind, Field[]> = {
     {
       key: 'priority',
       question:
-        'Qual é a prioridade dessa meta?\nAo escolher, eu crio a meta. O valor guardado começa em zero; depois você pode anotar os aportes.',
+        'Qual é a prioridade dessa Caixinha?\nAo escolher, eu crio a Caixinha. O valor guardado começa em zero; depois você pode anotar os aportes.',
       type: 'choice',
       choices: [choice('high', 'Alta'), choice('medium', 'Média'), choice('low', 'Baixa')],
     },
@@ -118,7 +118,7 @@ const fields: Record<GuideKind, Field[]> = {
 const titles: Record<GuideKind, string> = {
   expense: 'Anotar gasto',
   income: 'Anotar entrada',
-  goal: 'Criar uma meta',
+  goal: 'Criar uma Caixinha',
   recurring: 'Criar conta fixa',
 };
 export function createGuide(kind: GuideKind, today: string): GuideState {
@@ -180,7 +180,7 @@ export function guideAnswer(
       }
       if (!validDate(String(value))) throw new Error();
       if (state.kind === 'goal' && String(value) < state.today)
-        return { error: 'O prazo da meta precisa ser hoje ou uma data futura.' };
+        return { error: 'O prazo da Caixinha precisa ser hoje ou uma data futura.' };
     } else if (field.type === 'choice') {
       if (!field.choices?.some((item) => item.value === value))
         return { error: 'Escolha uma opção abaixo ou escreva exatamente o nome dela.' };
@@ -223,7 +223,7 @@ export function guideReceipt(state: GuideState) {
   const a = state.answers;
   const dateLabel = (value: unknown) => String(value).split('-').reverse().join('/');
   if (state.kind === 'goal')
-    return `*Meta criada* ✓\n${a.name}\nObjetivo: *${formatMoney(Number(a.target))}*\nPrazo: ${dateLabel(a.deadline)}\nPor mês: ${formatMoney(Number(a.monthly_contribution))}\nGuardado: R$ 0,00\n\nVocê já pode acompanhar no app.`;
+    return `*Caixinha criada* ✓\n${a.name}\nObjetivo: *${formatMoney(Number(a.target))}*\nPrazo: ${dateLabel(a.deadline)}\nPor mês: ${formatMoney(Number(a.monthly_contribution))}\nGuardado: R$ 0,00\n\nVocê já pode acompanhar no app.`;
   if (state.kind === 'recurring')
     return `*Conta fixa cadastrada* ✓\n${a.description} · *${formatMoney(Number(a.amount))}*\nPrimeiro vencimento: ${dateLabel(a.start_date)}\nFrequência: ${{ weekly: 'semanal', monthly: 'mensal', yearly: 'anual' }[String(a.frequency)]}\n\nÉ uma previsão. Nenhum pagamento foi registrado.`;
   return `*${state.kind === 'expense' ? 'Gasto anotado' : 'Entrada anotada'}* ✓\n${a.description} · *${formatMoney(Number(a.amount))}*\n${dateLabel(a.date)} · ${a.category}\nSituação: ${a.status === 'planned' ? 'pendente' : state.kind === 'expense' ? 'pago' : 'recebido'}\n\nJá está no app.`;

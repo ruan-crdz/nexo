@@ -384,7 +384,7 @@ export function SimpleHome() {
               </dd>
             </div>
             <div>
-              <dt>Protegido em metas</dt>
+              <dt>Guardado em Caixinhas</dt>
               <dd>{displayMoney(goalBudget.allocated)}</dd>
             </div>
             <div>
@@ -457,7 +457,7 @@ export function SimpleHome() {
           {activeGoal && goalProgress ? (
             <>
               <div>
-                <p className="eyebrow">Seu próximo passo</p>
+                <p className="eyebrow">Sua Caixinha em foco</p>
                 <h2 id="home-goal-title">{activeGoal.name}</h2>
                 <p className="home-goal-amount">
                   {displayMoney(activeGoal.saved)} de {displayMoney(activeGoal.target)}
@@ -471,7 +471,7 @@ export function SimpleHome() {
                   {displayMoney(goalProgress.remaining)}
                 </small>
                 <p className="goal-next-contribution">
-                  <strong>Este mês: {displayMoney(goalProgress.suggested)}</strong> para sua meta.
+                  <strong>Este mês: {displayMoney(goalProgress.suggested)}</strong> para sua Caixinha.
                 </p>
                 {activeGoal.deadline && goalProgress.monthlyTarget !== null ? (
                   <small>
@@ -483,12 +483,12 @@ export function SimpleHome() {
                 )}
                 {!goalProgress.feasibleNow && goalProgress.remaining > 0 && (
                   <p className="muted">
-                    O prazo exige mais que a sobra atual. Você pode ajustar o prazo ou o valor da meta.
+                    O prazo exige mais que a sobra atual. Você pode ajustar o prazo ou o valor da Caixinha.
                   </p>
                 )}
               </div>
               <Link className="button button-secondary" to="/metas">
-                Ver meta <ChevronRight size={18} />
+                Ver Caixinha <ChevronRight size={18} />
               </Link>
             </>
           ) : (
@@ -497,7 +497,7 @@ export function SimpleHome() {
                 <h2 id="home-goal-title">Escolha um objetivo</h2>
               </div>
               <Link className="button button-secondary" to="/metas">
-                Escolher meta <ChevronRight size={18} />
+                Escolher Caixinha <ChevronRight size={18} />
               </Link>
             </>
           )}

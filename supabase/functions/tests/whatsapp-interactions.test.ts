@@ -239,7 +239,7 @@ Deno.test('pergunta do menu guarda contexto para uma resposta curta', async () =
   await mocked(
     async (requests) => {
       const result = await handleWhatsAppNavigation({ id: 'nexo:nav:saving-help' }, context);
-      assert.match(result!.reply!, /qual meta/);
+      assert.match(result!.reply!, /qual Caixinha/);
       const saved = requests.find((request) => Array.isArray(request.body.history))!;
       assert.equal(saved.body.user_id, context.userId);
       assert.match(JSON.stringify(saved.body.history), /Anotar valor guardado/);

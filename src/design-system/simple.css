@@ -252,7 +252,8 @@ label {
   font-weight: 600;
 }
 .simple-nav a.active {
-  background: var(--sand);
+  background: var(--lime-soft);
+  color: var(--moss);
   box-shadow: none;
 }
 .simple-nav a.simple-nav-nexo-link {
@@ -1085,6 +1086,36 @@ label {
   flex-direction: column;
   gap: 20px;
   min-width: 0;
+}
+.simple-summary {
+  padding: clamp(22px, 4vw, 32px);
+  border: 0;
+  border-radius: 12px;
+  background: var(--account-hero);
+  color: var(--account-hero-foreground);
+  box-shadow: var(--shadow);
+}
+.simple-summary .eyebrow,
+.simple-summary .home-month-result > span,
+.simple-summary .home-flow-line,
+.simple-summary .muted,
+.simple-summary .home-budget-breakdown dt {
+  color: var(--account-hero-muted);
+}
+.simple-summary .home-month-result strong {
+  font-size: clamp(42px, 6vw, 56px);
+  letter-spacing: 0;
+}
+.simple-summary .home-budget-breakdown > div + div {
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--account-hero-foreground) 22%, transparent);
+}
+.simple-summary .home-budget-breakdown dd,
+.simple-summary .home-budget-breakdown .money-value {
+  color: var(--account-hero-foreground);
+}
+.simple-summary .home-flow-line {
+  margin-block: 12px 4px;
 }
 .simple-summary > .eyebrow {
   margin-bottom: 4px;

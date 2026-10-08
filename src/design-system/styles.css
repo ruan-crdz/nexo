@@ -444,7 +444,8 @@ fieldset {
   padding: 24px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
 .section-title {
   display: flex;

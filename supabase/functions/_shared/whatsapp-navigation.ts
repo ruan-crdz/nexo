@@ -261,7 +261,7 @@ export async function handleWhatsAppNavigation(
         income:
           '*Anotar entrada*\nEscreva ou mande um áudio com o valor, de onde veio e quando aconteceu. Exemplo: “Recebi 2.000 reais de salário hoje”. Se faltar algo, eu pergunto só o necessário.',
         goal:
-          '*Criar uma meta*\nConte o objetivo, o valor e o prazo em uma frase. Exemplo: “Quero juntar 5 mil reais para uma viagem até dezembro de 2026, com prioridade alta e 300 reais por mês”. Se faltar algo, eu pergunto junto, sem formulário.',
+          '*Criar uma Caixinha*\nConte o objetivo e o valor; se quiser, inclua um prazo. Exemplo: “Quero juntar 5 mil reais para uma viagem até dezembro de 2026, com prioridade alta e 300 reais por mês”. Se faltar algo, eu pergunto junto, sem formulário.',
         recurring:
           '*Criar conta fixa*\nDescreva o valor, o vencimento e a frequência em uma frase. Exemplo: “Internet, 120 reais por mês, vencimento todo dia 10”. Se faltar uma data essencial, eu pergunto.',
       };

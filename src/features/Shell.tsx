@@ -31,7 +31,7 @@ const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
   { to: '/nexo', label: 'Nexo', icon: MessageCircle },
-  { to: '/metas', label: 'Metas', icon: Target },
+  { to: '/metas', label: 'Caixinhas', icon: Target },
   { to: '/planejar', label: 'Planejar', icon: CalendarDays },
   { to: '/familia', label: 'Família', icon: Users },
   { to: '/perfil', label: 'Você', icon: Settings },

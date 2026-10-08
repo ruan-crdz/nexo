@@ -40,8 +40,8 @@ const steps = [
     icon: NotebookPen,
   },
   {
-    title: 'Cuide das suas metas',
-    description: 'Defina o que quer alcançar e acompanhe os aportes sem duplicar gastos.',
+    title: 'Organize suas Caixinhas',
+    description: 'Separe dinheiro para o que importa, com prazo ou no seu próprio ritmo.',
     example: 'Você vê quanto já guardou, quanto falta e qual próximo passo cabe no seu mês.',
     icon: Target,
   },

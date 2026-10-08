@@ -477,7 +477,7 @@ export function nexoScore(input: {
       action: 'Procure um pequeno espaço entre renda e gastos.',
     },
     {
-      name: 'Metas',
+      name: 'Caixinhas',
       weight: 10,
       value: input.goalProgress,
       action: 'Revise o prazo e o valor da sua prioridade.',

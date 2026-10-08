@@ -11,7 +11,7 @@ export const rootChoices = [
   option('expense', 'Anotar gasto'),
   option('income', 'Anotar entrada'),
   option('money', 'Consultar dinheiro'),
-  option('goals', 'Minhas metas'),
+  option('goals', 'Caixinhas'),
   option('planning', 'Me planejar'),
   option('accounts', 'Contas e cartões'),
   option('receipts', 'Enviar comprovante'),
@@ -38,9 +38,9 @@ export const navigationPages: Record<string, NavigationPage> = {
     option('cash-help', 'Dinheiro até uma data'),
     option('purchase-help', 'Posso comprar?'),
   ]),
-  goals: page('*Minhas metas*\nO que você quer fazer?', [
-    option('goal-list', 'Ver minhas metas'),
-    option('goal', 'Criar uma meta'),
+  goals: page('*Caixinhas*\nO que você quer fazer?', [
+    option('goal-list', 'Ver Caixinhas'),
+    option('goal', 'Criar Caixinha'),
     option('saving-help', 'Anotar valor guardado'),
     option('withdrawal-help', 'Anotar uma retirada'),
   ]),
@@ -106,7 +106,7 @@ export const navigationQueries: Record<string, string> = {
   history: 'Mostre meus últimos cinco lançamentos, com descrição, valor, data e se estão pagos ou pendentes.',
   due: 'Quais contas ainda estão pendentes neste mês? Mostre valores e vencimentos.',
   categories: 'Quanto gastei por categoria neste mês? Considere apenas os gastos pagos.',
-  'goal-list': 'Consulte minhas metas e mostre o valor guardado e o alvo de cada uma.',
+  'goal-list': 'Consulte minhas Caixinhas e mostre o valor guardado e o alvo de cada uma.',
   'recurring-list':
     'Consulte minhas contas recorrentes e mostre valor, frequência e próximo vencimento, se puder calculá-lo.',
   'account-list':
@@ -120,9 +120,9 @@ export const navigationPrompts: Record<string, string> = {
   'purchase-help':
     '*Pensar antes de comprar*\nO que você quer comprar, por quanto e como pretende pagar? Conte também quanto dinheiro está disponível, sem incluir limite do cartão.',
   'saving-help':
-    '*Anotar valor guardado*\nEm qual meta você guardou dinheiro e quanto foi?\nExemplo: “Guardei 50 reais na reserva”. Isso atualiza a meta, sem criar outro gasto.',
+    '*Anotar valor guardado*\nEm qual Caixinha você guardou dinheiro e quanto foi?\nExemplo: “Guardei 50 reais na reserva”. Isso atualiza o valor guardado, sem criar outro gasto.',
   'withdrawal-help':
-    '*Anotar uma retirada*\nDe qual meta você retirou dinheiro e quanto foi?\nExemplo: “Retirei 30 reais da reserva”.',
+    '*Anotar uma retirada*\nDe qual Caixinha você retirou dinheiro e quanto foi?\nExemplo: “Retirei 30 reais da reserva”.',
   'budget-help':
     '*Limites de gastos*\nQuer consultar seus limites ou definir um novo?\nPara definir, diga a categoria, o valor e o mês: “Limite de 500 reais para alimentação em outubro de 2026”.',
   'debt-help':

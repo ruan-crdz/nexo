@@ -90,7 +90,7 @@ export function JourneyGoalForm({
         }),
       );
       await app.refresh();
-      app.toast('Sua meta está em foco. Um passo de cada vez.');
+      app.toast('Sua Caixinha está em foco. Um passo de cada vez.');
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Confira os valores e tente novamente.');
@@ -100,7 +100,7 @@ export function JourneyGoalForm({
   }
   return (
     <Dialog
-      title={existing ? 'Ajustar minha meta' : 'Planejar minha meta'}
+      title={existing ? 'Editar Caixinha' : 'Criar Caixinha'}
       onClose={() => {
         if (!pending) onClose();
       }}
@@ -108,7 +108,7 @@ export function JourneyGoalForm({
       <form className="simple-form" onSubmit={(event) => void save(event)}>
         <fieldset disabled={pending} className="simple-form">
           <label>
-            Nome da meta
+            Nome da Caixinha
             <input
               required
               minLength={2}
@@ -131,7 +131,7 @@ export function JourneyGoalForm({
               onChange={(event) => setTarget(event.target.value)}
             />
           </label>
-          <div className="goal-presets" role="group" aria-label="Valores sugeridos para meta">
+          <div className="goal-presets" role="group" aria-label="Valores sugeridos para Caixinha">
             {goalPresets.map((value) => (
               <button
                 type="button"
@@ -152,7 +152,7 @@ export function JourneyGoalForm({
               value={saved}
               onChange={(event) => setSaved(event.target.value)}
             />
-            {existing && <small>Ajustes no valor guardado ficam registrados no histórico da meta.</small>}
+            {existing && <small>Ajustes no valor guardado ficam registrados no histórico da Caixinha.</small>}
           </label>
           <details>
             <summary>Passo semanal opcional</summary>
@@ -173,11 +173,11 @@ export function JourneyGoalForm({
               checked={hasDeadline}
               onChange={(event) => setHasDeadline(event.target.checked)}
             />
-            Tenho uma data para alcançar esta meta
+            Tenho uma data para alcançar esta Caixinha
           </label>
           {hasDeadline && (
             <label>
-              Data que quer alcançar a meta
+              Data que quer alcançar a Caixinha
               <input
                 required
                 type="date"
@@ -215,7 +215,7 @@ export function JourneyGoalForm({
           )}
           <Button type="submit" disabled={pending}>
             <Check size={18} />
-            {pending ? 'Salvando…' : existing ? 'Salvar alterações' : 'Criar meta'}
+            {pending ? 'Salvando…' : existing ? 'Salvar alterações' : 'Criar Caixinha'}
           </Button>
           <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
             Cancelar
@@ -336,7 +336,7 @@ function GoalMovement({
           {reason === 'withdrawal'
             ? 'Esse valor não está mais separado'
             : `Esse valor já foi ${reason === 'saving' ? 'separado de verdade' : 'usado'}`}
-          . Isto atualiza minha meta, não transfere dinheiro nem cria gasto duplicado.
+          . Isto atualiza minha Caixinha, não transfere dinheiro nem cria gasto duplicado.
         </label>
         {error && (
           <p role="alert" className="error-message">
@@ -374,7 +374,7 @@ function downloadAchievement(name: string, goal: Goal | null, points: number) {
   const lines = [
     'Meu esforço continua.',
     `${points} pontos de hábitos construídos.`,
-    goal ? `Minha meta: ${goal.name}` : 'Um passo de cada vez.',
+    goal ? `Minha Caixinha: ${goal.name}` : 'Um passo de cada vez.',
     'Uma pausa não apaga minhas conquistas.',
     'Nenhum dado bancário foi compartilhado.',
   ];
@@ -479,10 +479,10 @@ export function GoalJourney() {
             <Button
               variant="secondary"
               className="journey-new-goal"
-              aria-label="Nova meta"
+              aria-label="Nova Caixinha"
               onClick={() => setSetup({})}
             >
-              <Plus size={18} /> <span>Nova meta</span>
+              <Plus size={18} /> <span>Nova Caixinha</span>
             </Button>
           )}
           <Button
@@ -506,7 +506,7 @@ export function GoalJourney() {
               </div>
               <Progress value={journey.percent} label={`Progresso total de ${goal.name}`} />
               <p className="journey-estimate muted">
-                {Math.round(journey.percent)}% da meta · faltam {displayMoney(plan.remaining)}.
+                {Math.round(journey.percent)}% da Caixinha · faltam {displayMoney(plan.remaining)}.
               </p>
               <dl className="goal-monthly-plan">
                 <div className="goal-next-contribution">
@@ -543,7 +543,7 @@ export function GoalJourney() {
                   {plan.overdue ? 'O prazo escolhido já passou. ' : ''}
                   Faltam {displayMoney(plan.gap)} para completar a cota deste mês com a sobra atual.
                   {plan.projectedMonth
-                    ? ` Se essa capacidade se repetisse, a meta chegaria em ${new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${plan.projectedMonth}-01T12:00:00Z`))}.`
+                    ? ` Se essa capacidade se repetisse, a Caixinha chegaria ao alvo em ${new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${plan.projectedMonth}-01T12:00:00Z`))}.`
                     : ' Não há sobra registrada para sugerir um aporte agora.'}{' '}
                   Ajuste o prazo ou o valor sem comprometer contas essenciais.
                 </p>
@@ -560,7 +560,7 @@ export function GoalJourney() {
                     : app.data.profile.journey_mode === 'recovery' || journey.recovering
                     ? `Seu esforço não foi apagado. Você já chegou a ${displayMoney(journey.peak)}. Vamos retomar sem tirar dinheiro do essencial.`
                     : plan.remaining === 0
-                      ? 'Meta alcançada.'
+                      ? 'Alvo alcançado.'
                       : plan.required === 0
                         ? 'Você já completou a cota deste mês.'
                         : `Neste mês, cabe um próximo aporte de ${displayMoney(plan.suggested)} com a sobra atual.`}
@@ -582,7 +582,7 @@ export function GoalJourney() {
                 Precisei usar numa urgência
               </Button>
               <Button variant="ghost" onClick={() => setSetup({ existing: goal })}>
-                Editar meta
+                Editar Caixinha
               </Button>
               <Button variant="ghost" onClick={() => setMovement('withdrawal')}>
                 Anotar retirada
@@ -590,7 +590,7 @@ export function GoalJourney() {
             </div>
           </div>
           <div className="journey-foot">
-            <span>Já alcançou {displayMoney(journey.peak)} nesta meta.</span>
+            <span>Já guardou {displayMoney(journey.peak)} nesta Caixinha.</span>
             <span>
               {app.data.goal_events.filter((event) => event.goal_id === goal.id && event.delta > 0).length}{' '}
               passos registrados. O dinheiro atual é separado do histórico.
@@ -613,14 +613,14 @@ export function GoalJourney() {
           <div>
             <Button onClick={() => setSetup({})}>
               <Target size={18} />
-              Criar minha meta
+              Criar minha Caixinha
             </Button>
           </div>
         </>
       )}
       {app.data.goals.length > 1 && (
         <label className="journey-goal-picker">
-          Meta em foco
+          Caixinha em foco
           <select
             value={goal?.id ?? ''}
             disabled={pending}
@@ -759,7 +759,7 @@ export function GoalJourney() {
                 disabled={pending}
                 onChange={(event) => void preference({ journey_reminders: event.target.checked })}
               />
-              Quero lembretes opcionais da meta
+              Quero lembretes opcionais da Caixinha
             </label>
             <label>
               Horário preferido para o lembrete
@@ -858,8 +858,8 @@ export function GoalJourney() {
                 </p>
                 <p>
                   {journey
-                    ? `Seu maior progresso nesta meta foi ${displayMoney(journey.peak)}. O que precisou ser usado não apaga sua capacidade de retomar.`
-                    : 'Seu caminho pode começar com uma meta pequena.'}
+                    ? `Você já guardou ${displayMoney(journey.peak)} nesta Caixinha. O que precisou ser usado não apaga sua capacidade de retomar.`
+                    : 'Seu caminho pode começar com uma Caixinha pequena.'}
                 </p>
                 <p>Seu próximo passo não precisa impressionar ninguém. Precisa caber na sua vida.</p>
               </article>
@@ -871,7 +871,7 @@ export function GoalJourney() {
                   {summary.checkins} check-ins · nível {summary.level} ·{' '}
                   {app.data.goal_events.filter((event) => event.delta > 0).length} passos de reserva.
                 </p>
-                {journey && <p>Maior marco na meta atual: {displayMoney(journey.peak)}.</p>}
+                {journey && <p>Maior valor guardado nesta Caixinha: {displayMoney(journey.peak)}.</p>}
               </section>
             )}
             <p className="muted">

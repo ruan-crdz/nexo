@@ -144,7 +144,7 @@ export function goalJourney(goal: Pick<Goal, 'target' | 'saved'>, weekly: number
   money(weekly);
   money(highWater);
   if (goal.target <= 0 || goal.saved < 0 || weekly < 0 || highWater < 0)
-    throw new Error('Valores de meta inválidos.');
+    throw new Error('Valores da Caixinha inválidos.');
   const remaining = Math.max(0, goal.target - goal.saved);
   const peak = Math.max(highWater, goal.saved);
   const percent = Math.min(100, (goal.saved / goal.target) * 100);
@@ -170,7 +170,7 @@ export function goalJourney(goal: Pick<Goal, 'target' | 'saved'>, weekly: number
     recovering: goal.saved < peak,
     message:
       remaining === 0
-        ? 'Você chegou à sua meta. O próximo passo é seu.'
+        ? 'Você chegou ao seu alvo. O próximo passo é seu.'
         : goal.saved < peak
           ? `Seu esforço não foi apagado. Você já chegou a ${formatMoney(peak)}. Vamos retomar no seu ritmo, sem tirar dinheiro do essencial.`
           : weekly > 0

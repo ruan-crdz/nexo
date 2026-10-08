@@ -66,7 +66,7 @@ export function spendingAllowance(input: CashAssumptions, transactions: Transact
       `Dinheiro confirmado: ${formatMoney(input.cash)} em ${input.confirmed_on}.`,
       `Contas pendentes até ${input.next_income_date}, inclusive: ${formatMoney(due)}.`,
       `Reserva protegida: ${formatMoney(input.protected_amount)}.`,
-      `Separado para metas: ${formatMoney(input.goal_amount)}.`,
+      `Separado para Caixinhas: ${formatMoney(input.goal_amount)}.`,
       `${formatMoney(input.cash)} - ${formatMoney(due)} - ${formatMoney(input.protected_amount)} - ${formatMoney(input.goal_amount)} = ${formatMoney(remaining)}.`,
       `Renda prevista de ${formatMoney(input.estimated_income)} não foi tratada como dinheiro recebido. Não é uma recomendação de investimento.`,
     ],

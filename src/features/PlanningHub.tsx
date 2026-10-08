@@ -136,7 +136,7 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
             : 'Conta recorrente'
           : kind === 'budget'
             ? 'Limite por categoria'
-            : 'Sua meta'
+            : 'Sua Caixinha'
       }
       onClose={() => {
         if (!pending) onClose();
@@ -408,7 +408,7 @@ export function PlanningHub() {
       </section>
       <section className="planning-section" aria-labelledby="planning-goals-title">
         <div className="simple-section-title">
-          <h2 id="planning-goals-title">Metas</h2>
+          <h2 id="planning-goals-title">Caixinhas</h2>
         </div>
         {app.data.goals.length ? (
           <div className="plan-list">
@@ -432,10 +432,10 @@ export function PlanningHub() {
             ))}
           </div>
         ) : (
-          <p className="muted">Nenhuma meta cadastrada.</p>
+          <p className="muted">Nenhuma caixinha criada.</p>
         )}
         <Link className="text-link" to="/metas">
-          Acompanhar meta e conquistas
+          Acompanhar caixinhas
         </Link>
       </section>
       <section className="planning-section" aria-labelledby="planning-recurring-title">

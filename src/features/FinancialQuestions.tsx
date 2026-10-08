@@ -31,7 +31,7 @@ export function FinancialQuestions() {
         Quanto posso gastar? · Faturas e sugestões
       </Link>
       <div className="simple-inline-actions">
-        {['Por que gastei mais?', 'Quanto falta para minha meta?', 'Quais contas ainda vencem?'].map(
+        {['Por que gastei mais?', 'Quanto falta para minha Caixinha?', 'Quais contas ainda vencem?'].map(
           (text) => (
             <Button
               key={text}

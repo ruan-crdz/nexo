@@ -101,6 +101,26 @@ it('resumo mensal soma entradas e gastos pagos e exclui previsões', () => {
     expense,
   ]);
 });
+it('pergunta pela Caixinha retorna o cálculo verificado do valor que falta', () => {
+  const goal = {
+    id: crypto.randomUUID(),
+    name: 'Reserva',
+    target: 50000,
+    saved: 12000,
+    monthly_contribution: 0,
+    deadline: null,
+    priority: 'medium' as const,
+    weekly_amount: 0,
+    high_water: 12000,
+  };
+  const answer = answerFinancialQuestion(
+    { transactions: [], goals: [goal], financial_accounts: [] },
+    'Quanto falta para minha Caixinha?',
+    '2026-10-08',
+  );
+  expect(answer?.goals).toEqual([goal]);
+  expect(answer?.calculation[0]).toContain('faltam');
+});
 it.each(['com Uber', 'em Uber', 'no Uber'])('filtra estabelecimento sem somar aluguel: %s', (filter) => {
   const uber = row({ description: 'Uber', category: 'Transporte', amount: 2500 });
   const data = {
