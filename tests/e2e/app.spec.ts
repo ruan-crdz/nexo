@@ -18,20 +18,26 @@ test('anota, persiste, corrige e exclui um gasto com confirmação', async ({ pa
   await page.getByRole('button', { name: 'Salvar movimento', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Movimento salvo.');
   await page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Histórico' }).click();
-  await page.getByLabel('Buscar movimentos').fill('Farmácia teste');
-  await expect(page.getByRole('heading', { name: 'Farmácia teste' })).toBeVisible();
+  await page.getByRole('button', { name: 'Buscar no histórico' }).click();
+  await page.getByRole('searchbox').fill('Farmácia teste');
+  await expect(page.getByRole('button', { name: 'Farmácia teste' })).toBeVisible();
   await page.reload();
-  await page.getByLabel('Buscar movimentos').fill('Farmácia teste');
-  await page.getByRole('button', { name: 'Corrigir Farmácia teste' }).click();
+  await page.getByRole('button', { name: 'Buscar no histórico' }).click();
+  await page.getByRole('searchbox').fill('Farmácia teste');
+  await page.getByRole('button', { name: 'Farmácia teste' }).click();
+  await page.getByRole('button', { name: 'Corrigir movimento' }).click();
   await page.getByLabel('Quanto foi? (R$)').fill('50,00');
   await page.getByRole('button', { name: 'Salvar movimento' }).click();
   await expect(page.locator('.money-row-top > strong')).toContainText('50,00');
-  await page.getByRole('button', { name: 'Excluir Farmácia teste' }).click();
+  await page.getByRole('button', { name: 'Farmácia teste' }).click();
+  await page.getByRole('button', { name: 'Mais opções' }).click();
+  await page.getByRole('button', { name: 'Excluir registro' }).click();
   await page.getByRole('button', { name: 'Não, voltar' }).click();
-  await expect(page.getByRole('heading', { name: 'Farmácia teste' })).toBeVisible();
-  await page.getByRole('button', { name: 'Excluir Farmácia teste' }).click();
+  await page.getByRole('button', { name: 'Farmácia teste' }).click();
+  await page.getByRole('button', { name: 'Mais opções' }).click();
+  await page.getByRole('button', { name: 'Excluir registro' }).click();
   await page.getByRole('button', { name: 'Sim, excluir movimento' }).click();
-  await expect(page.getByRole('heading', { name: 'Farmácia teste' })).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Farmácia teste' })).not.toBeVisible();
 });
 
 test('entrada atualiza o resumo e filtros separam gastos de entradas', async ({ page }) => {
@@ -61,16 +67,30 @@ test('entrada atualiza o resumo e filtros separam gastos de entradas', async ({ 
   );
   expect(matching).toBe(initial + 1);
   await page.goto('/#/movimentos');
-  await page.getByLabel('Buscar movimentos').fill('Entrada de teste');
-  await page.getByRole('button', { name: 'Gastos', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Entrada de teste' })).not.toBeVisible();
-  await page.getByRole('button', { name: 'Entradas', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Entrada de teste' })).toBeVisible();
-  await expect(page.getByText('Anotado no app')).toBeVisible();
-  await page.getByRole('button', { name: 'WhatsApp', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Entrada de teste' })).not.toBeVisible();
-  await page.getByRole('button', { name: 'No app', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Entrada de teste' })).toBeVisible();
+  await page.getByRole('button', { name: 'Buscar no histórico' }).click();
+  await page.getByRole('searchbox').fill('Entrada de teste');
+  await page.getByRole('button', { name: 'Filtrar histórico' }).click();
+  await page.getByLabel('Gastos', { exact: true }).check();
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect(page.getByRole('button', { name: 'Entrada de teste' })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Filtrar histórico' }).click();
+  await page.getByLabel('Entradas', { exact: true }).check();
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect(page.getByRole('button', { name: 'Entrada de teste' })).toBeVisible();
+  await page.getByRole('button', { name: 'Entrada de teste' }).click();
+  const details = page.getByRole('dialog');
+  await expect(details).toContainText('Anotado no app');
+  await details.getByRole('button', { name: 'Fechar', exact: true }).click();
+  await page.getByRole('button', { name: 'Filtrar histórico' }).click();
+  await page.getByLabel('Todos', { exact: true }).check();
+  await page.getByLabel('WhatsApp', { exact: true }).check();
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect(page.getByRole('button', { name: 'Entrada de teste' })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Filtrar histórico' }).click();
+  await page.getByLabel('WhatsApp', { exact: true }).uncheck();
+  await page.getByLabel('Aplicativo', { exact: true }).check();
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect(page.getByRole('button', { name: 'Entrada de teste' })).toBeVisible();
 });
 
 test('desfaz imediatamente um movimento recém-registrado', async ({ page }) => {
@@ -103,13 +123,14 @@ test('desfaz imediatamente um movimento recém-registrado', async ({ page }) => 
 
 test('detalhes do movimento mostram origem e estado atuais', async ({ page }) => {
   await page.goto('/#/movimentos');
-  await page.getByRole('button', { name: 'Ver detalhes de Mercado da semana' }).click();
+  await page.getByRole('button', { name: 'Mercado da semana' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Detalhes do movimento' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Mercado da semana' })).toBeVisible();
   await expect(dialog).toContainText('Mercado da semana');
   await expect(dialog).toContainText('Alimentação');
   await expect(dialog).toContainText('WhatsApp');
   await expect(dialog).toContainText('Pago');
+  await dialog.getByText('Como este registro chegou aqui?').click();
   await expect(dialog).toContainText('Registrado a partir de uma mensagem enviada pelo WhatsApp.');
 });
 
@@ -141,7 +162,8 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
   await page.reload();
   const result = await page.locator('.home-month-result').innerText();
   await page.goto('/#/movimentos');
-  await page.getByRole('button', { name: 'Corrigir Conta prevista de teste' }).click();
+  await page.getByRole('button', { name: 'Conta prevista de teste' }).click();
+  await page.getByRole('button', { name: 'Corrigir movimento' }).click();
   await page.getByLabel('Quanto foi? (R$)').fill('987,65');
   await page.getByRole('button', { name: 'Salvar movimento' }).click();
   const changed = await page.evaluate(
@@ -151,8 +173,10 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
   );
   expect(changed).toMatchObject({ ...original, amount: 98765 });
   await page.goto('/#/movimentos');
-  await page.getByRole('button', { name: 'Pendentes', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Conta prevista de teste' })).toBeVisible();
+  await page.getByRole('button', { name: 'Filtrar histórico' }).click();
+  await page.getByLabel('Pendentes', { exact: true }).check();
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect(page.getByRole('button', { name: 'Conta prevista de teste' })).toBeVisible();
   await page.goto('/#/inicio');
   await expect(page.locator('.home-month-result')).toHaveText(result, { useInnerText: true });
 });
@@ -225,11 +249,16 @@ test('datas e mês do histórico continuam utilizáveis em tela estreita e deskt
   await expect(date).toHaveValue('2026-10-05');
   await page.getByRole('button', { name: 'Cancelar' }).click();
   await page.goto('/#/movimentos');
-  const month = page.getByLabel('Mês dos movimentos');
-  await month.selectOption('2026-08');
-  await expect(month).toHaveValue('2026-08');
+  await page.getByRole('button', { name: 'outubro de 2026', exact: true }).click();
+  const monthSheet = page.getByRole('dialog', { name: 'Escolher período' });
+  await expect(monthSheet.getByRole('button', { name: 'outubro de 2026', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await monthSheet.getByRole('button', { name: 'agosto de 2026', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'agosto de 2026', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 800 });
-  await expect(month).toHaveValue('2026-08');
+  await expect(page.getByRole('button', { name: 'agosto de 2026', exact: true })).toBeVisible();
 });
 
 test('navegação desktop e ocultação de valores persistem entre páginas', async ({ page }) => {
@@ -251,11 +280,16 @@ test('navegação desktop e ocultação de valores persistem entre páginas', as
   await page.goto('/#/movimentos');
   await expect(page.locator('.money-row-top > strong').first()).toContainText('R$ •••••');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Mostrar valores' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mostrar valores' })).toHaveCount(0);
   await expect(page.locator('.money-row-top > strong').first()).toContainText('R$ •••••');
+  await page.goto('/#/inicio');
+  await expect(page.getByRole('button', { name: 'Mostrar valores' })).toBeVisible();
+  await expect(page.locator('.home-month-result strong')).toHaveText('R$ •••••');
   await page.getByRole('button', { name: 'Mostrar valores' }).click();
+  await page.goto('/#/movimentos');
   await expect(page.locator('.money-row-top > strong').first()).not.toContainText('•••••');
 
+  await page.goto('/#/inicio');
   await page.getByRole('button', { name: 'Ocultar valores' }).click();
   await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);

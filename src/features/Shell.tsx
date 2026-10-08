@@ -61,7 +61,7 @@ export function Shell() {
   if (app.data.profile.onboarded && !app.data.profile.feature_tour_completed)
     return <Navigate to="/tour" replace />;
   return (
-    <div className="simple-shell">
+    <div className={pathname === '/movimentos' ? 'simple-shell history-shell' : 'simple-shell'}>
       <a
         className="skip-link"
         href="#main-content"
@@ -72,7 +72,8 @@ export function Shell() {
       >
         Pular para o conteúdo
       </a>
-      <header className="simple-topbar">
+      {pathname !== '/movimentos' && (
+        <header className="simple-topbar">
         <div className="topbar-mobile-controls">
           <Link className="simple-profile topbar-mobile-avatar" to="/perfil" aria-label="Abrir seu perfil">
             {app.data.profile.name.slice(0, 1).toUpperCase()}
@@ -98,7 +99,8 @@ export function Shell() {
           </div>
         </div>
         <span className="topbar-mobile-greeting">Olá, {app.data.profile.name.split(' ')[0]}</span>
-      </header>
+        </header>
+      )}
       <nav className="simple-nav" aria-label="Principal">
         <Link className="simple-nav-brand" to="/inicio" aria-label="Nexo início">
           <Brand compact />

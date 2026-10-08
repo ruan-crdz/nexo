@@ -15,14 +15,18 @@ import {
   Camera,
   Mic,
   Plus,
+  MoreVertical,
+  Search,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke } from '../data/client';
-import { Button, Card, Dialog, Progress } from '../design-system/components';
+import { Button, Dialog, Progress } from '../design-system/components';
 import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { categories, transactionSchema } from '../../shared/domain';
 import type { Transaction } from '../../shared/domain';
-import { civilDate, parseMoney, shiftDays, shiftMonths, sum } from '../../shared/financial-engine';
+import { civilDate, formatMoney, parseMoney, shiftDays, shiftMonths, sum } from '../../shared/financial-engine';
 import { monthlyFlow } from '../../shared/insights';
 import { goalMonthlyBudget, goalMonthlyPlan } from '../../shared/journey';
 import { merchantKey } from '../../shared/financial-decisions';
@@ -42,6 +46,22 @@ function movementDateLabel(date: string, today: string) {
   if (date === today) return 'Hoje';
   if (date === shiftDays(today, -1)) return 'Ontem';
   return dateLabel(date);
+}
+function historyGroupLabel(date: string, today: string) {
+  if (date === today) return 'Hoje';
+  if (date === shiftDays(today, -1)) return 'Ontem';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+function normalizeHistorySearch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9]/g, '');
 }
 function fullDateLabel(date: string) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
@@ -74,127 +94,431 @@ export function MoneyForm({
   const [account, setAccount] = useState(existing?.account_id ?? '');
   const [status, setStatus] = useState<Transaction['status']>(existing?.status ?? 'paid');
   const [kind, setKind] = useState(type);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-  const [learnCategory, setLearnCategory] = useState(false);
-  async function save(event: React.FormEvent) {
-    event.preventDefault();
-    setError('');
-    let value: Transaction;
-    try {
-      if (date > today && status === 'paid')
-        throw new Error('Para uma data futura, marque “Ainda não aconteceu” nos detalhes.');
-      value = transactionSchema.parse({
-        id,
-        description,
-        amount: parseMoney(amount),
-        type: kind,
-        category,
-        date,
-        status,
-        source: existing?.source ?? 'manual',
-        account_id: account || null,
-      });
-    } catch (err) {
-      setError(
-        err instanceof Error && err.message.startsWith('Para uma data futura')
-          ? err.message
-          : 'Confira o valor (por exemplo, 25,50), a descrição e a data.',
-      );
-      return;
+  /*
+    const app = useApp();
+    const today = civilDate(new Date(), app.data.profile.timezone);
+    const currentMonth = today.slice(0, 7);
+    const [month, setMonth] = useState(currentMonth);
+    const [search, setSearch] = useState('');
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [monthOpen, setMonthOpen] = useState(false);
+    const [otherMonthOpen, setOtherMonthOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
+    const [pendingOnly, setPendingOnly] = useState(false);
+    const [sourceFilters, setSourceFilters] = useState<Transaction['source'][]>([]);
+    const [draftType, setDraftType] = useState<'all' | 'expense' | 'income'>('all');
+    const [draftPendingOnly, setDraftPendingOnly] = useState(false);
+    const [draftSources, setDraftSources] = useState<Transaction['source'][]>([]);
+    const [adding, setAdding] = useState<Transaction['type'] | null>(null);
+    const recentMonths = Array.from({ length: 4 }, (_, index) =>
+      shiftMonths(`${currentMonth}-01`, -index).slice(0, 7),
+    );
+    const monthChoices = recentMonths.includes(month) ? recentMonths : [month, ...recentMonths.slice(0, 3)];
+    const normalizedSearch = normalizeHistorySearch(search);
+    const rows = app.data.transactions
+      .filter((transaction) => {
+        if (!transaction.date.startsWith(month)) return false;
+        if (typeFilter !== 'all' && transaction.type !== typeFilter) return false;
+        if (pendingOnly && transaction.status !== 'planned') return false;
+        if (sourceFilters.length && !sourceFilters.includes(transaction.source)) return false;
+        if (!normalizedSearch) return true;
+        const searchableValues = [
+          transaction.description,
+          transaction.category,
+          sourceLabels[transaction.source],
+          formatMoney(transaction.amount),
+        ];
+        return searchableValues.some((value) => normalizeHistorySearch(value).includes(normalizedSearch));
+      })
+      .sort((first, second) => second.date.localeCompare(first.date));
+    const groups = rows.reduce<{ date: string; label: string; rows: Transaction[] }[]>((result, transaction) => {
+      const lastGroup = result[result.length - 1];
+      if (lastGroup?.date === transaction.date) lastGroup.rows.push(transaction);
+      else result.push({ date: transaction.date, label: historyGroupLabel(transaction.date, today), rows: [transaction] });
+      return result;
+    }, []);
+    const hasAppliedFilters = typeFilter !== 'all' || pendingOnly || sourceFilters.length > 0;
+    const hasNoResults = rows.length === 0;
+    const hasNoTransactions = app.data.transactions.length === 0;
+    function clearFilters() {
+      setTypeFilter('all');
+      setPendingOnly(false);
+      setSourceFilters([]);
+      setSearch('');
     }
-    setPending(true);
-    let preferenceFailed = false;
-    try {
-      await app.repository.save('transactions', value, null);
-      if (learnCategory && merchantKey(description).length >= 3) {
-        try {
-          await app.repository.categoryPreference(merchantKey(description), category);
-        } catch {
-          preferenceFailed = true;
-        }
-      }
-      await app.refresh();
-      const pendingOffline = !app.demo && !navigator.onLine;
-      const canUndo = !existing && (app.demo || navigator.onLine);
-      app.toast(
-        preferenceFailed
-          ? 'Movimento salvo; a preferência para os próximos registros não foi atualizada.'
-          : pendingOffline
-            ? 'Movimento pendente neste aparelho.'
-            : existing
-              ? 'Movimento atualizado.'
-              : 'Movimento salvo.',
-        canUndo
-          ? {
-              label: 'Desfazer',
-              onClick: async () => {
-                await app.repository.remove('transactions', value.id, null);
-                await app.refresh();
-                app.toast('Movimento desfeito.');
-              },
-            }
-          : undefined,
-      );
-      onClose();
-    } catch {
-      setError('Não foi possível salvar. Confira sua conexão e tente novamente.');
-    } finally {
-      setPending(false);
+    function applyDraftFilters() {
+      setTypeFilter(draftType);
+      setPendingOnly(draftPendingOnly);
+      setSourceFilters(draftSources);
+      setFiltersOpen(false);
     }
-  }
-  return (
-    <Dialog
-      title={existing ? 'Corrigir movimento' : kind === 'expense' ? 'Anotar um gasto' : 'Anotar uma entrada'}
-      onClose={() => {
-        if (!pending) onClose();
-      }}
-    >
-      <form className="simple-form" onSubmit={(event) => void save(event)}>
-        <fieldset disabled={pending} className="simple-form">
-          <label>
-            Quanto foi? (R$)
-            <input
-              autoFocus
-              data-dialog-autofocus
-              inputMode="decimal"
-              placeholder="0,00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-              className="money-input"
-            />
+    function clearDraftFilters() {
+      setDraftType('all');
+      setDraftPendingOnly(false);
+      setDraftSources([]);
+    }
+    function toggleDraftSource(source: Transaction['source']) {
+      setDraftSources((current) =>
+        current.includes(source) ? current.filter((item) => item !== source) : [...current, source],
+      );
+    }
+    function removeSourceFilter(source: Transaction['source']) {
+      setSourceFilters((current) => current.filter((item) => item !== source));
+    }
+    return (
+      <div className="history-page">
+        <header className="history-heading">
+          <h1>Histórico</h1>
+          <div className="history-heading-actions">
+            <Button
+              variant="ghost"
+              aria-label={searchOpen ? 'Fechar busca' : 'Buscar no histórico'}
+              title={searchOpen ? 'Fechar busca' : 'Buscar no histórico'}
+              aria-expanded={searchOpen}
+              onClick={() => setSearchOpen((open) => !open)}
+            >
+              {searchOpen ? <X size={20} /> : <Search size={20} />}
+            </Button>
+            <Button
+              variant="ghost"
+              aria-label="Filtrar histórico"
+              title="Filtrar histórico"
+              aria-expanded={filtersOpen}
+              onClick={() => {
+                setDraftType(typeFilter);
+                setDraftPendingOnly(pendingOnly);
+                setDraftSources(sourceFilters);
+                setFiltersOpen(true);
+              }}
+            >
+              <SlidersHorizontal size={20} /> <span>Filtrar</span>
+            </Button>
+            <div className="history-overflow">
+              <Button
+                variant="ghost"
+                aria-label="Mais opções do histórico"
+                title="Mais opções"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <MoreVertical size={20} />
+              </Button>
+              {menuOpen && (
+                <div className="history-overflow-menu" role="menu">
+                  <button role="menuitem" onClick={() => { setAdding('expense'); setMenuOpen(false); }}>
+                    Anotar gasto
+                  </button>
+                  <button role="menuitem" onClick={() => { setAdding('income'); setMenuOpen(false); }}>
+                    Anotar entrada
+                  </button>
+                  <Link role="menuitem" to="/perfil" onClick={() => setMenuOpen(false)}>
+                    Meu perfil
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+        {searchOpen && (
+          <label className="history-search">
+            Buscar no histórico
+            <span className="history-search-control">
+              <Search size={18} aria-hidden="true" />
+              <input
+                type="search"
+                placeholder="Descrição, categoria, origem ou valor"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              {search && (
+                <button type="button" aria-label="Limpar busca" onClick={() => setSearch('')}>
+                  <X size={18} />
+                </button>
+              )}
+            </span>
           </label>
-          <label>
-            {kind === 'expense' ? 'Com o quê?' : 'De onde veio?'}
-            <input
-              placeholder={
-                kind === 'expense' ? 'Ex.: mercado, farmácia, conta de luz' : 'Ex.: aposentadoria, salário'
-              }
-              maxLength={180}
-              minLength={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Quando?
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-            <small>{date === today ? 'Hoje' : 'Confira a data do movimento.'}</small>
-          </label>
-          <details className="simple-details">
-            <summary>Mais detalhes (opcional)</summary>
-            <div className="simple-form">
-              <label>
-                Gasto ou entrada?
-                <select value={kind} onChange={(e) => setKind(e.target.value as Transaction['type'])}>
-                  <option value="expense">Gasto</option>
-                  <option value="income">Entrada</option>
-                </select>
+        )}
+        <div className="history-month-bar">
+          <Button
+            variant="ghost"
+            aria-label="Mês anterior"
+            title="Mês anterior"
+            onClick={() => setMonth(shiftMonths(`${month}-01`, -1).slice(0, 7))}
+          >
+            <ChevronLeft size={22} />
+          </Button>
+          <button className="history-month-current" onClick={() => setMonthOpen(true)}>
+            {monthLabel(month)}
+          </button>
+          <Button
+            variant="ghost"
+            aria-label="Próximo mês"
+            title="Próximo mês"
+            onClick={() => setMonth(shiftMonths(`${month}-01`, 1).slice(0, 7))}
+          >
+            <ChevronRight size={22} />
+          </Button>
+        </div>
+        {(search || hasAppliedFilters) && (
+          <div className="history-active-filters" aria-label="Filtros ativos">
+            {search && (
+              <button onClick={() => setSearch('')} aria-label="Remover busca">
+                Busca: {search} <X size={14} />
+              </button>
+            )}
+            {typeFilter !== 'all' && (
+              <button onClick={() => setTypeFilter('all')}>
+                {typeFilter === 'expense' ? 'Gastos' : 'Entradas'} <X size={14} />
+              </button>
+            )}
+            {pendingOnly && (
+              <button onClick={() => setPendingOnly(false)}>
+                Pendentes <X size={14} />
+              </button>
+            )}
+            {sourceFilters.map((source) => (
+              <button key={source} onClick={() => removeSourceFilter(source)}>
+                {source === 'manual' ? 'Aplicativo' : source === 'whatsapp' ? 'WhatsApp' : 'Arquivo'} <X size={14} />
+              </button>
+            ))}
+            <button className="history-clear-filters" onClick={clearFilters}>Limpar filtros</button>
+          </div>
+        )}
+        {hasNoResults ? (
+          <div className="history-empty">
+            <h2>
+              {hasNoTransactions
+                ? 'Nada por aqui ainda.'
+                : hasAppliedFilters || search
+                  ? 'Nenhum resultado.'
+                  : 'Nenhum movimento neste mês.'}
+            </h2>
+            {hasNoTransactions ? (
+              <>
+                <p>Mande seu primeiro gasto pelo WhatsApp.</p>
+                <Link className="button button-primary" to="/integracoes">Abrir WhatsApp</Link>
+              </>
+            ) : hasAppliedFilters || search ? (
+              <>
+                <p>Tente mudar a busca ou os filtros.</p>
+                <Button variant="secondary" onClick={clearFilters}>Limpar filtros</Button>
+              </>
+            ) : (
+              <p>Escolha outro mês para consultar seus registros.</p>
+            )}
+          </div>
+        ) : (
+          <div className="history-timeline">
+            {groups.map((group) => (
+              <section className="history-day-group" key={group.date} aria-labelledby={`history-day-${group.date}`}>
+                <h2 id={`history-day-${group.date}`}>{group.label}</h2>
+                <MoneyRows rows={group.rows} timeline />
+              </section>
+            ))}
+          </div>
+        )}
+        {monthOpen && (
+          <Dialog title="Escolher período" className="capture-sheet history-sheet" onClose={() => setMonthOpen(false)}>
+            <div className="history-month-options">
+              {monthChoices.map((option) => (
+                <button
+                  key={option}
+                  aria-pressed={month === option}
+                  onClick={() => { setMonth(option); setMonthOpen(false); }}
+                >
+                  {monthLabel(option)}
+                </button>
+              ))}
+            </div>
+            {otherMonthOpen ? (
+              <label className="history-other-month">
+                Escolher outra data
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      setMonth(event.target.value);
+                      setMonthOpen(false);
+                    }
+                  }}
+                />
               </label>
-              <label>
-                Categoria
+            ) : (
+              <Button variant="secondary" onClick={() => setOtherMonthOpen(true)}>Escolher outra data</Button>
+            )}
+          </Dialog>
+        )}
+        {filtersOpen && (
+          <Dialog title="Filtrar histórico" className="capture-sheet history-sheet" onClose={() => setFiltersOpen(false)}>
+            <div className="history-filter-sections">
+              <fieldset>
+                <legend>Tipo</legend>
+                {([
+                  ['all', 'Todos'],
+                  ['expense', 'Gastos'],
+                  ['income', 'Entradas'],
+                ] as const).map(([value, label]) => (
+                  <label key={value}>
+                    <input
+                      type="radio"
+                      name="history-type"
+                      checked={draftType === value}
+                      onChange={() => setDraftType(value)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset>
+                <legend>Situação</legend>
+                <label>
+                  <input type="checkbox" checked={draftPendingOnly} onChange={(event) => setDraftPendingOnly(event.target.checked)} />
+                  Pendentes
+                </label>
+              </fieldset>
+              <fieldset>
+                <legend>Origem</legend>
+                {([
+                  ['whatsapp', 'WhatsApp'],
+                  ['manual', 'Aplicativo'],
+                  ['import', 'Arquivo'],
+                ] as const).map(([value, label]) => (
+                  <label key={value}>
+                    <input type="checkbox" checked={draftSources.includes(value)} onChange={() => toggleDraftSource(value)} />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
+            </div>
+            <div className="history-sheet-actions">
+              <Button variant="secondary" onClick={clearDraftFilters}>Limpar</Button>
+              <Button onClick={applyDraftFilters}>Aplicar filtros</Button>
+            </div>
+          </Dialog>
+        )}
+    */
+    const [pending, setPending] = useState(false);
+    const [error, setError] = useState('');
+    const [learnCategory, setLearnCategory] = useState(false);
+    async function save(event: React.FormEvent) {
+      event.preventDefault();
+      setError('');
+      let value: Transaction;
+      try {
+        if (date > today && status === 'paid')
+          throw new Error('Para uma data futura, marque “Ainda não aconteceu” nos detalhes.');
+        value = transactionSchema.parse({
+          id,
+          description,
+          amount: parseMoney(amount),
+          type: kind,
+          category,
+          date,
+          status,
+          source: existing?.source ?? 'manual',
+          account_id: account || null,
+        });
+      } catch (validationError) {
+        setError(
+          validationError instanceof Error && validationError.message.startsWith('Para uma data futura')
+            ? validationError.message
+            : 'Confira o valor (por exemplo, 25,50), a descrição e a data.',
+        );
+        return;
+      }
+      setPending(true);
+      let preferenceFailed = false;
+      try {
+        await app.repository.save('transactions', value, null);
+        if (learnCategory && merchantKey(description).length >= 3) {
+          try {
+            await app.repository.categoryPreference(merchantKey(description), category);
+          } catch {
+            preferenceFailed = true;
+          }
+        }
+        await app.refresh();
+        const pendingOffline = !app.demo && !navigator.onLine;
+        const canUndo = !existing && (app.demo || navigator.onLine);
+        app.toast(
+          preferenceFailed
+            ? 'Movimento salvo; a preferência para os próximos registros não foi atualizada.'
+            : pendingOffline
+              ? 'Movimento pendente neste aparelho.'
+              : existing
+                ? 'Movimento atualizado.'
+                : 'Movimento salvo.',
+          canUndo
+            ? {
+                label: 'Desfazer',
+                onClick: async () => {
+                  await app.repository.remove('transactions', value.id, null);
+                  await app.refresh();
+                  app.toast('Movimento desfeito.');
+                },
+              }
+            : undefined,
+        );
+        onClose();
+      } catch {
+        setError('Não foi possível salvar. Confira sua conexão e tente novamente.');
+      } finally {
+        setPending(false);
+      }
+    }
+    return (
+      <Dialog
+        title={existing ? 'Corrigir movimento' : kind === 'expense' ? 'Anotar um gasto' : 'Anotar uma entrada'}
+        onClose={() => {
+          if (!pending) onClose();
+        }}
+      >
+        <form className="simple-form" onSubmit={(event) => void save(event)}>
+          <fieldset disabled={pending} className="simple-form">
+            <label>
+              Quanto foi? (R$)
+              <input
+                autoFocus
+                data-dialog-autofocus
+                inputMode="decimal"
+                placeholder="0,00"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                required
+                className="money-input"
+              />
+            </label>
+            <label>
+              {kind === 'expense' ? 'Com o quê?' : 'De onde veio?'}
+              <input
+                placeholder={kind === 'expense' ? 'Ex.: mercado, farmácia, conta de luz' : 'Ex.: aposentadoria, salário'}
+                maxLength={180}
+                minLength={2}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Quando?
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+              <small>{date === today ? 'Hoje' : 'Confira a data do movimento.'}</small>
+            </label>
+            <details className="simple-details">
+              <summary>Mais detalhes (opcional)</summary>
+              <div className="simple-form">
+                <label>
+                  Gasto ou entrada?
+                  <select value={kind} onChange={(event) => setKind(event.target.value as Transaction['type'])}>
+                    <option value="expense">Gasto</option>
+                    <option value="income">Entrada</option>
+                  </select>
+                </label>
+                <label>
+                  Categoria
                 <select value={category} onChange={(e) => setCategory(e.target.value)}>
                   {!categories.some((c) => c === category) && <option>{category}</option>}
                   {categories.map((c) => (
@@ -272,9 +596,311 @@ export function CapturePage() {
           <Button onClick={() => setAdding('expense')}>
             <ArrowUpRight size={18} /> Anotar gasto
           </Button>
-          <Button variant="secondary" onClick={() => setAdding('income')}>
+          {/*
+            const currentMonth = today.slice(0, 7);
+            const [month, setMonth] = useState(currentMonth);
             <ArrowDownLeft size={18} /> Anotar entrada
-          </Button>
+            const [searchOpen, setSearchOpen] = useState(false);
+            const [filtersOpen, setFiltersOpen] = useState(false);
+            const [monthOpen, setMonthOpen] = useState(false);
+            const [otherMonthOpen, setOtherMonthOpen] = useState(false);
+            const [menuOpen, setMenuOpen] = useState(false);
+            const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
+            const [pendingOnly, setPendingOnly] = useState(false);
+            const [sourceFilters, setSourceFilters] = useState<Transaction['source'][]>([]);
+            const [draftType, setDraftType] = useState<'all' | 'expense' | 'income'>('all');
+            const [draftPendingOnly, setDraftPendingOnly] = useState(false);
+            const [draftSources, setDraftSources] = useState<Transaction['source'][]>([]);
+      </section>
+            const recentMonths = Array.from({ length: 4 }, (_, index) =>
+              shiftMonths(`${currentMonth}-01`, -index).slice(0, 7),
+            );
+            const monthChoices = recentMonths.includes(month) ? recentMonths : [month, ...recentMonths.slice(0, 3)];
+            const normalizedSearch = normalizeHistorySearch(search);
+          <Link className="button button-secondary" to="/nexo">
+            <Mic size={18} /> Falar ou escrever para o Nexo
+                (transaction) => {
+                  if (!transaction.date.startsWith(month)) return false;
+                  if (typeFilter !== 'all' && transaction.type !== typeFilter) return false;
+                  if (pendingOnly && transaction.status !== 'planned') return false;
+                  if (sourceFilters.length && !sourceFilters.includes(transaction.source)) return false;
+                  if (!normalizedSearch) return true;
+                  const searchableValues = [
+                    transaction.description,
+                    transaction.category,
+                    sourceLabels[transaction.source],
+                    formatMoney(transaction.amount),
+                  ];
+                  return searchableValues.some((value) => normalizeHistorySearch(value).includes(normalizedSearch));
+                },
+            <FileUp size={18} /> Importar extrato
+              .sort((first, second) => second.date.localeCompare(first.date));
+            const groups = rows.reduce<{ date: string; label: string; rows: Transaction[] }[]>(
+              (result, transaction) => {
+                const lastGroup = result[result.length - 1];
+                if (lastGroup?.date === transaction.date) lastGroup.rows.push(transaction);
+                else result.push({ date: transaction.date, label: historyGroupLabel(transaction.date, today), rows: [transaction] });
+                return result;
+              },
+              [],
+            );
+            const hasAppliedFilters = typeFilter !== 'all' || pendingOnly || sourceFilters.length > 0;
+            function clearFilters() {
+              setTypeFilter('all');
+              setPendingOnly(false);
+              setSourceFilters([]);
+              setSearch('');
+            }
+            function applyDraftFilters() {
+              setTypeFilter(draftType);
+              setPendingOnly(draftPendingOnly);
+              setSourceFilters(draftSources);
+              setFiltersOpen(false);
+            }
+            function clearDraftFilters() {
+              setDraftType('all');
+              setDraftPendingOnly(false);
+              setDraftSources([]);
+            }
+            function toggleDraftSource(source: Transaction['source']) {
+              setDraftSources((current) =>
+                current.includes(source) ? current.filter((item) => item !== source) : [...current, source],
+              );
+            }
+            function removeSourceFilter(source: Transaction['source']) {
+              setSourceFilters((current) => current.filter((item) => item !== source));
+            }
+            const hasNoResults = !rows.length;
+            const hasNoTransactions = app.data.transactions.length === 0;
+          <Link className="button button-secondary" to="/integracoes">
+            <MessageCircle size={18} /> Usar WhatsApp
+                <div className="history-page">
+                  <header className="history-heading">
+                    <h1>Histórico</h1>
+                    <div className="history-heading-actions">
+                      <Button
+                        variant="ghost"
+                        aria-label={searchOpen ? 'Fechar busca' : 'Buscar no histórico'}
+                        title={searchOpen ? 'Fechar busca' : 'Buscar no histórico'}
+                        aria-expanded={searchOpen}
+                        onClick={() => setSearchOpen((open) => !open)}
+                      >
+                        {searchOpen ? <X size={20} /> : <Search size={20} />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        aria-label="Filtrar histórico"
+                        title="Filtrar histórico"
+                        aria-expanded={filtersOpen}
+                        onClick={() => {
+                          setDraftType(typeFilter);
+                          setDraftPendingOnly(pendingOnly);
+                          setDraftSources(sourceFilters);
+                          setFiltersOpen(true);
+                        }}
+                      >
+                        <SlidersHorizontal size={20} /> <span>Filtrar</span>
+                      </Button>
+                      <div className="history-overflow">
+                        <Button
+                          variant="ghost"
+                          aria-label="Mais opções do histórico"
+                          title="Mais opções"
+                          aria-expanded={menuOpen}
+                          onClick={() => setMenuOpen((open) => !open)}
+                        >
+                          <MoreVertical size={20} />
+                        </Button>
+                        {menuOpen && (
+                          <div className="history-overflow-menu" role="menu">
+                            <button role="menuitem" onClick={() => { setAdding('expense'); setMenuOpen(false); }}>
+                              Anotar gasto
+                            </button>
+                            <button role="menuitem" onClick={() => { setAdding('income'); setMenuOpen(false); }}>
+                              Anotar entrada
+                            </button>
+                            <Link role="menuitem" to="/perfil" onClick={() => setMenuOpen(false)}>
+                              Meu perfil
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </header>
+                  {searchOpen && (
+                    <label className="history-search">
+                      Buscar no histórico
+                      <span className="history-search-control">
+                        <Search size={18} aria-hidden="true" />
+                        <input
+                          type="search"
+                          placeholder="Descrição, categoria, origem ou valor"
+                          value={search}
+                          onChange={(event) => setSearch(event.target.value)}
+                        />
+                        {search && (
+                          <button type="button" aria-label="Limpar busca" onClick={() => setSearch('')}>
+                            <X size={18} />
+                          </button>
+                        )}
+                      </span>
+                    </label>
+                  )}
+                  <div className="history-month-bar">
+                    <Button
+                      variant="ghost"
+                      aria-label="Mês anterior"
+                      title="Mês anterior"
+                      onClick={() => setMonth(shiftMonths(`${month}-01`, -1).slice(0, 7))}
+                    >
+                      <ChevronLeft size={22} />
+                    </Button>
+                    <button className="history-month-current" onClick={() => setMonthOpen(true)}>
+                      {monthLabel(month)}
+                    </button>
+                    <Button
+                      variant="ghost"
+                      aria-label="Próximo mês"
+                      title="Próximo mês"
+                      onClick={() => setMonth(shiftMonths(`${month}-01`, 1).slice(0, 7))}
+                    >
+                      <ChevronRight size={22} />
+                    </Button>
+                  </div>
+                  {(search || hasAppliedFilters) && (
+                    <div className="history-active-filters" aria-label="Filtros ativos">
+                      {search && (
+                        <button onClick={() => setSearch('')} aria-label="Remover busca">
+                          Busca: {search} <X size={14} />
+                        </button>
+                      )}
+                      {typeFilter !== 'all' && (
+                        <button onClick={() => setTypeFilter('all')}>
+                          {typeFilter === 'expense' ? 'Gastos' : 'Entradas'} <X size={14} />
+                        </button>
+                      )}
+                      {pendingOnly && (
+                        <button onClick={() => setPendingOnly(false)}>
+                          Pendentes <X size={14} />
+                        </button>
+                      )}
+                      {sourceFilters.map((source) => (
+                        <button key={source} onClick={() => removeSourceFilter(source)}>
+                          {source === 'manual' ? 'Aplicativo' : source === 'whatsapp' ? 'WhatsApp' : 'Arquivo'}{' '}
+                          <X size={14} />
+                        </button>
+                      ))}
+                      <button className="history-clear-filters" onClick={clearFilters}>
+                        Limpar filtros
+                      </button>
+                    </div>
+                  )}
+                  {hasNoResults ? (
+                    <div className="history-empty">
+                      <h2>{hasNoTransactions ? 'Nada por aqui ainda.' : hasAppliedFilters || search ? 'Nenhum resultado.' : 'Nenhum movimento neste mês.'}</h2>
+                      {hasNoTransactions ? (
+                        <>
+                          <p>Mande seu primeiro gasto pelo WhatsApp.</p>
+                          <Link className="button button-primary" to="/integracoes">Abrir WhatsApp</Link>
+                        </>
+                      ) : hasAppliedFilters || search ? (
+                        <>
+                          <p>Tente mudar a busca ou os filtros.</p>
+                          <Button variant="secondary" onClick={clearFilters}>Limpar filtros</Button>
+                        </>
+                      ) : (
+                        <p>Escolha outro mês para consultar seus registros.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="history-timeline">
+                      {groups.map((group) => (
+                        <section className="history-day-group" key={group.date} aria-labelledby={`history-day-${group.date}`}>
+                          <h2 id={`history-day-${group.date}`}>{group.label}</h2>
+                          <MoneyRows rows={group.rows} timeline />
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {monthOpen && (
+                  <Dialog title="Escolher período" className="capture-sheet history-sheet" onClose={() => setMonthOpen(false)}>
+                    <div className="history-month-options">
+                      {monthChoices.map((option) => (
+                        <button
+                          key={option}
+                          aria-pressed={month === option}
+                          onClick={() => { setMonth(option); setMonthOpen(false); }}
+                        >
+                          {monthLabel(option)}
+                        </button>
+                      ))}
+                    </div>
+                    {otherMonthOpen ? (
+                      <label className="history-other-month">
+                        Escolher outra data
+                        <input
+                          type="month"
+                          value={month}
+                          onChange={(event) => { if (event.target.value) { setMonth(event.target.value); setMonthOpen(false); } }}
+                        />
+                      </label>
+                    ) : (
+                      <Button variant="secondary" onClick={() => setOtherMonthOpen(true)}>Escolher outra data</Button>
+                    )}
+                  </Dialog>
+                )}
+                {filtersOpen && (
+                  <Dialog title="Filtrar histórico" className="capture-sheet history-sheet" onClose={() => setFiltersOpen(false)}>
+                    <div className="history-filter-sections">
+                      <fieldset>
+                        <legend>Tipo</legend>
+                        {([
+                          ['all', 'Todos'],
+                          ['expense', 'Gastos'],
+                          ['income', 'Entradas'],
+                        ] as const).map(([value, label]) => (
+                          <label key={value}>
+                            <input
+                              type="radio"
+                              name="history-type"
+                              checked={draftType === value}
+                              onChange={() => setDraftType(value)}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </fieldset>
+                      <fieldset>
+                        <legend>Situação</legend>
+                        <label>
+                          <input type="checkbox" checked={draftPendingOnly} onChange={(event) => setDraftPendingOnly(event.target.checked)} />
+                          Pendentes
+                        </label>
+                      </fieldset>
+                      <fieldset>
+                        <legend>Origem</legend>
+                        {([
+                          ['whatsapp', 'WhatsApp'],
+                          ['manual', 'Aplicativo'],
+                          ['import', 'Arquivo'],
+                        ] as const).map(([value, label]) => (
+                          <label key={value}>
+                            <input type="checkbox" checked={draftSources.includes(value)} onChange={() => toggleDraftSource(value)} />
+                            {label}
+                          </label>
+                        ))}
+                      </fieldset>
+                    </div>
+                    <div className="history-sheet-actions">
+                      <Button variant="secondary" onClick={clearDraftFilters}>Limpar</Button>
+                      <Button onClick={applyDraftFilters}>Aplicar filtros</Button>
+                    </div>
+                  </Dialog>
+                )}
+                {adding && <MoneyForm type={adding} onClose={() => setAdding(null)} />}
+              </>
+            ); */}
         </div>
       </section>
       <section className="capture-section" aria-labelledby="capture-other-title">
@@ -331,8 +957,8 @@ export function SimpleHome() {
     ? goalMonthlyPlan(activeGoal, today, goalBudget.available, goalBudget.contributed[activeGoal.id] ?? 0)
     : null;
   const recent = app.data.transactions
-    .filter((t) => t.date <= today)
-    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter((transaction) => transaction.date <= today)
+    .sort((first, second) => second.date.localeCompare(first.date))
     .slice(0, 3);
   const recentGroups = [...new Set(recent.map((transaction) => transaction.date))].map((date) => ({
     date,
@@ -343,12 +969,8 @@ export function SimpleHome() {
   const previousMonth = shiftMonths(`${currentMonth}-01`, -2).slice(0, 7);
   const latestComplete = { month: latestMonth, ...monthlyFlow(posted, latestMonth) };
   const previousComplete = { month: previousMonth, ...monthlyFlow(posted, previousMonth) };
-  const expenseChange =
-    latestComplete && previousComplete ? latestComplete.expenses - previousComplete.expenses : null;
+  const expenseChange = latestComplete.expenses - previousComplete.expenses;
   const meaningfulChange =
-    expenseChange !== null &&
-    latestComplete &&
-    previousComplete &&
     latestComplete.count > 0 &&
     previousComplete.count > 0 &&
     Math.abs(expenseChange) >= Math.max(10_000, Math.round(previousComplete.expenses * 0.15));
@@ -363,7 +985,7 @@ export function SimpleHome() {
         action: 'Ver contas previstas',
         question: '',
       }
-    : meaningfulChange && latestComplete && previousComplete && expenseChange !== null
+    : meaningfulChange
       ? {
           title: 'Seus gastos mudaram em relação ao mês passado.',
           amount: `${displayMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'}`,
@@ -567,17 +1189,20 @@ export function MoneyRows({
   showMetadata = true,
   showActions = true,
   compactHome = false,
+  timeline = false,
 }: {
   rows: Transaction[];
   showMetadata?: boolean;
   showActions?: boolean;
   compactHome?: boolean;
+  timeline?: boolean;
 }) {
   const app = useApp();
   const displayMoney = useMoneyDisplay();
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [details, setDetails] = useState<Transaction | null>(null);
+  const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   async function remove() {
@@ -597,7 +1222,7 @@ export function MoneyRows({
   }
   return (
     <>
-      <ul className={`money-list${compactHome ? ' home-compact-list' : ''}`}>
+      <ul className={`money-list${compactHome ? ' home-compact-list' : ''}${timeline ? ' history-money-list' : ''}`}>
         {rows.map((t) => (
           <li className={compactHome ? 'home-compact-money-row' : undefined} key={t.id}>
             <div className="money-row-top">
@@ -606,21 +1231,31 @@ export function MoneyRows({
               </span>
               <div className="money-description">
                 <h3>
-                  <button className="money-detail-trigger" onClick={() => setDetails(t)}>
+                  <button
+                    className="money-detail-trigger"
+                    onClick={() => {
+                      setMoreOptionsOpen(false);
+                      setDetails(t);
+                    }}
+                  >
                     {t.description}
                   </button>
                 </h3>
                 <p className={compactHome ? 'sr-only' : 'muted'}>
-                  {new Intl.DateTimeFormat('pt-BR', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                    timeZone: 'UTC',
-                  }).format(new Date(`${t.date}T12:00:00Z`))}
-                  {showMetadata && (
+                  {timeline ? (
                     <>
-                      {' '}
-                      · {t.category} · {sourceLabels[t.source]}
+                      {t.category}
+                      {t.status === 'planned' && ` · Previsto para ${fullDateLabel(t.date)}`}
+                    </>
+                  ) : (
+                    <>
+                      {new Intl.DateTimeFormat('pt-BR', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        timeZone: 'UTC',
+                      }).format(new Date(`${t.date}T12:00:00Z`))}
+                      {showMetadata && <> · {t.category} · {sourceLabels[t.source]}</>}
                     </>
                   )}
                 </p>
@@ -630,7 +1265,7 @@ export function MoneyRows({
                 {t.type === 'income' ? '+' : '−'} {displayMoney(t.amount)}
               </strong>
             </div>
-            {showActions && (
+            {showActions && !timeline && (
               <div className="money-row-bottom">
                 <span className="muted">
                   {t.status === 'planned' ? 'Ainda não aconteceu' : t.type === 'income' ? 'Recebido' : 'Pago'}
@@ -667,9 +1302,16 @@ export function MoneyRows({
         ))}
       </ul>
       {details && (
-        <Dialog title="Detalhes do movimento" onClose={() => setDetails(null)}>
+        <Dialog
+          title={timeline ? details.description : 'Detalhes do movimento'}
+          className={timeline ? 'history-detail-sheet' : ''}
+          onClose={() => {
+            setDetails(null);
+            setMoreOptionsOpen(false);
+          }}
+        >
           <div className="movement-detail">
-            <h2>{details.description}</h2>
+            {!timeline && <h2>{details.description}</h2>}
             <strong className={details.type === 'income' ? 'positive' : ''}>
               {details.type === 'income' ? '+' : '−'} {displayMoney(details.amount)}
             </strong>
@@ -706,21 +1348,45 @@ export function MoneyRows({
                 </dd>
               </div>
             </dl>
-            <p className="muted">
+            <details className={timeline ? 'history-detail-origin' : undefined}>
+              <summary>{timeline ? 'Como este registro chegou aqui?' : 'Origem do registro'}</summary>
+              <p className="muted">
               {details.source === 'whatsapp'
                 ? 'Registrado a partir de uma mensagem enviada pelo WhatsApp.'
                 : details.source === 'import'
                   ? 'Registrado a partir de um arquivo importado.'
                   : 'Registrado manualmente no app.'}
-            </p>
+              </p>
+            </details>
             <Button
               onClick={() => {
                 setEditing(details);
                 setDetails(null);
+                setMoreOptionsOpen(false);
               }}
             >
               <Pencil size={16} /> Corrigir movimento
             </Button>
+            <Button
+              variant="secondary"
+              aria-expanded={moreOptionsOpen}
+              onClick={() => setMoreOptionsOpen((open) => !open)}
+            >
+              <MoreVertical size={18} /> Mais opções
+            </Button>
+            {moreOptionsOpen && (
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setError('');
+                  setDeleting(details);
+                  setDetails(null);
+                  setMoreOptionsOpen(false);
+                }}
+              >
+                <Trash2 size={16} /> Excluir registro
+              </Button>
+            )}
           </div>
         </Dialog>
       )}
@@ -758,120 +1424,228 @@ export function MoneyRows({
 export function SimpleHistory() {
   const app = useApp();
   const today = civilDate(new Date(), app.data.profile.timezone);
-  const [month, setMonth] = useState(() => today.slice(0, 7));
+  const currentMonth = today.slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'expense' | 'income' | 'pending'>('all');
-  const [sourceFilter, setSourceFilter] = useState<'all' | Transaction['source']>('all');
-  const [adding, setAdding] = useState<Transaction['type'] | null>(null);
-  const monthOptions = Array.from({ length: 133 }, (_, index) =>
-    shiftMonths(`${today.slice(0, 7)}-01`, index - 120).slice(0, 7),
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const [otherMonthOpen, setOtherMonthOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [sourceFilters, setSourceFilters] = useState<Transaction['source'][]>([]);
+  const [draftType, setDraftType] = useState<'all' | 'expense' | 'income'>('all');
+  const [draftPendingOnly, setDraftPendingOnly] = useState(false);
+  const [draftSources, setDraftSources] = useState<Transaction['source'][]>([]);
+  const recentMonths = Array.from({ length: 4 }, (_, index) =>
+    shiftMonths(`${currentMonth}-01`, -index).slice(0, 7),
   );
+  const monthChoices = recentMonths.includes(month) ? recentMonths : [month, ...recentMonths.slice(0, 3)];
+  const normalizedSearch = normalizeHistorySearch(search);
   const rows = app.data.transactions
-    .filter(
-      (t) =>
-        t.date.startsWith(month) &&
-        (filter === 'pending' ? t.status === 'planned' : filter === 'all' || t.type === filter) &&
-        (sourceFilter === 'all' || t.source === sourceFilter) &&
-        t.description.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')),
-    )
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .filter((transaction) => {
+      if (!transaction.date.startsWith(month)) return false;
+      if (typeFilter !== 'all' && transaction.type !== typeFilter) return false;
+      if (pendingOnly && transaction.status !== 'planned') return false;
+      if (sourceFilters.length && !sourceFilters.includes(transaction.source)) return false;
+      if (!normalizedSearch) return true;
+      return [
+        transaction.description,
+        transaction.category,
+        sourceLabels[transaction.source],
+        formatMoney(transaction.amount),
+      ].some((value) => normalizeHistorySearch(value).includes(normalizedSearch));
+    })
+    .sort((first, second) => second.date.localeCompare(first.date));
+  const groups = rows.reduce<{ date: string; label: string; rows: Transaction[] }[]>((result, transaction) => {
+    const lastGroup = result[result.length - 1];
+    if (lastGroup?.date === transaction.date) lastGroup.rows.push(transaction);
+    else result.push({ date: transaction.date, label: historyGroupLabel(transaction.date, today), rows: [transaction] });
+    return result;
+  }, []);
+  const hasAppliedFilters = typeFilter !== 'all' || pendingOnly || sourceFilters.length > 0;
+  const hasNoResults = rows.length === 0;
+  const hasNoTransactions = app.data.transactions.length === 0;
+  function clearFilters() {
+    setTypeFilter('all');
+    setPendingOnly(false);
+    setSourceFilters([]);
+    setSearch('');
+  }
+  function applyDraftFilters() {
+    setTypeFilter(draftType);
+    setPendingOnly(draftPendingOnly);
+    setSourceFilters(draftSources);
+    setFiltersOpen(false);
+  }
+  function clearDraftFilters() {
+    setDraftType('all');
+    setDraftPendingOnly(false);
+    setDraftSources([]);
+  }
+  function toggleDraftSource(source: Transaction['source']) {
+    setDraftSources((current) =>
+      current.includes(source) ? current.filter((item) => item !== source) : [...current, source],
+    );
+  }
+  function removeSourceFilter(source: Transaction['source']) {
+    setSourceFilters((current) => current.filter((item) => item !== source));
+  }
   return (
-    <>
-      <header className="simple-heading">
-        <h1>Movimentos</h1>
-        <p>Tudo que entrou no Nexo, com a origem de cada registro. Toque em “Corrigir” para mudar algo.</p>
+    <div className="history-page">
+      <header className="history-heading">
+        <h1>Histórico</h1>
+        <div className="history-heading-actions">
+          <Button
+            variant="ghost"
+            aria-label={searchOpen ? 'Fechar busca' : 'Buscar no histórico'}
+            title={searchOpen ? 'Fechar busca' : 'Buscar no histórico'}
+            aria-expanded={searchOpen}
+            onClick={() => setSearchOpen((open) => !open)}
+          >
+            {searchOpen ? <X size={20} /> : <Search size={20} />}
+          </Button>
+          <Button
+            variant="ghost"
+            aria-label="Filtrar histórico"
+            title="Filtrar histórico"
+            aria-expanded={filtersOpen}
+            onClick={() => {
+              setDraftType(typeFilter);
+              setDraftPendingOnly(pendingOnly);
+              setDraftSources(sourceFilters);
+              setFiltersOpen(true);
+            }}
+          >
+            <SlidersHorizontal size={20} /> <span>Filtrar</span>
+          </Button>
+        </div>
       </header>
-      <div className="simple-inline-actions">
-        <Button onClick={() => setAdding('expense')}>Anotar gasto</Button>
-        <Button variant="secondary" onClick={() => setAdding('income')}>
-          Anotar entrada
+      {searchOpen && (
+        <label className="history-search">
+          Buscar no histórico
+          <span className="history-search-control">
+            <Search size={18} aria-hidden="true" />
+            <input
+              type="search"
+              placeholder="Descrição, categoria, origem ou valor"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {search && (
+              <button type="button" aria-label="Limpar busca" onClick={() => setSearch('')}>
+                <X size={18} />
+              </button>
+            )}
+          </span>
+        </label>
+      )}
+      <div className="history-month-bar">
+        <Button variant="ghost" aria-label="Mês anterior" onClick={() => setMonth(shiftMonths(`${month}-01`, -1).slice(0, 7))}>
+          <ChevronLeft size={22} />
+        </Button>
+        <button className="history-month-current" onClick={() => setMonthOpen(true)}>{monthLabel(month)}</button>
+        <Button variant="ghost" aria-label="Próximo mês" onClick={() => setMonth(shiftMonths(`${month}-01`, 1).slice(0, 7))}>
+          <ChevronRight size={22} />
         </Button>
       </div>
-      <Card>
-        <div className="month-picker">
-          <Button
-            variant="secondary"
-            aria-label="Mês anterior"
-            onClick={() => setMonth(shiftMonths(`${month}-01`, -1).slice(0, 7))}
-          >
-            <ChevronLeft />
-          </Button>
-          <label>
-            Mês dos movimentos
-            <select value={month} onChange={(event) => setMonth(event.target.value)}>
-              {!monthOptions.includes(month) && <option value={month}>{monthLabel(month)}</option>}
-              {monthOptions.map((option) => (
-                <option key={option} value={option}>
-                  {monthLabel(option)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button
-            variant="secondary"
-            aria-label="Próximo mês"
-            onClick={() => setMonth(shiftMonths(`${month}-01`, 1).slice(0, 7))}
-          >
-            <ChevronRight />
-          </Button>
+      {(search || hasAppliedFilters) && (
+        <div className="history-active-filters" aria-label="Filtros ativos">
+          {search && <button onClick={() => setSearch('')} aria-label="Remover busca">Busca: {search} <X size={14} /></button>}
+          {typeFilter !== 'all' && <button onClick={() => setTypeFilter('all')}>{typeFilter === 'expense' ? 'Gastos' : 'Entradas'} <X size={14} /></button>}
+          {pendingOnly && <button onClick={() => setPendingOnly(false)}>Pendentes <X size={14} /></button>}
+          {sourceFilters.map((source) => (
+            <button key={source} onClick={() => removeSourceFilter(source)}>
+              {source === 'manual' ? 'Aplicativo' : source === 'whatsapp' ? 'WhatsApp' : 'Arquivo'} <X size={14} />
+            </button>
+          ))}
+          <button className="history-clear-filters" onClick={clearFilters}>Limpar filtros</button>
         </div>
-        <label className="history-search">
-          Buscar movimentos
-          <input
-            type="search"
-            placeholder="Ex.: mercado"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
-        <div className="history-filters" role="group" aria-label="Filtrar movimentos">
-          {(
-            [
-              ['all', 'Todas'],
-              ['expense', 'Gastos'],
-              ['income', 'Entradas'],
-              ['pending', 'Pendentes'],
-            ] as const
-          ).map(([value, label]) => (
-            <Button
-              key={value}
-              variant={filter === value ? 'primary' : 'secondary'}
-              aria-pressed={filter === value}
-              onClick={() => setFilter(value)}
-            >
-              {label}
-            </Button>
+      )}
+      {hasNoResults ? (
+        <div className="history-empty">
+          <h2>
+            {hasNoTransactions ? 'Nada por aqui ainda.' : hasAppliedFilters || search ? 'Nenhum resultado.' : 'Nenhum movimento neste mês.'}
+          </h2>
+          {hasNoTransactions ? (
+            <>
+              <p>Mande seu primeiro gasto pelo WhatsApp.</p>
+              <Link className="button button-primary" to="/integracoes">Abrir WhatsApp</Link>
+            </>
+          ) : hasAppliedFilters || search ? (
+            <>
+              <p>Tente mudar a busca ou os filtros.</p>
+              <Button variant="secondary" onClick={clearFilters}>Limpar filtros</Button>
+            </>
+          ) : <p>Escolha outro mês para consultar seus registros.</p>}
+        </div>
+      ) : (
+        <div className="history-timeline">
+          {groups.map((group) => (
+            <section className="history-day-group" key={group.date} aria-labelledby={`history-day-${group.date}`}>
+              <h2 id={`history-day-${group.date}`}>{group.label}</h2>
+              <MoneyRows rows={group.rows} timeline />
+            </section>
           ))}
         </div>
-        <div className="history-filters" role="group" aria-label="Filtrar por origem">
-          {(
-            [
-              ['all', 'Todas as origens'],
-              ['manual', 'No app'],
-              ['whatsapp', 'WhatsApp'],
-              ['import', 'Arquivo'],
-            ] as const
-          ).map(([value, label]) => (
-            <Button
-              key={value}
-              variant={sourceFilter === value ? 'primary' : 'secondary'}
-              aria-pressed={sourceFilter === value}
-              onClick={() => setSourceFilter(value)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-        {rows.length ? (
-          <MoneyRows rows={rows} />
-        ) : (
-          <div className="simple-empty">
-            <h2>Nenhum movimento por aqui.</h2>
-            <p>Confira o mês e a busca, ou anote seu primeiro gasto.</p>
+      )}
+      {monthOpen && (
+        <Dialog title="Escolher período" className="capture-sheet history-sheet" onClose={() => setMonthOpen(false)}>
+          <div className="history-month-options">
+            {monthChoices.map((option) => (
+              <button key={option} aria-pressed={month === option} onClick={() => { setMonth(option); setMonthOpen(false); }}>
+                {monthLabel(option)}
+              </button>
+            ))}
           </div>
-        )}
-      </Card>
-      {adding && <MoneyForm type={adding} onClose={() => setAdding(null)} />}
-    </>
+          {otherMonthOpen ? (
+            <label className="history-other-month">
+              Escolher outra data
+              <input type="month" value={month} onChange={(event) => { if (event.target.value) { setMonth(event.target.value); setMonthOpen(false); } }} />
+            </label>
+          ) : <Button variant="secondary" onClick={() => setOtherMonthOpen(true)}>Escolher outra data</Button>}
+        </Dialog>
+      )}
+      {filtersOpen && (
+        <Dialog title="Filtrar histórico" className="capture-sheet history-sheet" onClose={() => setFiltersOpen(false)}>
+          <div className="history-filter-sections">
+            <fieldset>
+              <legend>Tipo</legend>
+              {([
+                ['all', 'Todos'],
+                ['expense', 'Gastos'],
+                ['income', 'Entradas'],
+              ] as const).map(([value, label]) => (
+                <label key={value}>
+                  <input type="radio" name="history-type" checked={draftType === value} onChange={() => setDraftType(value)} />
+                  {label}
+                </label>
+              ))}
+            </fieldset>
+            <fieldset>
+              <legend>Situação</legend>
+              <label><input type="checkbox" checked={draftPendingOnly} onChange={(event) => setDraftPendingOnly(event.target.checked)} />Pendentes</label>
+            </fieldset>
+            <fieldset>
+              <legend>Origem</legend>
+              {([
+                ['whatsapp', 'WhatsApp'],
+                ['manual', 'Aplicativo'],
+                ['import', 'Arquivo'],
+              ] as const).map(([value, label]) => (
+                <label key={value}>
+                  <input type="checkbox" checked={draftSources.includes(value)} onChange={() => toggleDraftSource(value)} />
+                  {label}
+                </label>
+              ))}
+            </fieldset>
+          </div>
+          <div className="history-sheet-actions">
+            <Button variant="secondary" onClick={clearDraftFilters}>Limpar</Button>
+            <Button onClick={applyDraftFilters}>Aplicar filtros</Button>
+          </div>
+        </Dialog>
+      )}
+    </div>
   );
 }
