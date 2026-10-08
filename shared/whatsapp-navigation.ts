@@ -9,7 +9,7 @@ const option = (key: string, title: string, description?: string): WhatsAppButto
   ...(description ? { description } : {}),
 });
 export const rootChoices = [
-  option('expense', 'Anotar gasto', 'O que você pagou ou ainda vai pagar'),
+  option('expense', 'Anotar gasto', 'Conte em uma frase o que aconteceu'),
   option('income', 'Anotar entrada', 'Salário, aposentadoria ou outro recebimento'),
   option('money', 'Consultar dinheiro', 'Resumo, histórico e contas a pagar'),
   option('goals', 'Minhas metas', 'Criar uma meta ou acompanhar o dinheiro guardado'),

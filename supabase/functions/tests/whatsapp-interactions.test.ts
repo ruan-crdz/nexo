@@ -75,6 +75,38 @@ Deno.test('menu é nativo e não chama IA; texto livre continua disponível', as
   );
 });
 
+Deno.test('anotar gasto orienta uma frase livre e deixa o chat tratar o relato', async () => {
+  await mocked(
+    async (requests) => {
+      const prompt = await handleWhatsAppNavigation({ id: 'nexo:nav:expense' }, context);
+      assert.match(prompt!.reply!, /Gastei 25 reais na farmácia hoje/);
+      assert.equal(requests.filter((request) => request.url.pathname.endsWith('advance_whatsapp_guide')).length, 0);
+      assert.equal(await handleWhatsAppNavigation({ text: 'Gastei 25 reais na farmácia hoje' }, context), null);
+      assert.equal(requests.filter((request) => request.url.pathname.endsWith('advance_whatsapp_guide')).length, 0);
+    },
+    () => null,
+  );
+});
+
+Deno.test('relato completo retoma o chat e encerra uma sessão antiga de gasto', async () => {
+  const state = createGuide('expense', context.today);
+  await mocked(
+    async (requests) => {
+      const result = await handleWhatsAppNavigation(
+        { text: 'Gastei 25 reais na farmácia hoje' },
+        context,
+      );
+      assert.equal(result, null);
+      assert.equal(
+        requests.filter((request) => request.url.pathname.endsWith('whatsapp_guided_sessions')).length,
+        2,
+      );
+      assert.equal(requests.filter((request) => request.url.pathname.endsWith('advance_whatsapp_guide')).length, 0);
+    },
+    (url) => (url.pathname.endsWith('whatsapp_guided_sessions') ? { state } : null),
+  );
+});
+
 Deno.test('botão antigo não avança nem grava; o atual usa versão e proprietário', async () => {
   const state = {
     ...createGuide('expense', context.today),

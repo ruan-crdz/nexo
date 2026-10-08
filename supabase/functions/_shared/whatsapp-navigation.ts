@@ -44,6 +44,14 @@ async function recordFingerprint(row: Record<string, unknown>) {
   ).slice(0, 12);
 }
 
+function isNaturalExpenseMessage(text: string) {
+  const normalized = text.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const hasAmount = /(?:r\$\s*\d[\d.,]*|\d[\d.,]*\s*(?:reais?|real)\b)/i.test(normalized);
+  const hasIntent = /\b(gastei|paguei|comprei|desembolsei|passei)\b/i.test(normalized);
+  const hasDescription = /\b(?:na|no|em|de|da|do|para)\s+[\p{L}\d]/iu.test(normalized);
+  return hasAmount && (hasIntent || hasDescription);
+}
+
 async function recordNavigation(id: string, key: string | null, context: Context): Promise<Result | null> {
   const db = admin();
   const pagination = /^nexo:records:(edit|delete):(\d{1,3})$/.exec(id);
@@ -234,11 +242,26 @@ export async function handleWhatsAppNavigation(
       current,
       'Há um cadastro em andamento. Termine ou cancele este cadastro; depois, envie a foto ou o PDF novamente.',
     );
+  if (current?.kind === 'expense' && input.text && isNaturalExpenseMessage(input.text)) {
+    const cleared = await db.from('whatsapp_guided_sessions').delete().eq('user_id', context.userId);
+    if (cleared.error) throw new HttpError(503, 'Não consegui retomar sua frase livre.');
+    return null;
+  }
   if (!current) {
     const records = await recordNavigation(input.id ?? '', key, context);
     if (records) return records;
   }
   if (key) {
+    if (key === 'expense') {
+      if (current) {
+        const cleared = await db.from('whatsapp_guided_sessions').delete().eq('user_id', context.userId);
+        if (cleared.error) throw new HttpError(503, 'Não consegui encerrar o cadastro anterior.');
+      }
+      const prompt =
+        '*Anotar gasto*\nEscreva ou mande um áudio com o que aconteceu. Exemplo: “Gastei 25 reais na farmácia hoje”. Se faltar algo, eu pergunto.';
+      await savePrompt(context.userId, prompt);
+      return { reply: prompt, buttons: [backChoice] };
+    }
     if (['expense', 'income', 'goal', 'recurring'].includes(key)) {
       const state = createGuide(key as GuideKind, context.today);
       return advance(context, state, state, guideQuestion(state), null, true);
