@@ -188,12 +188,15 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   await expect(nexoLink.locator('.simple-nav-nexo-mark img')).toBeVisible();
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(nav.getByRole('link')).toHaveCount(3);
+  await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Histórico');
   await expect(nav.getByRole('link', { name: 'Família', exact: true })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'Objetivos', exact: true })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'Planejar', exact: true })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Objetivos', exact: true })).toHaveAttribute('href', '#/metas');
+  await expect(nav.getByRole('link', { name: 'Planejar', exact: true })).toHaveAttribute(
+    'href',
+    '#/planejar',
+  );
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
   await expect(nexoLink).toHaveAccessibleName('Perguntar ao Nexo');
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
@@ -202,10 +205,25 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   await expect(nexoMark).toHaveCSS('filter', 'brightness(0) invert(1)');
   await expect(nexoMark).toHaveCSS('width', '32px');
   await expect(page.getByRole('link', { name: 'Abrir seu perfil' })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 740 });
+  const navFits = await nav.evaluate((element) => {
+    const links = [...element.querySelectorAll('a')];
+    return (
+      element.scrollWidth <= element.clientWidth &&
+      links.every((link) => {
+        const bounds = link.getBoundingClientRect();
+        return bounds.left >= 0 && bounds.right <= window.innerWidth;
+      })
+    );
+  });
+  expect(navFits).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
   for (const [name, path] of [
     ['Início', 'inicio'],
     ['Histórico', 'movimentos'],
     ['Perguntar ao Nexo', 'nexo'],
+    ['Objetivos', 'metas'],
+    ['Planejar', 'planejar'],
   ]) {
     await nav.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/${path}$`));
@@ -259,7 +277,7 @@ test('datas e mês do histórico continuam utilizáveis em tela estreita e deskt
 test('navegação desktop e ocultação de valores persistem entre páginas', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(4);
+  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(6);
   await expect(nav.locator('.simple-nav-brand img')).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Início', exact: true })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Histórico' })).toBeVisible();
@@ -310,6 +328,25 @@ test('navegação desktop e ocultação de valores persistem entre páginas', as
   await page.getByRole('button', { name: 'Quanto falta para minha Caixinha?' }).click();
   await expect(page.locator('.verified-answer')).toContainText('•••••');
   await expect(page.locator('.verified-answer')).not.toContainText(/R\$\s*\d/);
+});
+
+test('títulos principais seguem o padrão visual da Home e têm respiro do cabeçalho', async ({ page }) => {
+  const homeTitleSizes = await page
+    .locator('.home-month-title h1, .home-goal-heading h2, .home-recent h2')
+    .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fontSize));
+  expect(homeTitleSizes).toEqual(['22px', '22px', '22px']);
+  await expect(page.locator('main')).toHaveCSS('padding-top', '16px');
+
+  for (const [path, label] of [
+    ['/#/movimentos', 'Histórico'],
+    ['/#/metas', 'Objetivos'],
+    ['/#/nexo', 'Nexo'],
+  ]) {
+    await page.goto(path);
+    const heading = page.getByRole('heading', { name: label, exact: true });
+    await expect(heading).toBeVisible();
+    await expect(heading).toHaveCSS('font-size', '22px');
+  }
 });
 
 test('onboarding pergunta nome, oferece WhatsApp e salva objetivo opcional', async ({ page }) => {
@@ -1210,6 +1247,110 @@ test('wizard cria uma Caixinha sem prazo e abre seu detalhe', async ({ page }) =
   expect(data.goals).toContainEqual(
     expect.objectContaining({ name: 'Reserva tranquila', saved: 2500, deadline: null }),
   );
+});
+test('modal de prazo mantém opções e data alinhadas em celular', async ({ page }) => {
+  const id = '12345678-1234-4234-8234-123456789abc';
+  await page.evaluate((goalId) => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    data.goals = [
+      {
+        id: goalId,
+        name: 'Reserva do prazo',
+        target: 50000,
+        saved: 2000,
+        monthly_contribution: 0,
+        deadline: null,
+        priority: 'medium',
+        weekly_amount: 0,
+        high_water: 2000,
+        purpose: 'Reserva',
+      },
+    ];
+    data.goal_events = [];
+    data.profile.active_goal_id = goalId;
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  }, id);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.reload();
+  await page.goto(`/#/metas/${id}`);
+  await page.locator('.objective-detail-row').nth(1).click();
+  const dialog = page.getByRole('dialog');
+  const choices = dialog.getByRole('group', { name: 'Prazo da Caixinha' });
+  await expect(dialog).toHaveClass(/objective-settings-sheet/);
+  await choices.getByRole('radio', { name: 'Escolher uma data' }).check();
+  const dateValue = await page.evaluate(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().slice(0, 10);
+  });
+  await dialog.getByLabel('Data desejada').fill(dateValue);
+  await expect(choices.locator('.objective-deadline-option').nth(1)).toHaveCSS('border-radius', '8px');
+  const controlsFit = await dialog.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return (
+      element.scrollWidth <= element.clientWidth &&
+      [...element.querySelectorAll('input, button')].every((control) => {
+        const controlBounds = control.getBoundingClientRect();
+        return controlBounds.left >= bounds.left && controlBounds.right <= bounds.right;
+      })
+    );
+  });
+  expect(controlsFit).toBe(true);
+  await dialog.getByRole('button', { name: 'Salvar' }).click();
+  const data = await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!));
+  expect(data.goals[0].deadline).toBe(dateValue);
+});
+test('excluir Caixinha exige confirmação e remove seu histórico', async ({ page }) => {
+  const goalId = '12345678-1234-4234-8234-123456789abc';
+  const eventId = '32345678-1234-4234-8234-123456789abc';
+  await page.evaluate(
+    ({ goalId: id, eventId: movementId }) => {
+      const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+      data.goals = [
+        {
+          id,
+          name: 'Reserva para excluir',
+          target: 50000,
+          saved: 2000,
+          monthly_contribution: 0,
+          deadline: null,
+          priority: 'medium',
+          weekly_amount: 0,
+          high_water: 3000,
+          purpose: 'Reserva',
+        },
+      ];
+      data.goal_events = [
+        {
+          id: movementId,
+          goal_id: id,
+          delta: 2000,
+          reason: 'saving',
+          balance_after: 2000,
+          created_at: new Date().toISOString(),
+        },
+      ];
+      data.profile.active_goal_id = id;
+      localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+    },
+    { goalId, eventId },
+  );
+  await page.reload();
+  await page.goto(`/#/metas/${goalId}`);
+  await page.getByRole('button', { name: 'Excluir Caixinha' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Excluir Caixinha?' })).toBeVisible();
+  await expect(dialog).toContainText('o histórico de movimentações serão removidos');
+  await dialog.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(page.getByRole('heading', { name: 'Reserva para excluir' })).toBeVisible();
+  await page.getByRole('button', { name: 'Excluir Caixinha' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Excluir Caixinha' }).click();
+  await expect(page).toHaveURL(/#\/metas$/);
+  await expect(page.getByRole('heading', { name: 'Objetivos', exact: true })).toBeVisible();
+  const remaining = await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!));
+  expect(remaining.goals).toHaveLength(0);
+  expect(remaining.goal_events).toHaveLength(0);
+  expect(remaining.profile.active_goal_id).toBeNull();
 });
 test('guardar e retirar atualiza o detalhe sem apagar o pico histórico', async ({ page }) => {
   const id = '12345678-1234-4234-8234-123456789abc';

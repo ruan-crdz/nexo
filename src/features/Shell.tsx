@@ -2,6 +2,8 @@ import { NavLink, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
 import {
   Home,
   NotebookPen,
+  Target,
+  CalendarDays,
   Eye,
   EyeOff,
   ShieldCheck,
@@ -27,6 +29,8 @@ const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
   { to: '/nexo', label: 'Nexo', icon: MessageCircle },
+  { to: '/metas', label: 'Objetivos', icon: Target },
+  { to: '/planejar', label: 'Planejar', icon: CalendarDays },
 ];
 export function Shell() {
   const app = useApp();

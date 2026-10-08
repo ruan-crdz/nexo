@@ -317,6 +317,9 @@ label {
   gap: 32px;
   outline: none;
 }
+.simple-content[data-page='/inicio'] {
+  padding-top: 16px;
+}
 /* The mobile declarations below replace the desktop rail without changing routes. */
 .simple-nav {
   display: flex;
@@ -747,7 +750,9 @@ label {
 }
 .history-heading h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 .history-heading-actions {
   display: flex;
@@ -3667,7 +3672,9 @@ label {
 }
 .objectives-page-header h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 .objectives-total {
   display: grid;
@@ -3832,7 +3839,7 @@ label {
 }
 .objective-detail-hero h1 {
   margin: 6px 0 8px;
-  font-size: 23px;
+  font-size: 22px;
   overflow-wrap: anywhere;
 }
 .objective-detail-saved {
@@ -3878,6 +3885,81 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+.objective-detail-delete,
+.objective-detail-delete > svg {
+  color: var(--terra);
+}
+.objective-settings-sheet,
+.objective-delete-sheet {
+  display: grid;
+  gap: 18px;
+}
+.objective-settings-sheet .dialog-header h2,
+.objective-delete-sheet .dialog-header h2 {
+  font-size: 22px;
+  line-height: 1.2;
+}
+.objective-settings-form,
+.objective-delete-form {
+  max-width: none;
+  gap: 16px;
+}
+.objective-deadline-choices {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.objective-deadline-choices legend {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.objective-deadline-option {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  min-height: 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  cursor: pointer;
+}
+.objective-deadline-option:has(input:checked) {
+  border-color: var(--moss);
+  background: var(--lime-soft);
+  color: var(--moss);
+}
+.objective-deadline-option input[type='radio'] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
+  accent-color: var(--moss);
+}
+.objective-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.objective-form-actions .button {
+  flex: 1 1 160px;
+  width: auto;
+  min-width: 0;
+}
+.objective-delete-form > p {
+  margin: 0;
+}
+.objective-delete-confirm,
+.objective-delete-confirm:hover {
+  border-color: var(--terra);
+  background: var(--terra);
+  color: #fff;
 }
 .objective-detail-settings {
   border-top: 1px solid var(--line);
@@ -3969,7 +4051,9 @@ label {
 }
 .goal-flow-header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 .goal-flow-header > span {
   color: var(--muted);
@@ -4117,5 +4201,25 @@ label {
   }
   .goal-kind-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 360px) {
+  .simple-shell .simple-nav a {
+    gap: 2px;
+    padding-inline: 0;
+    font-size: 10px;
+  }
+  .simple-shell .simple-nav a > svg {
+    width: 20px;
+    height: 20px;
+  }
+  .simple-shell .simple-nav .simple-nav-nexo-mark {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+  }
+  .simple-shell .simple-nav .simple-nav-nexo-mark img {
+    width: 26px;
+    height: 26px;
   }
 }

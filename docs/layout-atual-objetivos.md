@@ -2,13 +2,13 @@
 
 Ficha factual da experiência de Caixinhas, acessível pela rota `/#/metas`. A lista reúne todos os objetivos; criação e detalhe são telas separadas. O progresso é registrado pelo Nexo e não representa saldo bancário sincronizado nem movimenta dinheiro.
 
-## Lista de Caixinhas
+## Lista de Objetivos
 
-- O cabeçalho é “Caixinhas” e oferece um atalho de criação.
+- O cabeçalho é “Objetivos” e oferece um atalho de criação.
 - Quando existem objetivos, um total resume o valor guardado em todas as Caixinhas.
 - Cada item mostra nome, valor guardado, alvo, barra e percentual. Tocar no item abre seu detalhe.
 - Sem objetivos, a tela explica como começar e oferece a criação.
-- A navegação fixa tem três destinos: Início, Histórico e Nexo. Objetivos permanece acessível por links contextuais, incluindo Home, Perfil e Planejar.
+- A navegação fixa tem cinco destinos: Início, Histórico, Nexo, Objetivos e Planejar.
 
 ## Criar Caixinha
 
@@ -31,6 +31,8 @@ A rota `/#/metas/:goalId` exibe uma Caixinha por vez, com valor guardado, alvo, 
 - **Retirar:** reduz o valor guardado. O motivo é opcional e pode indicar emergência ou uso no objetivo. Uma emergência não apaga o pico histórico nem movimentações anteriores.
 
 Informações secundárias permitem editar alvo, prazo, nome/categoria e consultar o histórico. Metas sem prazo continuam sem cota mensal obrigatória. IDs inexistentes mostram uma saída para voltar à lista.
+
+A ação **Excluir Caixinha** exige confirmação e remove também o histórico associado. Depois da exclusão, a lista de objetivos é exibida.
 
 ## Interface e limites
 
