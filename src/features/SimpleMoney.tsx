@@ -1161,9 +1161,6 @@ export function SimpleHome() {
         <section className="home-recent" aria-labelledby="recent-title">
           <div className="simple-section-title">
             <h2 id="recent-title">Últimos movimentos</h2>
-            <Link className="text-link" to="/movimentos">
-              Histórico <ChevronRight size={18} />
-            </Link>
           </div>
           {recentGroups.length ? (
             recentGroups.map((group) => (

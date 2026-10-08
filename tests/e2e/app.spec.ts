@@ -181,22 +181,19 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
   await expect(page.locator('.home-month-result')).toHaveText(result, { useInnerText: true });
 });
 
-test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', async ({ page }) => {
+test('navegação tem três destinos e Planejamento fica acessível pela Home', async ({ page }) => {
   const nav = page.getByRole('navigation', { name: 'Principal' });
   const nexoLink = nav.getByRole('link', { name: 'Perguntar ao Nexo' });
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(nexoLink.locator('.simple-nav-nexo-mark img')).toBeVisible();
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(nav.getByRole('link')).toHaveCount(5);
+  await expect(nav.getByRole('link')).toHaveCount(3);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Histórico');
   await expect(nav.getByRole('link', { name: 'Família', exact: true })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'Objetivos', exact: true })).toHaveAttribute('href', '#/metas');
-  await expect(nav.getByRole('link', { name: 'Planejar', exact: true })).toHaveAttribute(
-    'href',
-    '#/planejar',
-  );
+  await expect(nav.getByRole('link', { name: 'Objetivos', exact: true })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Planejar', exact: true })).toHaveCount(0);
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
   await expect(nexoLink).toHaveAccessibleName('Perguntar ao Nexo');
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
@@ -222,13 +219,18 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
     ['Início', 'inicio'],
     ['Histórico', 'movimentos'],
     ['Perguntar ao Nexo', 'nexo'],
-    ['Objetivos', 'metas'],
-    ['Planejar', 'planejar'],
   ]) {
     await nav.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/${path}$`));
   }
   await nav.getByRole('link', { name: 'Início', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Planejar', exact: true })).toBeVisible();
+  await expect(
+    page.locator('.home-goal').getByRole('link', { name: 'Ver todos os objetivos' }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Planejar', exact: true }).click();
+  await expect(page).toHaveURL(/#\/planejar$/);
+  await page.goto('/#/inicio');
   const linkWidths = await nav
     .getByRole('link')
     .evaluateAll((links) => links.map((link) => link.getBoundingClientRect().width));
@@ -262,6 +264,7 @@ test('datas e mês do histórico continuam utilizáveis em tela estreita e deskt
   await expect(date).toHaveValue('2026-10-05');
   await page.getByRole('button', { name: 'Cancelar' }).click();
   await page.goto('/#/movimentos');
+  await expect(page.locator('.simple-topbar')).toBeVisible();
   await page.getByRole('button', { name: 'outubro de 2026', exact: true }).click();
   const monthSheet = page.getByRole('dialog', { name: 'Escolher período' });
   await expect(monthSheet.getByRole('button', { name: 'outubro de 2026', exact: true })).toHaveAttribute(
@@ -272,12 +275,13 @@ test('datas e mês do histórico continuam utilizáveis em tela estreita e deskt
   await expect(page.getByRole('button', { name: 'agosto de 2026', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.getByRole('button', { name: 'agosto de 2026', exact: true })).toBeVisible();
+  await expect(page.locator('.simple-topbar')).toBeVisible();
 });
 
 test('navegação desktop e ocultação de valores persistem entre páginas', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(6);
+  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(4);
   await expect(nav.locator('.simple-nav-brand img')).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Início', exact: true })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Histórico' })).toBeVisible();
@@ -293,7 +297,7 @@ test('navegação desktop e ocultação de valores persistem entre páginas', as
   await page.goto('/#/movimentos');
   await expect(page.locator('.money-row-top > strong').first()).toContainText('R$ •••••');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Mostrar valores' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Mostrar valores' })).toBeVisible();
   await expect(page.locator('.money-row-top > strong').first()).toContainText('R$ •••••');
   await page.goto('/#/inicio');
   await expect(page.getByRole('button', { name: 'Mostrar valores' })).toBeVisible();
@@ -740,6 +744,7 @@ test('Home mostra o resumo, ações rápidas, objetivos e até três movimentos'
   await expect(page.locator('.home-action-rail > *')).toHaveCount(4);
   await expect(page.locator('.home-insight').count()).resolves.toBeLessThanOrEqual(1);
   await expect(page.locator('.home-goal')).toHaveCount(1);
+  await expect(page.locator('.home-recent').getByRole('link', { name: 'Histórico' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Objetivos', exact: true })).toBeVisible();
   const sectionHeadingStyles = await Promise.all(
     [
@@ -1044,13 +1049,39 @@ test('entrada e cadastro têm instruções simples e permitem conferir a senha',
   expect(result.violations).toEqual([]);
 });
 
-test('recorrência persiste como pendente sem duplicar ao recarregar', async ({ page }) => {
+test('Planejamento resume as áreas e centraliza a adição', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
   await page.goto('/#/planejar');
-  await page.getByRole('button', { name: 'Nova recorrência' }).click();
-  await page.getByLabel('Nome', { exact: true }).fill('Conta recorrente e2e');
-  await page.getByLabel('Valor (R$)', { exact: true }).fill('99,50');
-  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
+  await expect(page.getByRole('heading', { name: 'Planejamento', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Próximos 30 dias' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Limites do mês' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Caixinhas' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Contas recorrentes' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Editar|Excluir/ })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('link', { name: 'Adicionar planejamento' }).click();
+  await expect(page.getByRole('heading', { name: 'O que quer planejar?' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Conta', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Limite de gastos' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Caixinha' })).toHaveAttribute('href', '#/metas/nova');
+});
+
+test('recorrência persiste como pendente sem duplicar ao recarregar', async ({ page }) => {
+  await page.goto('/#/planejar/adicionar');
+  await page.getByRole('link', { name: 'Conta', exact: true }).click();
+  await page.getByLabel('Nome da conta').fill('Conta recorrente e2e');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Valor (R$)').fill('99,50');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Data de vencimento').fill('2026-10-15');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Todo mês' }).click();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Confirmar conta' }).click();
   await expect(page.getByRole('heading', { name: 'Conta recorrente e2e' })).toBeVisible();
+  await page.locator('.planning-detail-overflow > summary[aria-label="Mais opções da conta"]').click();
+  await expect(page.getByRole('link', { name: 'Editar', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pausar conta' })).toBeVisible();
   const before = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
       (row: { description: string }) => row.description === 'Conta recorrente e2e',
@@ -1059,7 +1090,7 @@ test('recorrência persiste como pendente sem duplicar ao recarregar', async ({ 
   expect(before.length).toBeGreaterThan(0);
   expect(before.every((row: { status: string }) => row.status === 'planned')).toBe(true);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Planejar', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Conta recorrente e2e' })).toBeVisible();
   const after = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
       (row: { description: string }) => row.description === 'Conta recorrente e2e',
@@ -1070,14 +1101,17 @@ test('recorrência persiste como pendente sem duplicar ao recarregar', async ({ 
 
 test('limite e meta têm cálculo verificável e avisos exigem consentimento', async ({ page }) => {
   await expect(page.locator('.attention-band')).toHaveCount(0);
-  await page.goto('/#/planejar');
-  await page.getByRole('button', { name: 'Novo limite' }).click();
-  await page.getByLabel('Valor (R$)', { exact: true }).fill('1,00');
-  await page.getByRole('combobox', { name: 'Categoria', exact: true }).selectOption('Alimentação');
-  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
-  await expect(
-    page.locator('.planning-section[aria-labelledby="planning-budgets-title"] .plan-list'),
-  ).toContainText('Acima do limite');
+  await page.goto('/#/planejar/adicionar');
+  await page.getByRole('link', { name: 'Limite de gastos' }).click();
+  await page.getByRole('button', { name: 'Alimentação', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Valor máximo (R$)').fill('1,00');
+  await page.getByRole('button', { name: 'Criar limite' }).click();
+  await expect(page.locator('.planning-limit-list-full')).toContainText('acima');
+  await page.locator('.planning-limit-row').filter({ hasText: 'Alimentação' }).click();
+  await expect(page.getByRole('heading', { name: 'Alimentação', exact: true })).toBeVisible();
+  await page.locator('.planning-detail-overflow > summary[aria-label="Mais opções do limite"]').click();
+  await expect(page.getByRole('link', { name: 'Editar limite' })).toBeVisible();
   await page.goto('/#/metas/nova');
   await page.getByRole('button', { name: 'Viagem', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
@@ -1150,13 +1184,19 @@ test('decisão recusa premissas vazias e mostra dinheiro calculado sem antecipar
   await expect(page.locator('.verified-answer')).toContainText('não foi tratada como dinheiro recebido');
 });
 test('renda semanal é prevista e fatura não transforma limite em saldo', async ({ page }) => {
-  await page.goto('/#/planejar');
-  await page.getByRole('button', { name: 'Nova recorrência' }).click();
-  await page.getByLabel('Nome', { exact: true }).fill('Renda semanal teste');
+  await page.goto('/#/planejar/adicionar');
+  await page.getByRole('link', { name: 'Conta', exact: true }).click();
+  await page.getByLabel('Nome da conta').fill('Renda semanal teste');
+  await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByLabel('Valor (R$)', { exact: true }).fill('100,00');
-  await page.getByRole('combobox', { name: 'Frequência' }).selectOption('weekly');
-  await page.getByRole('combobox', { name: 'Gasto ou renda' }).selectOption('income');
-  await page.getByRole('button', { name: 'Salvar planejamento' }).click();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Data de vencimento').fill('2026-10-12');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Toda semana' }).click();
+  await page.getByText('Mais opções').click();
+  await page.getByLabel('Tipo').selectOption('income');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Confirmar conta' }).click();
   await expect(page.getByRole('heading', { name: 'Renda semanal teste' })).toBeVisible();
   const rows = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
@@ -1397,16 +1437,21 @@ test('guardar e retirar atualiza o detalhe sem apagar o pico histórico', async 
   await expect(page.getByRole('dialog')).toContainText('Emergência');
 });
 test('conta única vira um gasto previsto sem criar recorrência', async ({ page }) => {
-  await page.goto('/#/planejar');
-  await expect(page.getByRole('button', { name: 'Nova Caixinha', exact: true })).not.toBeVisible();
-  await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Nome').fill('Consulta médica única');
-  await dialog.getByLabel('Valor (R$)').fill('85,00');
-  await dialog.getByLabel('Frequência').selectOption('once');
-  await expect(dialog.getByText(/pendente uma única vez/)).toBeVisible();
-  await dialog.getByRole('button', { name: 'Anotar conta' }).click();
-  await expect(dialog).not.toBeVisible();
+  await page.goto('/#/planejar/adicionar');
+  await page.getByRole('link', { name: 'Conta', exact: true }).click();
+  await page.getByLabel('Nome da conta').fill('Consulta médica única');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Valor (R$)').fill('85,00');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Data de vencimento').fill('2026-10-20');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Só desta vez' }).click();
+  await expect(
+    page.getByText('Será anotada como pendente uma única vez. Nenhum pagamento é feito pelo app.'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Anotar conta' }).click();
+  await expect(page.getByRole('heading', { name: 'Contas', exact: true })).toBeVisible();
   const data = await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!));
   expect(data.transactions).toContainEqual(
     expect.objectContaining({

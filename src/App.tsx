@@ -14,7 +14,9 @@ const IntegrationsPage = lazy(async () => ({
   default: (await import('./features/Integrations')).IntegrationsPage,
 }));
 const MfaPage = lazy(async () => ({ default: (await import('./features/Mfa')).MfaPage }));
-const PlanningHub = lazy(async () => ({ default: (await import('./features/PlanningHub')).PlanningHub }));
+const PlanningExperience = lazy(async () => ({
+  default: (await import('./features/PlanningExperience')).PlanningExperience,
+}));
 const FinancialQuestions = lazy(async () => ({
   default: (await import('./features/FinancialQuestions')).FinancialQuestions,
 }));
@@ -60,7 +62,7 @@ export default function App() {
               <Route path="/perfil" element={<SimpleSettings />} />
               <Route path="/ajuda" element={<SimpleHelp />} />
               <Route path="/privacidade" element={<SimplePrivacy />} />
-              <Route path="/planejar" element={<PlanningHub />} />
+              <Route path="/planejar/*" element={<PlanningExperience />} />
               <Route path="/metas" element={<GoalsPage />} />
               <Route path="/metas/nova" element={<GoalsPage />} />
               <Route path="/metas/:goalId" element={<GoalsPage />} />

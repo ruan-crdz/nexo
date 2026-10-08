@@ -2,8 +2,6 @@ import { NavLink, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
 import {
   Home,
   NotebookPen,
-  Target,
-  CalendarDays,
   Eye,
   EyeOff,
   ShieldCheck,
@@ -29,8 +27,6 @@ const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
   { to: '/nexo', label: 'Nexo', icon: MessageCircle },
-  { to: '/metas', label: 'Objetivos', icon: Target },
-  { to: '/planejar', label: 'Planejar', icon: CalendarDays },
 ];
 export function Shell() {
   const app = useApp();
@@ -80,7 +76,7 @@ export function Shell() {
       >
         Pular para o conteúdo
       </a>
-      {pathname !== '/movimentos' && pathname !== '/nexo' && (
+      {pathname !== '/nexo' && (
         <header className="simple-topbar">
           <div className="topbar-mobile-controls">
             <Link className="simple-profile topbar-mobile-avatar" to="/perfil" aria-label="Abrir seu perfil">
