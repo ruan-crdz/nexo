@@ -165,10 +165,10 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   await expect(nexoLink.locator('.simple-nav-nexo-desktop-icon')).toBeVisible();
   await expect(nexoLink.locator('.simple-nav-nexo-mark')).not.toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(nav.getByRole('link')).toHaveCount(6);
+  await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Histórico');
-  await expect(nav.getByRole('link', { name: 'Família', exact: true })).toHaveAttribute('href', '#/familia');
+  await expect(nav.getByRole('link', { name: 'Família', exact: true })).toHaveCount(0);
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
   await expect(nexoLink).toHaveAccessibleName('Perguntar ao Nexo');
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
@@ -181,7 +181,6 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
     ['Caixinhas', 'metas'],
     ['Planejar', 'planejar'],
     ['Perguntar ao Nexo', 'nexo'],
-    ['Família', 'familia'],
   ]) {
     await nav.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/${path}$`));
@@ -200,10 +199,9 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   }
 });
 
-test('Família está na navegação principal e explica a limitação dos dados de demonstração', async ({ page }) => {
-  const family = page
-    .getByRole('navigation', { name: 'Principal' })
-    .getByRole('link', { name: 'Família', exact: true });
+test('Família fica no Perfil e explica a limitação dos dados de demonstração', async ({ page }) => {
+  await page.goto('/#/perfil');
+  const family = page.getByRole('link', { name: 'Família', exact: true });
   await expect(family).toBeVisible();
   await family.click();
   await expect(page.getByRole('heading', { name: 'Finanças em família' })).toBeVisible();
