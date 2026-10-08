@@ -5,8 +5,8 @@ import {
   downloadMedia,
   hashToken,
   deliverReply,
-  deliverImageReply,
   cacheImageReply,
+  prepareWhatsAppReply,
   retryWhatsAppReply,
   showTypingIndicator,
   verifySignature,
@@ -15,14 +15,10 @@ import { parseLinkingCode, whatsappWelcome } from '../../../shared/whatsapp-link
 import { transcribe, readReceipt } from '../_shared/openai.ts';
 import { civilDate, formatMoney } from '../../../shared/financial-engine.ts';
 import { chatWithWhatsApp, executeChatTool } from '../_shared/whatsapp-chat.ts';
-import { replyWithMoneySnapshot } from '../_shared/whatsapp-money.ts';
-import type { WhatsAppMoneySnapshot } from '../_shared/whatsapp-money.ts';
 import { handleWhatsAppAction } from '../_shared/whatsapp-interactions.ts';
-import {
-  proposalButtons,
-  welcomeButtons,
-  type WhatsAppButton,
-} from '../../../shared/whatsapp-presentation.ts';
+import { handleWhatsAppNavigation } from '../_shared/whatsapp-navigation.ts';
+import { rootChoices, nextStepText, withNextStep } from '../../../shared/whatsapp-navigation.ts';
+import { proposalButtons, type WhatsAppButton } from '../../../shared/whatsapp-presentation.ts';
 
 const messageSchema = z.object({
   id: z.string().min(1).max(300),
@@ -34,6 +30,9 @@ const messageSchema = z.object({
     .object({
       type: z.string(),
       button_reply: z.object({ id: z.string().max(256), title: z.string().max(100) }).optional(),
+      list_reply: z
+        .object({ id: z.string().max(200), title: z.string().max(100), description: z.string().optional() })
+        .optional(),
     })
     .optional(),
   audio: z.object({ id: z.string(), mime_type: z.string().optional() }).optional(),
@@ -89,29 +88,30 @@ async function processMessage(message: Message) {
     return;
   }
   let committed = false;
-  let financialChanged = false;
+  let connectedUserId: string | undefined;
   let moneyToday = '';
-  let currentMoney: WhatsAppMoneySnapshot | null | undefined;
   let messagePoints = 0;
   let showPoints = false;
   async function finish(reply: string, userId?: string, buttons: WhatsAppButton[] = []) {
-    if (financialChanged && userId)
-      reply = await replyWithMoneySnapshot(reply, userId, moneyToday, currentMoney);
     if (showPoints && messagePoints > 0)
       reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
+    if (userId && !buttons.length) {
+      buttons = rootChoices;
+      if (!reply.includes(nextStepText)) reply = withNextStep(reply);
+    }
+    const prepared = await prepareWhatsAppReply(message.id, userId, reply, buttons);
     const result = await db
       .from('whatsapp_messages_metadata')
       .update({
         state: 'complete',
-        reply,
-        reply_buttons: buttons,
+        ...prepared,
         user_id: userId ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('message_id', message.id);
     if (result.error) throw new Error('metadata');
     committed = true;
-    await deliverReply(message.id, message.from, reply, buttons);
+    await retryWhatsAppReply(message.id, message.from);
   }
   async function finishImage(
     image: Uint8Array,
@@ -120,15 +120,15 @@ async function processMessage(message: Message) {
     mimeType: 'image/png' | 'image/jpeg',
   ) {
     let reply = caption;
-    if (financialChanged) reply = await replyWithMoneySnapshot(reply, userId, moneyToday, currentMoney);
     if (showPoints && messagePoints > 0)
       reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
     await cacheImageReply(message.id, image, mimeType);
+    const prepared = await prepareWhatsAppReply(message.id, userId, withNextStep(reply), rootChoices, true);
     const stored = await db
       .from('whatsapp_messages_metadata')
       .update({
         state: 'complete',
-        reply,
+        ...prepared,
         reply_kind: 'image',
         user_id: userId,
         updated_at: new Date().toISOString(),
@@ -136,7 +136,7 @@ async function processMessage(message: Message) {
       .eq('message_id', message.id);
     if (stored.error) throw new HttpError(503, 'Não foi possível registrar a resposta visual.');
     committed = true;
-    await deliverImageReply(message.id, message.from, image, reply, mimeType);
+    await retryWhatsAppReply(message.id, message.from);
   }
   try {
     let text = message.text?.body?.trim() ?? '';
@@ -152,7 +152,7 @@ async function processMessage(message: Message) {
           ? whatsappWelcome
           : 'Esse código de conexão já expirou ou foi usado. No app, abra Você → WhatsApp e gere um novo código.',
         link.data ?? undefined,
-        link.data ? welcomeButtons : [],
+        link.data ? rootChoices : [],
       );
       return;
     }
@@ -169,6 +169,7 @@ async function processMessage(message: Message) {
       return;
     }
     const userId = connection.data.user_id;
+    connectedUserId = userId;
     const rate = await db.rpc('consume_rate_limit', {
       subject: userId,
       bucket_name: 'whatsapp',
@@ -186,30 +187,53 @@ async function processMessage(message: Message) {
       .single();
     if (profile.error) throw new Error('profile');
     moneyToday = civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone);
-    if (message.type === 'interactive') {
+    const interactiveId =
+      message.interactive?.type === 'button_reply'
+        ? message.interactive.button_reply?.id
+        : message.interactive?.type === 'list_reply'
+          ? message.interactive.list_reply?.id
+          : undefined;
+    if (message.type === 'audio' && message.audio)
+      text = await transcribe(await downloadMedia(message.audio.id), userId);
+    if (['text', 'audio', 'interactive', 'image', 'document'].includes(message.type)) {
       const owned = await db
         .from('whatsapp_messages_metadata')
         .update({ user_id: userId })
         .eq('message_id', message.id);
       if (owned.error) throw new HttpError(503, 'Não consegui conferir a origem da escolha.');
-      const action = await handleWhatsAppAction(
-        message.interactive?.type === 'button_reply' ? (message.interactive.button_reply?.id ?? '') : '',
+      const navigation = await handleWhatsAppNavigation(
+        { id: interactiveId, text, media: message.type === 'image' || message.type === 'document' },
         {
+          userId,
+          phone: message.from,
+          messageId: message.id,
+          today: moneyToday,
+          onCommit: () => {
+            committed = true;
+          },
+        },
+      );
+      if (navigation?.reply) {
+        await finish(navigation.reply, userId, navigation.buttons);
+        return;
+      }
+      if (navigation?.text) text = navigation.text;
+      else if (message.type === 'interactive') {
+        const action = await handleWhatsAppAction(interactiveId ?? '', {
           userId,
           phone: message.from,
           messageId: message.id,
           today: civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
           onCommit: () => {
             committed = true;
-            financialChanged = true;
           },
-        },
-      );
-      if (action.reply) {
-        await finish(action.reply, userId);
-        return;
+        });
+        if (action.reply) {
+          await finish(action.reply, userId);
+          return;
+        }
+        text = action.text ?? '';
       }
-      text = action.text ?? '';
     }
     if (['text', 'audio', 'image', 'document'].includes(message.type)) {
       const award = await db.rpc('award_habit_for', {
@@ -221,8 +245,6 @@ async function processMessage(message: Message) {
       messagePoints = Number(award.data);
       showPoints = profile.data.show_journey_points;
     }
-    if (message.type === 'audio' && message.audio)
-      text = await transcribe(await downloadMedia(message.audio.id), userId);
     const receiptMedia =
       message.type === 'image' && message.image
         ? await downloadMedia(message.image.id)
@@ -289,7 +311,6 @@ async function processMessage(message: Message) {
           today: civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
           onCommit: () => {
             committed = true;
-            financialChanged = true;
           },
         },
       )) as { saved: number; already_exists: number };
@@ -310,14 +331,6 @@ async function processMessage(message: Message) {
       );
       return;
     }
-    if (/^(oi|olá|ola|menu|ajuda)[!.?\s]*$/i.test(text)) {
-      await finish(
-        'Oi! Sou o Nexo 🌿\n\nPode mandar texto ou áudio para anotar gastos, consultar seu mês ou organizar suas contas.\n\nComo posso ajudar?',
-        userId,
-        welcomeButtons,
-      );
-      return;
-    }
     if (message.type === 'text' || message.type === 'audio' || message.type === 'interactive') {
       const owned = await db
         .from('whatsapp_messages_metadata')
@@ -335,14 +348,10 @@ async function processMessage(message: Message) {
           today: civilDate(new Date(Number(message.timestamp) * 1000), profile.data.timezone),
           onCommit: () => {
             committed = true;
-            financialChanged = true;
             buttons = [];
           },
           onProposal: (id) => {
             buttons = proposalButtons(id);
-          },
-          onMoneySnapshot: (snapshot) => {
-            currentMoney = snapshot;
           },
           onImage: (image, mime) => {
             visual = { image, mime };
@@ -359,18 +368,36 @@ async function processMessage(message: Message) {
     // Never retry a committed financial write. External delivery failure is kept
     // as metadata for operator reconciliation, without logging financial content.
     if (!committed) {
-      await db
+      const durable = await db
         .from('whatsapp_messages_metadata')
-        .update({ state: 'failed', updated_at: new Date().toISOString() })
-        .eq('message_id', message.id);
-      try {
-        await deliverReply(
-          message.id,
-          message.from,
-          'Não consegui concluir esse pedido. Nenhuma alteração foi confirmada. Confira seus registros antes de tentar novamente.',
-        );
-      } catch {
-        console.error(JSON.stringify({ event: 'whatsapp_failure_notice_failed' }));
+        .select('state,reply')
+        .eq('message_id', message.id)
+        .maybeSingle();
+      if (!durable.error && durable.data?.state === 'complete' && durable.data.reply) {
+        committed = true;
+        try {
+          await retryWhatsAppReply(message.id, message.from);
+        } catch {
+          console.error(JSON.stringify({ event: 'whatsapp_recovery_delivery_failed' }));
+        }
+      } else if (!durable.error) {
+        const reply =
+          'Não consegui confirmar a conclusão desse pedido. Confira seus registros antes de tentar novamente.';
+        await db
+          .from('whatsapp_messages_metadata')
+          .update({ state: 'failed', updated_at: new Date().toISOString() })
+          .eq('message_id', message.id)
+          .neq('state', 'complete');
+        try {
+          await deliverReply(
+            message.id,
+            message.from,
+            connectedUserId ? withNextStep(reply) : reply,
+            connectedUserId ? rootChoices : [],
+          );
+        } catch {
+          console.error(JSON.stringify({ event: 'whatsapp_failure_notice_failed' }));
+        }
       }
     }
     console.error(JSON.stringify({ event: 'whatsapp_failure', stage: committed ? 'reply' : 'processing' }));

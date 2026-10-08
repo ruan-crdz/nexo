@@ -26,7 +26,7 @@ describe('mensagens nativas do WhatsApp', () => {
     const message = whatsAppMessageContent('Valor: **R$ 156,00**\nPosso salvar?', buttons);
     expect(message.type).toBe('interactive');
     expect(message.interactive?.body.text).toContain('*R$ 156,00*');
-    expect(message.interactive?.action.buttons.map((button) => button.reply.title)).toEqual([
+    expect(message.interactive?.action.buttons?.map((button) => button.reply.title)).toEqual([
       'Confirmar',
       'Corrigir',
       'Cancelar',

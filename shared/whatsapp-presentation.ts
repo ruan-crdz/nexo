@@ -1,4 +1,5 @@
-export type WhatsAppButton = { id: string; title: string };
+/** A choice becomes a native list row when there are more than three options. */
+export type WhatsAppButton = { id: string; title: string; description?: string };
 
 /** WhatsApp uses a single asterisk. Malformed emphasis is safer as plain text. */
 export function formatWhatsAppText(text: string) {
@@ -53,24 +54,40 @@ export function parseWhatsAppAction(id: string) {
 
 export function whatsAppMessageContent(text: string, buttons: WhatsAppButton[] = []) {
   const body = formatWhatsAppText(text);
+  const list = buttons.length > 3 || buttons.some((button) => button.description !== undefined);
   if (!buttons.length || body.length > 1024)
     return { type: 'text', text: { body: formatWhatsAppText(body.slice(0, 4000)) } };
   if (
-    buttons.length > 3 ||
+    buttons.length > 10 ||
     new Set(buttons.map((button) => button.id)).size !== buttons.length ||
-    new Set(buttons.map((button) => button.title)).size !== buttons.length ||
+    (!list && new Set(buttons.map((button) => button.title)).size !== buttons.length) ||
     buttons.some(
-      (button) => !button.id || button.id.length > 256 || !button.title || button.title.length > 20,
+      (button) =>
+        !button.id ||
+        button.id.length > (list ? 200 : 256) ||
+        !button.title ||
+        button.title.length > (list ? 24 : 20) ||
+        (button.description?.length ?? 0) > 72,
     )
   )
     throw new Error('Botões inválidos para o WhatsApp.');
+  if (list)
+    return {
+      type: 'interactive',
+      interactive: {
+        type: 'list',
+        body: { text: body },
+        footer: { text: 'Pode escolher abaixo ou mandar texto ou áudio.' },
+        action: { button: 'Ver opções', sections: [{ title: 'Nexo · Escolha uma opção', rows: buttons }] },
+      },
+    };
   return {
     type: 'interactive',
     interactive: {
       type: 'button',
       body: { text: body },
-      footer: { text: 'Nexo • Você também pode responder por texto ou áudio' },
-      action: { buttons: buttons.map((reply) => ({ type: 'reply', reply })) },
+      footer: { text: 'Pode escolher abaixo ou mandar texto ou áudio.' },
+      action: { buttons: buttons.map(({ id, title }) => ({ type: 'reply', reply: { id, title } })) },
     },
   };
 }

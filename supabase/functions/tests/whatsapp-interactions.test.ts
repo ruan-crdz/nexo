@@ -1,7 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { createClient } from '@supabase/supabase-js';
 import { handleWhatsAppAction } from '../_shared/whatsapp-interactions.ts';
-import { sendText, hashToken, retryWhatsAppReply } from '../_shared/whatsapp.ts';
+import { sendText, hashToken, retryWhatsAppReply, prepareWhatsAppReply } from '../_shared/whatsapp.ts';
+import { handleWhatsAppNavigation } from '../_shared/whatsapp-navigation.ts';
+import { rootChoices, nextStepText } from '../../../shared/whatsapp-navigation.ts';
+import { createGuide, guideQuestion } from '../../../shared/whatsapp-guide.ts';
 import { proposalButtons } from '../../../shared/whatsapp-presentation.ts';
 import { executeChatTool, chatWithWhatsApp, chatToolDefinitions } from '../_shared/whatsapp-chat.ts';
 import {
@@ -56,6 +59,230 @@ async function mocked(
     }
   }
 }
+
+Deno.test('menu é nativo e não chama IA; texto livre continua disponível', async () => {
+  await mocked(
+    async (requests) => {
+      const result = await handleWhatsAppNavigation({ text: 'menu' }, context);
+      assert.equal(result?.buttons?.length, 10);
+      await sendText(context.phone, result!.reply!, result!.buttons);
+      const sent = requests.find((request) => request.url.hostname === 'graph.facebook.com')!;
+      assert.equal((sent.body.interactive as { type: string }).type, 'list');
+      assert.equal(await handleWhatsAppNavigation({ text: 'Paguei 50 reais no mercado' }, context), null);
+      assert.ok(!requests.some((request) => request.url.hostname === 'api.openai.com'));
+    },
+    (url) => (url.hostname === 'graph.facebook.com' ? { messages: [{ id: 'menu-sent' }] } : null),
+  );
+});
+
+Deno.test('botão antigo não avança nem grava; o atual usa versão e proprietário', async () => {
+  const state = {
+    ...createGuide('expense', context.today),
+    step: 4,
+    version: 4,
+    answers: { description: 'Farmácia', amount: 3590, date: context.today, category: 'Saúde' },
+  };
+  await mocked(
+    async (requests) => {
+      const stale = await handleWhatsAppNavigation({ id: `nexo:guide:${state.id}:3:0` }, context);
+      assert.match(stale!.reply!, /anterior/);
+      assert.ok(!requests.some((request) => request.url.pathname.includes('/rpc/')));
+      const result = await handleWhatsAppNavigation({ id: guideQuestion(state).buttons[0].id }, context);
+      assert.ok(result!.reply!.includes(nextStepText));
+      const write = requests.find((request) => request.url.pathname.endsWith('advance_whatsapp_guide'))!.body;
+      assert.equal(write.owner, context.userId);
+      assert.equal(write.expected_version, 4);
+      assert.equal(write.next_state, null);
+      assert.equal((write.changes as { payload: { amount: number } }[])[0].payload.amount, 3590);
+      assert.ok(!requests.some((request) => request.url.hostname === 'api.openai.com'));
+    },
+    (url, body) =>
+      url.pathname.endsWith('whatsapp_guided_sessions')
+        ? { state }
+        : { status: 'applied', reply: body.response_text },
+  );
+});
+
+Deno.test('pergunta do menu guarda contexto para uma resposta curta', async () => {
+  await mocked(
+    async (requests) => {
+      const result = await handleWhatsAppNavigation({ id: 'nexo:nav:saving-help' }, context);
+      assert.match(result!.reply!, /qual meta/);
+      const saved = requests.find((request) => Array.isArray(request.body.history))!;
+      assert.equal(saved.body.user_id, context.userId);
+      assert.match(JSON.stringify(saved.body.history), /Anotar valor guardado/);
+    },
+    () => null,
+  );
+});
+
+Deno.test('correção lista registros do dono e permite descrições iguais com datas distintas', async () => {
+  await mocked(
+    async (requests) => {
+      const result = await handleWhatsAppNavigation({ id: 'nexo:nav:edit-help' }, context);
+      assert.equal(result!.buttons!.length, 3);
+      await sendText(context.phone, result!.reply!, result!.buttons);
+      const read = requests.find((request) => request.url.pathname.endsWith('transactions'))!;
+      assert.equal(read.url.searchParams.get('user_id'), `eq.${context.userId}`);
+      const sent = requests.find((request) => request.url.hostname === 'graph.facebook.com')!;
+      assert.equal((sent.body.interactive as { type: string }).type, 'list');
+    },
+    (url) => {
+      if (url.pathname.endsWith('transactions'))
+        return [
+          {
+            id: proposal,
+            description: 'Mercado da vizinhança',
+            amount: 2500,
+            date: '2026-10-07',
+            status: 'paid',
+          },
+          {
+            id: '12345678-1234-4234-8234-123456789ab1',
+            description: 'Mercado da vizinhança',
+            amount: 2500,
+            date: '2026-10-08',
+            status: 'paid',
+          },
+        ];
+      return url.hostname === 'graph.facebook.com' ? { messages: [{ id: 'records-sent' }] } : null;
+    },
+  );
+});
+
+Deno.test('resposta longa guarda todo o conteúdo e menu antes de enviar', async () => {
+  await mocked(
+    async (requests) => {
+      const text = 'Registro de exemplo. '.repeat(130) + nextStepText;
+      const prepared = await prepareWhatsAppReply('long-answer', context.userId, text, rootChoices);
+      assert.ok(prepared.followup_key);
+      const tails = requests
+        .map((request) => request.body)
+        .sort((a, b) => String(a.message_id).localeCompare(String(b.message_id)));
+      const joined = [prepared.reply, ...tails.map((tail) => tail.reply)].join(' ');
+      assert.equal(joined.replace(/\s+/g, ' ').trim(), text.replace(/\s+/g, ' ').trim());
+      assert.equal((tails.at(-1)!.reply_buttons as unknown[]).length, 10);
+      assert.ok(requests.every((request) => request.url.hostname !== 'graph.facebook.com'));
+    },
+    () => null,
+  );
+});
+
+Deno.test('retry de resposta já enviada entrega só o menu pendente, sem repetir ação', async () => {
+  await mocked(
+    async (requests) => {
+      await retryWhatsAppReply('sent-parent', context.phone);
+      const deliveries = requests.filter((request) => request.url.hostname === 'graph.facebook.com');
+      assert.equal(deliveries.length, 1);
+      assert.equal((deliveries[0].body.interactive as { type: string }).type, 'list');
+      assert.ok(!requests.some((request) => /save_whatsapp|advance_whatsapp/.test(request.url.pathname)));
+    },
+    (url) => {
+      if (url.pathname.endsWith('whatsapp_connections')) return { consent_at: '2026-10-08' };
+      if (url.pathname.endsWith('claim_whatsapp_reply')) return true;
+      if (url.hostname === 'graph.facebook.com') return { messages: [{ id: 'tail-sent' }] };
+      return url.searchParams.get('message_id') === 'eq.sent-parent'
+        ? {
+            state: 'complete',
+            user_id: context.userId,
+            reply: 'Concluído',
+            sent_at: '2026-10-08',
+            delivery_status: 'accepted',
+            followup_key: 'pending-menu',
+          }
+        : { state: 'complete', user_id: context.userId, reply: nextStepText, reply_buttons: rootChoices };
+    },
+  );
+});
+
+Deno.test('entrega ambígua não dispara menu nem repete mensagem', async () => {
+  await mocked(
+    async (requests) => {
+      assert.equal(await retryWhatsAppReply('uncertain', context.phone), false);
+      assert.equal(requests.length, 1);
+    },
+    () => ({
+      state: 'complete',
+      reply: 'Resultado',
+      delivery_status: 'reconcile',
+      followup_key: 'pending-menu',
+    }),
+  );
+});
+
+Deno.test(
+  'excluir pela lista respeita a versão exibida e um clique repetido não exclui novamente',
+  async () => {
+    let row: Record<string, unknown> | null = {
+      id: proposal,
+      user_id: context.userId,
+      description: 'Farmácia',
+      amount: 3590,
+      date: context.today,
+      status: 'paid',
+      category: 'Saúde',
+      type: 'expense',
+      account_id: null,
+    };
+    await mocked(
+      async (requests) => {
+        const list = await handleWhatsAppNavigation({ id: 'nexo:nav:delete-help' }, context);
+        const button = list!.buttons![0].id;
+        row!.amount = 5000;
+        assert.match((await handleWhatsAppNavigation({ id: button }, context))!.reply!, /registro mudou/);
+        assert.ok(!requests.some((request) => request.url.pathname.includes('/rpc/')));
+        row!.amount = 3590;
+        const result = await handleWhatsAppNavigation({ id: button }, context);
+        assert.match(result!.reply!, /Registro excluído/);
+        row = null;
+        assert.match(
+          (await handleWhatsAppNavigation({ id: button }, context))!.reply!,
+          /não está mais disponível/,
+        );
+        const writes = requests.filter((request) => request.url.pathname.endsWith('save_whatsapp_batch'));
+        assert.equal(writes.length, 1);
+        assert.equal(writes[0].body.owner, context.userId);
+        assert.equal((writes[0].body.changes as { expected: { amount: number } }[])[0].expected.amount, 3590);
+      },
+      (url) => {
+        if (url.pathname.endsWith('transactions')) return url.searchParams.has('id') ? row : [row];
+        if (url.pathname.endsWith('save_whatsapp_batch')) return { status: 'applied', saved: 1 };
+        return null;
+      },
+    );
+  },
+);
+
+Deno.test('imagem guarda legenda curta e texto completo seguido do menu', async () => {
+  await mocked(
+    async (requests) => {
+      const text = 'Detalhes do gráfico e próximos passos.';
+      const prepared = await prepareWhatsAppReply('image-answer', context.userId, text, rootChoices, true);
+      assert.ok(prepared.reply.length < 1024);
+      assert.ok(prepared.followup_key);
+      assert.equal(requests[0].body.reply, text);
+      assert.equal((requests[0].body.reply_buttons as unknown[]).length, 10);
+    },
+    () => null,
+  );
+});
+
+Deno.test('recibo salvo antes de falha da IA recupera menu sem repetir gravação', async () => {
+  await mocked(
+    async (requests) => {
+      await retryWhatsAppReply('committed-before-failure', context.phone);
+      const delivered = requests.find((request) => request.url.hostname === 'graph.facebook.com')!;
+      assert.equal((delivered.body.interactive as { type: string }).type, 'list');
+      assert.ok(!requests.some((request) => request.url.pathname.endsWith('save_whatsapp_batch')));
+    },
+    (url) => {
+      if (url.pathname.endsWith('whatsapp_connections')) return { consent_at: '2026-10-08' };
+      if (url.pathname.endsWith('claim_whatsapp_reply')) return true;
+      if (url.hostname === 'graph.facebook.com') return { messages: [{ id: 'recovered' }] };
+      return { user_id: context.userId, state: 'complete', reply: 'Uma alteração concluída.' };
+    },
+  );
+});
 
 Deno.test('resumo do app existe sem conta cadastrada e gasto reduz sobra de 69,33 para 64,08', async () => {
   const row = {
@@ -584,10 +811,7 @@ Deno.test('modo app salva movimentos como manuais pelo RPC autenticado', async (
       assert.equal(changes[0].payload.source, 'manual');
       assert.equal(changes[0].action, 'create');
       assert.match(write.body.request as string, /^[0-9a-f-]{36}$/);
-      assert.equal(
-        requests[1].body.request,
-        write.body.request,
-      );
+      assert.equal(requests[1].body.request, write.body.request);
     },
     (url) => (url.pathname.endsWith('/rpc/save_ai_chat_batch') ? { status: 'applied', saved: 1 } : null),
   );

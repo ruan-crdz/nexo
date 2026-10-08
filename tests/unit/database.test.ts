@@ -50,6 +50,7 @@ beforeAll(async () => {
     readFileSync('supabase/migrations/202610070007_recurring_payment_reconciliation.sql', 'utf8'),
   );
   await db.exec(readFileSync('supabase/migrations/202610070008_ai_chat_writes.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610080001_whatsapp_guided_experience.sql', 'utf8'));
   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)', [
     alice,
     'alice@example.test',
@@ -61,6 +62,35 @@ afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('cadastro guiado é privado e atômico: clique antigo, duplicado, vencido e falha não gravam', async () => {
+    await db.exec('reset role');
+    await db.query("insert into whatsapp_connections(user_id,phone,consent_at) values($1,'5511999991111',now()) on conflict(user_id) do update set phone=excluded.phone,consent_at=excluded.consent_at", [alice]);
+    const flow = crypto.randomUUID();
+    for (const key of ['guide-start', 'guide-final', 'guide-double', 'guide-invalid', 'guide-other', 'guide-expired'])
+      await db.query('insert into whatsapp_messages_metadata(message_id,user_id) values($1,$2)', [key, alice]);
+    const advance = (key: string, version: number, state: unknown, changes: unknown = null, owner = alice) =>
+      db.query<{ result: { status: string } }>("select advance_whatsapp_guide($1,'5511999991111',$2,$3,$4,$5::jsonb,$6::jsonb,'Resposta pronta','[]'::jsonb) result",
+        [owner, key, flow, version, state === null ? null : JSON.stringify(state), changes === null ? null : JSON.stringify(changes)]);
+    await advance('guide-start', -1, { id: flow, version: 0 });
+    await asUser(alice);
+    await expect(db.query('select * from whatsapp_guided_sessions')).rejects.toThrow(/permission denied/);
+    await expect(advance('guide-final', 0, null)).rejects.toThrow(/permission denied/);
+    await db.exec('reset role');
+    await expect(advance('guide-other', 0, null, null, bob)).rejects.toThrow(/connection/);
+    const row = { entity: 'transactions', action: 'create', id: crypto.randomUUID(), expected: null,
+      payload: { description: 'Teste cadastro guiado', amount: 3590, type: 'expense', category: 'Saúde', date: '2026-10-08', status: 'paid', source: 'whatsapp', account_id: null } };
+    await expect(advance('guide-invalid', 0, null, [{ ...row, payload: { ...row.payload, amount: -1 } }])).rejects.toThrow();
+    expect((await db.query('select state from whatsapp_guided_sessions where user_id=$1', [alice])).rows).toHaveLength(1);
+    expect((await advance('guide-final', 0, null, [row])).rows[0].result.status).toBe('applied');
+    expect((await advance('guide-double', 0, null, [row])).rows[0].result.status).toBe('stale');
+    expect((await db.query("select id from transactions where description='Teste cadastro guiado'")).rows).toHaveLength(1);
+    expect((await db.query('select state from whatsapp_guided_sessions where user_id=$1', [alice])).rows).toHaveLength(0);
+    await advance('guide-start', -1, { id: flow, version: 0 });
+    await db.query("update whatsapp_guided_sessions set expires_at=now()-interval '1 minute' where user_id=$1", [alice]);
+    expect((await advance('guide-expired', 0, null, [row])).rows[0].result.status).toBe('stale');
+    await db.query('delete from whatsapp_guided_sessions where user_id=$1', [alice]);
+    await db.query("delete from transactions where description='Teste cadastro guiado'");
+  });
   it('chat autenticado com MFA cria uma vez, faz rollback do lote e isola outro usuário', async () => {
     await asUser(alice);
     await db.query("select set_config('request.jwt.claim.aal','aal2',false)");

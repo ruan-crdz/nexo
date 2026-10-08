@@ -1,4 +1,5 @@
 import { admin, env, HttpError, safeFetch } from './http.ts';
+import { rootChoices, withNextStep } from '../../../shared/whatsapp-navigation.ts';
 import {
   formatWhatsAppText,
   whatsAppMessageContent,
@@ -276,19 +277,19 @@ export async function cacheImageReply(
   if (saved.error) throw new HttpError(503, 'Não consegui guardar a imagem para recuperar o envio.');
 }
 
-export async function retryWhatsAppReply(messageId: string, phone: string) {
+export async function retryWhatsAppReply(messageId: string, phone: string): Promise<boolean> {
   const db = admin();
   const previous = await db
     .from('whatsapp_messages_metadata')
-    .select('state,reply,reply_kind,reply_buttons,sent_at,reply_message_id,delivery_status,user_id')
+    .select(
+      'state,reply,reply_kind,reply_buttons,sent_at,reply_message_id,delivery_status,user_id,followup_key',
+    )
     .eq('message_id', messageId)
     .maybeSingle();
   if (previous.error) throw new HttpError(503, 'Não consegui conferir a entrega anterior.');
   const reply = previous.data;
   if (
     !reply?.reply ||
-    reply.sent_at ||
-    reply.reply_message_id ||
     reply.delivery_status === 'reconcile' ||
     !['complete', 'pending'].includes(reply.state)
   )
@@ -302,6 +303,31 @@ export async function retryWhatsAppReply(messageId: string, phone: string) {
       .maybeSingle();
     if (connection.error) throw new HttpError(503, 'Não consegui conferir o vínculo.');
     if (!connection.data?.consent_at) return false;
+  }
+  if (reply.sent_at || reply.reply_message_id) {
+    if (reply.followup_key && ['accepted', 'delivered', 'read'].includes(reply.delivery_status))
+      return retryWhatsAppReply(reply.followup_key, phone);
+    return false;
+  }
+  // A financial RPC may have committed before the model or webhook finished.
+  // Recover its durable receipt with navigation, without running the write again.
+  if (
+    reply.user_id &&
+    reply.state === 'complete' &&
+    reply.reply_kind !== 'image' &&
+    !reply.reply_buttons?.length &&
+    !reply.followup_key &&
+    !messageId.startsWith('nexo-out:')
+  ) {
+    const prepared = await prepareWhatsAppReply(
+      messageId,
+      reply.user_id,
+      withNextStep(reply.reply),
+      rootChoices,
+    );
+    const stored = await db.from('whatsapp_messages_metadata').update(prepared).eq('message_id', messageId);
+    if (stored.error) throw new HttpError(503, 'Não consegui recuperar as opções da resposta.');
+    Object.assign(reply, prepared);
   }
   if (reply.reply_kind === 'image') {
     const stored = await db
@@ -317,6 +343,7 @@ export async function retryWhatsAppReply(messageId: string, phone: string) {
         phone,
         'A imagem anterior expirou. Envie a consulta novamente para gerar uma nova imagem; nenhuma alteração financeira foi repetida.',
       );
+      if (reply.followup_key) await retryWhatsAppReply(reply.followup_key, phone);
       return true;
     }
     if (!['image/png', 'image/jpeg'].includes(stored.data.mime_type))
@@ -332,7 +359,56 @@ export async function retryWhatsAppReply(messageId: string, phone: string) {
   } else {
     await deliverReply(messageId, phone, reply.reply, reply.reply_buttons ?? []);
   }
+  if (reply.followup_key) await retryWhatsAppReply(reply.followup_key, phone);
   return true;
+}
+
+/** Store every part before sending. Long answers and images keep their menu,
+ * and retries recover only the unsent tail instead of repeating financial work. */
+export async function prepareWhatsAppReply(
+  messageId: string,
+  userId: string | undefined,
+  reply: string,
+  buttons: WhatsAppButton[],
+  image = false,
+) {
+  const parts: { text: string; buttons: WhatsAppButton[] }[] = [];
+  if (image)
+    parts.push({
+      text: 'Seu resumo visual está pronto. Os detalhes estão na próxima mensagem.',
+      buttons: [],
+    });
+  let remaining = formatWhatsAppText(reply).trim();
+  while (remaining.length > 1000) {
+    const paragraph = remaining.lastIndexOf('\n', 1000);
+    const space = remaining.lastIndexOf(' ', 1000);
+    const end = paragraph > 500 ? paragraph : space > 500 ? space : 1000;
+    parts.push({ text: formatWhatsAppText(remaining.slice(0, end)), buttons: [] });
+    remaining = remaining.slice(end).trimStart();
+  }
+  parts.push({ text: formatWhatsAppText(remaining) || 'Escolha uma opção para continuar.', buttons });
+  const prefix = `nexo-out:${await hashToken(messageId)}`;
+  for (let index = parts.length - 1; index > 0; index--) {
+    const stored = await admin()
+      .from('whatsapp_messages_metadata')
+      .upsert(
+        {
+          message_id: `${prefix}:${index}`,
+          user_id: userId ?? null,
+          state: 'complete',
+          reply: parts[index].text,
+          reply_buttons: parts[index].buttons,
+          followup_key: index + 1 < parts.length ? `${prefix}:${index + 1}` : null,
+        },
+        { onConflict: 'message_id', ignoreDuplicates: true },
+      );
+    if (stored.error) throw new HttpError(503, 'Não consegui preparar a resposta completa.');
+  }
+  return {
+    reply: parts[0].text,
+    reply_buttons: parts[0].buttons,
+    followup_key: parts.length > 1 ? `${prefix}:1` : null,
+  };
 }
 export async function downloadMedia(mediaId: string): Promise<File> {
   if (!/^\d+$/.test(mediaId)) throw new HttpError(400, 'Identificador de mídia inválido.');

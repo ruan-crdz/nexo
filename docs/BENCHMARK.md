@@ -1,5 +1,7 @@
 # Benchmark de produto
 
+Levantamento específico mais recente: [experiência financeira no WhatsApp — 08/10/2026](BENCHMARK-WHATSAPP-2026-10-08.md), com fontes, limites da comparação e roteiro de testes.
+
 Consulta às páginas públicas oficiais em 04/10/2026. São descrições dos fornecedores, não testes independentes. “Oportunidade” é hipótese de produto; ausência de uma menção não comprova ausência de funcionalidade.
 
 | Feature observada                                                    | Produto / fonte                              | Direção do Nexo                      | Oportunidade a validar                                          |
