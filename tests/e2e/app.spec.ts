@@ -264,10 +264,59 @@ test('onboarding pergunta nome, oferece WhatsApp e salva objetivo opcional', asy
   await expect(page.getByRole('heading', { name: 'O que você mais quer melhorar?' })).toBeVisible();
   await page.getByRole('button', { name: 'Guardar dinheiro' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page).toHaveURL(/#\/tour$/);
+  await expect(page.getByRole('heading', { name: 'Acompanhe seu mês' })).toBeVisible();
+  await page.evaluate(() => localStorage.removeItem('nexo.feature-tour.demo'));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Acompanhe seu mês' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('heading', { name: 'Converse com o Nexo' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Converse com o Nexo' })).toBeVisible();
+  await page.goto('/#/inicio');
+  await expect(page).toHaveURL(/#\/tour$/);
+  await expect(page.getByRole('heading', { name: 'Converse com o Nexo' })).toBeVisible();
+  await page.getByRole('button', { name: 'Pular tudo' }).click();
   await expect(page).toHaveURL(/#\/inicio$/);
   await expect(page.getByRole('heading', { name: 'Seu mês' })).toBeVisible();
   const profile = await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!).profile);
-  expect(profile).toMatchObject({ name: 'Ruan', objective: 'Guardar dinheiro', onboarded: true });
+  expect(profile).toMatchObject({
+    name: 'Ruan',
+    objective: 'Guardar dinheiro',
+    onboarded: true,
+    feature_tour_completed: true,
+  });
+  expect(await page.evaluate(() => localStorage.getItem('nexo.feature-tour.demo'))).toBe('complete');
+});
+
+test('tour apresenta as funcionalidades principais em sequência até Começar a usar', async ({ page }) => {
+  const titles = [
+    'Acompanhe seu mês',
+    'Converse com o Nexo',
+    'Anote e revise movimentos',
+    'Cuide das suas metas',
+    'Organize o planejamento',
+    'Use o WhatsApp do seu jeito',
+    'Tenha controle da sua privacidade',
+  ];
+  await page.evaluate(() => {
+    localStorage.setItem('nexo.feature-tour.demo', 'pending:0');
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    data.profile.feature_tour_completed = false;
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  });
+  await page.reload();
+  await page.goto('/#/tour');
+  for (const [index, title] of titles.entries()) {
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    await expect(page.getByRole('progressbar', { name: 'Progresso do tour' })).toHaveAttribute(
+      'aria-valuenow',
+      String(index + 1),
+    );
+    await page.getByRole('button', { name: index === titles.length - 1 ? 'Começar a usar' : 'Continuar' }).click();
+  }
+  await expect(page).toHaveURL(/#\/inicio$/);
+  expect(await page.evaluate(() => localStorage.getItem('nexo.feature-tour.demo'))).toBe('complete');
 });
 
 test('Anotar abre opções em uma folha e permite iniciar uma entrada manual', async ({ page }) => {

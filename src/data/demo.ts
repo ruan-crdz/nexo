@@ -24,6 +24,7 @@ export function createDemo(): Dataset {
       insured: true,
       timezone: 'America/Sao_Paulo',
       onboarded: true,
+      feature_tour_completed: true,
       business_enabled: true,
       reminders_enabled: false,
       weekly_digest: false,

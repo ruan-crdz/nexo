@@ -56,6 +56,8 @@ export function Shell() {
   if (!app.demo && app.mfaRequired) return <Navigate to="/seguranca" replace />;
   if (!app.data.profile.onboarded && !app.error && !onboardingConnection)
     return <Navigate to="/onboarding" replace />;
+  if (app.data.profile.onboarded && !app.data.profile.feature_tour_completed)
+    return <Navigate to="/tour" replace />;
   return (
     <div className="simple-shell">
       <a

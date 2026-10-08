@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MessageCircle, Mic, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../data/context';
+import { startFeatureTour } from '../data/feature-tour';
 import { Brand, Button, Card } from '../design-system/components';
 
 export function SimpleLanding() {
@@ -108,9 +109,17 @@ export function SimpleOnboarding() {
     setPending(true);
     setError('');
     try {
-      await app.repository.profile({ ...app.data.profile, name: name.trim(), objective, onboarded: true });
+      const tourIdentity = app.demo ? 'demo' : app.user?.id;
+      if (tourIdentity) startFeatureTour(tourIdentity);
+      await app.repository.profile({
+        ...app.data.profile,
+        name: name.trim(),
+        objective,
+        onboarded: true,
+        feature_tour_completed: false,
+      });
       await app.refresh();
-      navigate('/inicio', { replace: true });
+      navigate('/tour', { replace: true });
     } catch {
       setError('Não foi possível salvar sua preferência. Tente novamente.');
     } finally {

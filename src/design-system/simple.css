@@ -906,6 +906,117 @@ label {
 .onboarding-step .chat-example-nexo {
   max-width: 100%;
 }
+.feature-tour {
+  min-height: 100svh;
+  width: min(100%, 780px);
+  margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+}
+.feature-tour-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.feature-tour-header .brand img {
+  width: 44px;
+  height: 44px;
+}
+.feature-tour-content {
+  width: min(100%, 620px);
+  margin: auto;
+  padding: 40px 0;
+  display: grid;
+  gap: 22px;
+  animation: feature-tour-enter 220ms ease-out both;
+}
+.feature-tour-progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.feature-tour-progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--line);
+}
+.feature-tour-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--moss);
+  transition: width 220ms ease-out;
+}
+.feature-tour-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--ink);
+  color: var(--paper);
+}
+.feature-tour-content h1 {
+  max-width: 15ch;
+}
+.feature-tour-description {
+  max-width: 54ch;
+  color: var(--muted);
+  font-size: 18px;
+}
+.feature-tour-example {
+  border-left: 3px solid var(--moss);
+  padding: 4px 0 4px 16px;
+  display: grid;
+  gap: 6px;
+}
+.feature-tour-example p {
+  max-width: 58ch;
+  color: var(--muted);
+}
+.feature-tour-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+}
+@keyframes feature-tour-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 520px) {
+  .feature-tour {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+  .feature-tour-content {
+    gap: 18px;
+  }
+  .feature-tour-description {
+    font-size: 16px;
+  }
+  .feature-tour-actions > .button {
+    flex: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feature-tour-content,
+  .feature-tour-progress span {
+    animation: none;
+    transition: none;
+  }
+}
 .auth-form-inner {
   width: min(100%, 460px);
 }

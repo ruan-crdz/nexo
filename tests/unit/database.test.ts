@@ -57,11 +57,28 @@ beforeAll(async () => {
     bob,
     'bob@example.test',
   ]);
+  await db.exec(readFileSync('supabase/migrations/202610080002_feature_tour.sql', 'utf8'));
 }, 60_000);
 afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('marca perfis existentes como concluídos e novos perfis como pendentes do tour', async () => {
+    await db.exec('reset role');
+    const existing = await db.query<{ feature_tour_completed: boolean }>(
+      'select feature_tour_completed from profiles where id=$1',
+      [alice],
+    );
+    expect(existing.rows[0].feature_tour_completed).toBe(true);
+    const newcomer = crypto.randomUUID();
+    await db.query('insert into auth.users(id,email) values($1,$2)', [newcomer, 'new@example.test']);
+    const created = await db.query<{ feature_tour_completed: boolean }>(
+      'select feature_tour_completed from profiles where id=$1',
+      [newcomer],
+    );
+    expect(created.rows[0].feature_tour_completed).toBe(false);
+    await db.query('delete from auth.users where id=$1', [newcomer]);
+  });
   it('cadastro guiado é privado e atômico: clique antigo, duplicado, vencido e falha não gravam', async () => {
     await db.exec('reset role');
     await db.query("insert into whatsapp_connections(user_id,phone,consent_at) values($1,'5511999991111',now()) on conflict(user_id) do update set phone=excluded.phone,consent_at=excluded.consent_at", [alice]);

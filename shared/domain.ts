@@ -98,6 +98,7 @@ export const profileSchema = z.object({
     }
   }),
   onboarded: z.boolean(),
+  feature_tour_completed: z.boolean().default(false),
   business_enabled: z.boolean(),
   reminders_enabled: z.boolean().default(false),
   weekly_digest: z.boolean().default(false),
@@ -207,6 +208,7 @@ export const emptyProfile: Profile = {
   insured: false,
   timezone: 'America/Sao_Paulo',
   onboarded: false,
+  feature_tour_completed: false,
   business_enabled: false,
   reminders_enabled: false,
   weekly_digest: false,

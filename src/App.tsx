@@ -6,6 +6,7 @@ import { SimpleLanding, SimpleOnboarding } from './features/SimpleWelcome';
 import { SimpleHome, SimpleHistory, CapturePage } from './features/SimpleMoney';
 import { SimpleSettings, SimpleHelp } from './features/SimpleSettings';
 import { AppUpdate } from './features/AppUpdate';
+import { FeatureTour } from './features/FeatureTour';
 const SimplePrivacy = lazy(async () => ({
   default: (await import('./features/SimplePrivacy')).SimplePrivacy,
 }));
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/recuperar" element={<AuthPage mode="recovery" />} />
             <Route path="/redefinir-senha" element={<AuthPage mode="reset" />} />
             <Route path="/onboarding" element={<SimpleOnboarding />} />
+            <Route path="/tour" element={<FeatureTour />} />
             <Route path="/seguranca" element={<MfaPage />} />
             <Route element={<Shell />}>
               <Route path="/inicio" element={<SimpleHome />} />
