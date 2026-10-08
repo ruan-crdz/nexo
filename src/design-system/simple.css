@@ -3721,7 +3721,9 @@ label {
   background: var(--paper);
   color: inherit;
   box-shadow: var(--shadow);
-  transition: border-color var(--motion), transform var(--motion);
+  transition:
+    border-color var(--motion),
+    transform var(--motion);
 }
 .objective-card:hover {
   border-color: var(--moss);
@@ -4309,6 +4311,10 @@ label {
   border-radius: 8px;
   background: var(--paper);
   box-shadow: var(--shadow);
+}
+.planning-detail-overflow > .planning-overflow-menu {
+  right: auto;
+  left: 0;
 }
 .planning-overflow-menu a,
 .planning-overflow-menu button {

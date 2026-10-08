@@ -1123,10 +1123,15 @@ test('limite e meta têm cálculo verificável e avisos exigem consentimento', a
   await page.getByLabel('Valor máximo (R$)').fill('1,00');
   await page.getByRole('button', { name: 'Criar limite' }).click();
   await expect(page.locator('.planning-limit-list-full')).toContainText('acima');
+  await page.setViewportSize({ width: 320, height: 740 });
   await page.locator('.planning-limit-row').filter({ hasText: 'Alimentação' }).click();
   await expect(page.getByRole('heading', { name: 'Alimentação', exact: true })).toBeVisible();
   await page.locator('.planning-detail-overflow > summary[aria-label="Mais opções do limite"]').click();
   await expect(page.getByRole('link', { name: 'Editar limite' })).toBeVisible();
+  const menuBounds = await page.locator('.planning-detail-overflow .planning-overflow-menu').boundingBox();
+  expect(menuBounds).not.toBeNull();
+  expect(menuBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(320);
   await page.goto('/#/metas/nova');
   await page.getByRole('button', { name: 'Viagem', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
