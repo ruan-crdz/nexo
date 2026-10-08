@@ -255,6 +255,22 @@ label {
   background: var(--sand);
   box-shadow: none;
 }
+.simple-nav-nexo-mark {
+  display: grid;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--brand-bg);
+}
+.simple-nav-nexo-mark img {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
 .simple-nav .profile-nav-link {
   margin-top: auto;
 }

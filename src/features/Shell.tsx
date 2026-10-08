@@ -107,7 +107,13 @@ export function Shell() {
             className={to === '/perfil' ? 'profile-nav-link' : undefined}
             aria-label={to === '/nexo' ? 'Perguntar ao Nexo' : undefined}
           >
-            <Icon size={24} />
+            {to === '/nexo' ? (
+              <span className="simple-nav-nexo-mark" aria-hidden="true">
+                <img src={`${import.meta.env.BASE_URL}logo_letra_n.png`} alt="" />
+              </span>
+            ) : (
+              <Icon size={24} />
+            )}
             <span>{label}</span>
           </NavLink>
         ))}

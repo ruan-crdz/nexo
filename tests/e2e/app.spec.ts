@@ -165,6 +165,9 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   await expect(nav).toContainText('Histórico');
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
   await expect(nav.getByRole('link').nth(2)).toHaveAccessibleName('Perguntar ao Nexo');
+  const nexoMark = nav.getByRole('link').nth(2).locator('.simple-nav-nexo-mark img');
+  await expect(nexoMark).toHaveAttribute('src', /logo_letra_n\.png/);
+  await expect(nexoMark).toHaveCSS('filter', 'brightness(0) invert(1)');
   await expect(page.getByRole('link', { name: 'Abrir seu perfil' })).toBeVisible();
   for (const [name, path] of [
     ['Metas', 'metas'],
