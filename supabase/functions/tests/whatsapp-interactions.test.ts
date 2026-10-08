@@ -86,6 +86,67 @@ Deno.test('gasto relatado como ocorrido é pago por padrão sem perguntar situa�
   assert.match(chatInstructions, /nunca pergunte "já pagou\?"/i);
 });
 
+Deno.test('resumo mensal do menu consulta os dois lados e envia imagem sem chamar IA', async () => {
+  const rows = [
+    {
+      id: proposal,
+      description: 'Salário',
+      amount: 20000,
+      type: 'income',
+      category: 'Salário',
+      date: context.today,
+      status: 'paid',
+      source: 'manual',
+      account_id: null,
+    },
+    {
+      id: '12345678-1234-4234-8234-123456789ab1',
+      description: 'Farmácia',
+      amount: 10000,
+      type: 'expense',
+      category: 'Saúde',
+      date: context.today,
+      status: 'paid',
+      source: 'manual',
+      account_id: null,
+    },
+    {
+      id: '12345678-1234-4234-8234-123456789ab2',
+      description: 'Aluguel futuro',
+      amount: 50000,
+      type: 'expense',
+      category: 'Moradia',
+      date: '2026-10-20',
+      status: 'planned',
+      source: 'manual',
+      account_id: null,
+    },
+  ];
+  let image: Uint8Array | undefined;
+  await mocked(
+    async (requests) => {
+      const navigation = await handleWhatsAppNavigation({ id: 'nexo:nav:summary' }, context);
+      assert.ok(navigation?.text);
+      const reply = await chatWithWhatsApp(navigation.text, {
+        ...context,
+        onImage: (value) => {
+          image = value;
+        },
+      });
+      assert.match(reply, /Resumo do mês/);
+      assert.match(reply, /entraram R\$\s*200,00, saíram R\$\s*100,00/);
+      assert.ok(image);
+      assert.deepEqual([...image!.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+      assert.equal(requests.some((request) => request.url.hostname === 'api.openai.com'), false);
+    },
+    (url) => {
+      if (url.pathname.endsWith('transactions')) return rows;
+      if (url.pathname.endsWith('profiles')) return { fixed_expenses: 0, timezone: 'America/Sao_Paulo' };
+      return [];
+    },
+  );
+});
+
 Deno.test('tocar em anotar gasto não envia instrução nem cria sessão de formulário', async () => {
   await mocked(
     async (requests) => {

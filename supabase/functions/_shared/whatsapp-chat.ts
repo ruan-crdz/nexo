@@ -10,7 +10,7 @@ import {
   validateChatChange,
 } from '../../../shared/whatsapp-chat.ts';
 import { accountSchema, goalSchema, recurringRuleSchema, transactionSchema } from '../../../shared/domain.ts';
-import { answerFinancialQuestion } from '../../../shared/financial-questions.ts';
+import { answerFinancialQuestion, isMonthlySummaryRequest } from '../../../shared/financial-questions.ts';
 import { civilDate, formatMoney, sum } from '../../../shared/financial-engine.ts';
 import { readPages } from '../../../shared/pagination.ts';
 import { admin, env, HttpError } from './http.ts';
@@ -674,7 +674,7 @@ export async function executeChatTool(name: string, raw: unknown, context: ChatC
             }));
       context.onImage(
         await financeChartPng({
-          title: 'Seus registros no Nexo',
+          title: isMonthlySummaryRequest(args.question) ? 'Resumo do mês' : 'Seus registros no Nexo',
           subtitle: args.question.slice(0, 65),
           items,
           footer: 'Valores anotados ou previstos · Não é saldo bancário',
@@ -869,7 +869,20 @@ export async function chatWithWhatsApp(text: string, context: ChatContext): Prom
         }
       : undefined,
   };
-  for (let turn = 0; turn < 5; turn++) {
+    const deterministicMonthlySummary =
+      !context.appMode && Boolean(context.onImage) && isMonthlySummaryRequest(text);
+    if (deterministicMonthlySummary) {
+      try {
+        const summary = await executeChatTool('financial_answer', { question: text }, toolContext);
+        resultText =
+          summary && typeof summary === 'object' && 'answer' in summary && typeof summary.answer === 'string'
+            ? summary.answer
+            : 'Não consegui montar o resumo deste mês com os registros disponíveis.';
+      } catch {
+        resultText = 'Não consegui consultar o resumo deste mês agora. Tente novamente em instantes.';
+      }
+    }
+    for (let turn = 0; turn < (deterministicMonthlySummary ? 0 : 5); turn++) {
     const remaining = deadline - Date.now();
     if (remaining <= 1000) {
       if (!confirmed && !hasImage) throw new HttpError(504, 'O pedido demorou mais que o esperado.');

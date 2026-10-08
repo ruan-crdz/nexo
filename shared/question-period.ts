@@ -25,7 +25,7 @@ export function questionPeriod(text: string, today: string): Period {
     return { error: clarification };
   const relative = [
     ...text.matchAll(
-      /\b(hoje|ontem|mes passado|ultimo mes|este mes|nesse mes|neste mes|esse mes|mes atual)\b/g,
+      /\b(hoje|ontem|mes passado|ultimo mes|este mes|nesse mes|neste mes|deste mes|esse mes|mes atual|no mes atual)\b/g,
     ),
   ];
   if (

@@ -4,6 +4,7 @@ import {
   imageGenerationPrompt,
   isFinancialChartRequest,
   isFinancialQuestion,
+  isMonthlySummaryRequest,
 } from '../../shared/financial-questions';
 import type { Transaction } from '../../shared/domain';
 import { validateChatChange } from '../../shared/whatsapp-chat';
@@ -82,6 +83,23 @@ it('respeita mês nomeado, ano e estabelecimento sem trocar pelo mês atual', ()
   expect(answerFinancialQuestion(data, 'Quanto gastei em janeiro?', '2026-10-05')?.answer).toContain(
     'janeiro de 2026',
   );
+});
+it('resumo mensal soma entradas e gastos pagos e exclui previsões', () => {
+  const income = row({ type: 'income', category: 'Salário', amount: 20000, date: '2026-10-02' });
+  const expense = row({ category: 'Saúde', amount: 10000, date: '2026-10-04' });
+  const planned = row({ amount: 70000, status: 'planned', date: '2026-10-12' });
+  const data = { transactions: [income, expense, planned], goals: [], financial_accounts: [] };
+  expect(isMonthlySummaryRequest('resumo mensal')).toBe(true);
+  expect(isFinancialQuestion('resumo mensal')).toBe(true);
+  expect(answerFinancialQuestion(data, 'resumo mensal', '2026-10-08')).toMatchObject({
+    answer: expect.stringMatching(/entraram R\$\s*200,00, saíram R\$\s*100,00/),
+    records: [income, expense],
+    goals: [],
+  });
+  expect(answerFinancialQuestion(data, 'resumo deste mês: entradas e gastos pagos', '2026-10-08')?.records).toEqual([
+    income,
+    expense,
+  ]);
 });
 it.each(['com Uber', 'em Uber', 'no Uber'])('filtra estabelecimento sem somar aluguel: %s', (filter) => {
   const uber = row({ description: 'Uber', category: 'Transporte', amount: 2500 });

@@ -26,6 +26,19 @@ export function isFinancialChartRequest(text: string) {
   );
 }
 
+export function isMonthlySummaryRequest(text: string) {
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return (
+    /\b(?:resumo|resumir|fechamento)\b/.test(normalized) &&
+    /\b(?:mes|mensal|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/.test(
+      normalized,
+    )
+  );
+}
+
 export function isNextMonthForecastQuestion(text: string) {
   const normalized = text
     .normalize('NFD')
@@ -72,6 +85,7 @@ export function isFinancialQuestion(text: string) {
     .trim();
   return (
     isSpendabilityQuestion(normalized) ||
+    isMonthlySummaryRequest(normalized) ||
     isFinancialChartRequest(normalized) ||
     isNextMonthForecastQuestion(normalized) ||
     isVerifiedQuestion(text) ||
@@ -101,6 +115,30 @@ export function answerFinancialQuestion(
       records: [],
       goals: [],
     };
+  if (isMonthlySummaryRequest(normalized)) {
+    const period = questionPeriod(normalized, today);
+    if ('error' in period) return { answer: period.error, calculation: [], records: [], goals: [] };
+    const records = data.transactions.filter(
+      (row) => row.status === 'paid' && row.date >= period.start && row.date <= period.end,
+    );
+    const income = sum(records.filter((row) => row.type === 'income').map((row) => row.amount));
+    const expenses = sum(records.filter((row) => row.type === 'expense').map((row) => row.amount));
+    const label = formatPeriod(period.start, period.end, today);
+    return {
+      answer: records.length
+        ? `Resumo do mês (${label}): entraram ${formatMoney(income)}, saíram ${formatMoney(expenses)}. Resultado dos movimentos: ${formatMoney(income - expenses)}. Não é saldo bancário.`
+        : `Não encontrei movimentos pagos ${label}. Não é saldo bancário.`,
+      calculation: [
+        `${records.length} movimentos pagos considerados.`,
+        `Entradas: ${formatMoney(income)}.`,
+        `Gastos: ${formatMoney(expenses)}.`,
+        `Resultado dos movimentos: ${formatMoney(income - expenses)}.`,
+        'Previsões não entram nesse total.',
+      ],
+      records,
+      goals: [],
+    };
+  }
   if (isNextMonthForecastQuestion(normalized)) {
     const start = shiftMonths(`${today.slice(0, 7)}-01`, 1);
     const end = shiftDays(shiftMonths(start, 1), -1);
