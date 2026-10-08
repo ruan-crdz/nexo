@@ -734,12 +734,8 @@ test('notas de versão do PWA descrevem mudanças recentes', async ({ request })
   const response = await request.get('/release-notes.json');
   expect(response.ok()).toBe(true);
   const notes = await response.json();
-  expect(notes.changes).toContain(
-    'Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.',
-  );
-  expect(notes.changes).toContain(
-    'WhatsApp: o aviso agora distingue mensagem processada de resposta não entregue e recomenda conferir antes de reenviar.',
-  );
+  expect(notes.version).toBe('2026.10.08.1');
+  expect(notes.changes).toEqual(['Topo mais compacto e aviso de atualização resumido para esta publicação.']);
 });
 
 test('modal não rola horizontalmente e trava o fundo em celular e PC', async ({ page }) => {

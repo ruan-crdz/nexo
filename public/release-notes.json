@@ -1,24 +1,6 @@
 {
-  "version": "2026.10.07.6",
+  "version": "2026.10.08.1",
   "changes": [
-    "Experiência: Metas, Planejar e Nexo acessíveis diretamente no menu; perfil pelo avatar no celular, olho e Proteção.",
-    "Início: resultado do mês, CTA WhatsApp, dois atalhos, um insight, uma meta e até três movimentos; gráficos e alertas saíram da primeira tela.",
-    "Onboarding: três passos curtos para nome, WhatsApp opcional e objetivo principal.",
-    "Anotar: folha de ações no mobile, entrada manual em duas etapas e atalhos para Nexo, recibo, extrato e WhatsApp.",
-    "Registro manual: confirmação imediata com Desfazer; movimentos reais ainda pendentes offline não mostram undo.",
-    "Privacidade: valores financeiros podem ser ocultados nas principais telas; preferência fica salva neste aparelho.",
-    "Movimentos: filtro para registros pendentes, detalhe com origem/status e valores protegidos pelo olho.",
-    "Perfil: conta, integrações, Família, Proteção/MFA, privacidade e ajuda em grupos separados.",
-    "Navegação: cinco destinos no celular (Início, Histórico, Metas, Planejar e Nexo); Você também aparece no menu do desktop.",
-    "Movimentos: origem de cada registro visível e filtros para anotações no app, WhatsApp e arquivos importados.",
-    "Início: demonstração identificada, insight calculado com evidências quando há dados suficientes e meta com passo, valor restante e data de revisão.",
-    "Posso gastar?: acesso direto ao cálculo existente, com premissas confirmadas pela pessoa.",
-    "Notas fiscais: envio de PDF, foto HEIC do iPhone e ajuste automático de fotos grandes.",
-    "WhatsApp: o aviso agora distingue mensagem processada de resposta não entregue e recomenda conferir antes de reenviar.",
-    "WhatsApp: fotos criadas sob pedido e gráficos financeiros enviados como imagem com Manrope e cores Nexo; avaliação de compra reaproveita dados do app.",
-    "Metas: plano mensal por valor e prazo, aporte limitado pela sobra atual, cota já cumprida e ajuste de prazo quando não cabe.",
-    "Início: livre para planejar desconta metas protegidas e despesas reservadas; o resultado dos movimentos permanece visível, sem criar gasto duplicado.",
-    "Nexo: três pontos animados durante a resposta, com respeito à preferência de movimento reduzido.",
-    "Nexo: respostas em parágrafos, contexto entre perguntas e valor livre alinhado à Home; consultas sobre seus registros não são bloqueadas por falta de fonte externa."
+    "Topo mais compacto e aviso de atualização resumido para esta publicação."
   ]
 }

@@ -39,20 +39,18 @@ export function AppUpdate() {
   return (
     <aside className="app-update" role="status" aria-labelledby="app-update-title">
       <div>
-        <h2 id="app-update-title">Uma atualização está pronta</h2>
-        {notes.version && <p className="muted">Versão {notes.version}</p>}
-        <p>O que mudou:</p>
+        <h2 id="app-update-title">Atualização pronta</h2>
         <ul>
           {notes.changes.map((change) => (
             <li key={change}>{change}</li>
           ))}
         </ul>
-        <p className="muted">Salve suas anotações em andamento antes de atualizar.</p>
+        <p className="muted">Salve o que está digitando antes de atualizar.</p>
       </div>
       <div className="simple-inline-actions">
-        <Button onClick={() => void updateServiceWorker(true)}>Atualizar agora</Button>
+        <Button onClick={() => void updateServiceWorker(true)}>Atualizar</Button>
         <Button variant="secondary" onClick={() => setNeeded(false)}>
-          Mais tarde
+          Depois
         </Button>
       </div>
     </aside>
