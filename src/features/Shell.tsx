@@ -104,7 +104,9 @@ export function Shell() {
             key={to}
             to={to}
             end
-            className={to === '/perfil' ? 'profile-nav-link' : undefined}
+            className={
+              to === '/perfil' ? 'profile-nav-link' : to === '/nexo' ? 'simple-nav-nexo-link' : undefined
+            }
             aria-label={to === '/nexo' ? 'Perguntar ao Nexo' : undefined}
           >
             {to === '/nexo' ? (
@@ -114,7 +116,7 @@ export function Shell() {
             ) : (
               <Icon size={24} />
             )}
-            <span>{label}</span>
+            {to !== '/nexo' && <span>{label}</span>}
           </NavLink>
         ))}
       </nav>
