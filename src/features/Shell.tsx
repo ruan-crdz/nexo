@@ -15,6 +15,7 @@ import {
   ArrowDownLeft,
   Target,
   CalendarDays,
+  Users,
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
@@ -32,6 +33,7 @@ const navigation = [
   { to: '/nexo', label: 'Nexo', icon: MessageCircle },
   { to: '/metas', label: 'Metas', icon: Target },
   { to: '/planejar', label: 'Planejar', icon: CalendarDays },
+  { to: '/familia', label: 'Família', icon: Users },
   { to: '/perfil', label: 'Você', icon: Settings },
 ];
 export function Shell() {

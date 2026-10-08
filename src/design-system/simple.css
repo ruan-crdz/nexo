@@ -1787,6 +1787,153 @@ label {
   padding: 20px 0;
   border-bottom: 1px solid var(--line);
 }
+.family-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.family-overview h2 {
+  margin-bottom: 4px;
+}
+.family-overview > div:first-child > p:not(.eyebrow) {
+  max-width: 56ch;
+  color: var(--muted);
+}
+.family-security-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--moss);
+  font-size: 14px;
+}
+.family-overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.family-relationships {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.family-person-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.family-person-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.family-person-heading h3 {
+  overflow-wrap: anywhere;
+}
+.family-person-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 8px;
+  background: var(--sand);
+  color: var(--moss);
+}
+.family-grant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.family-grant-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.family-grant-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.family-grant-copy p,
+.family-grant-copy small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.family-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sand);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.family-status-active {
+  background: var(--lime-soft);
+  color: var(--moss);
+}
+.family-status-revoked {
+  color: var(--muted);
+}
+.family-grant-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.family-empty-state {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 20px 0;
+  color: var(--muted);
+}
+.family-advanced {
+  border-block: 1px solid var(--line);
+  padding-block: 12px;
+}
+.family-advanced > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+.family-advanced > .simple-form {
+  padding-top: 12px;
+}
+.family-date-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.family-invite-form > p:first-child {
+  color: var(--muted);
+}
+.family-invite-form > .button {
+  width: 100%;
+}
 .plan-row > div:first-child {
   flex: 1;
   min-width: min(100%, 180px);
@@ -1826,6 +1973,27 @@ label {
 .family-code {
   display: grid;
   gap: 16px;
+}
+@media (max-width: 620px) {
+  .family-overview,
+  .family-grant {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .family-overview-actions,
+  .family-grant-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .family-grant-actions > .button {
+    min-width: 0;
+    white-space: normal;
+  }
+}
+@media (max-width: 380px) {
+  .family-date-range {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .simple-content input[type='file'] {
   width: 100%;

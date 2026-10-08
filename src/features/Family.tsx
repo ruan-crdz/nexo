@@ -1,27 +1,15 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Copy, RefreshCw, Users, X } from 'lucide-react';
+import { Check, Copy, RefreshCw, ShieldCheck, Users } from 'lucide-react';
 import { useApp } from '../data/context';
 import { supabase } from '../data/client';
 import { Button, Dialog } from '../design-system/components';
 import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { parseMoney } from '../../shared/financial-engine';
 import { categories, transactionSchema } from '../../shared/domain';
-type Invite = {
-  id: string;
-  owner_id: string;
-  viewer_id: string | null;
-  owner_name: string;
-  viewer_name: string | null;
-  viewer_email: string | null;
-  scope: 'summary' | 'transactions';
-  state: 'invited' | 'pending' | 'active' | 'revoked';
-  expires_at: string;
-  account_id?: string | null;
-  period_start?: string | null;
-  period_end?: string | null;
-  can_propose?: boolean;
-};
+import { groupFamilyInvites } from '../../shared/family';
+import type { FamilyInvite } from '../../shared/family';
+type Invite = FamilyInvite;
 type Snapshot = {
   owner_name: string;
   month: string;
@@ -47,6 +35,8 @@ export function FamilyPage() {
   const [consent, setConsent] = useState(false);
   const [code, setCode] = useState('');
   const [created, setCreated] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState<{ invite: Invite; action: 'approve' | 'revoke' } | null>(null);
@@ -107,6 +97,7 @@ export function FamilyPage() {
     active: 'Acesso aprovado',
     revoked: 'Acesso revogado',
   };
+  const relationships = groupFamilyInvites(invites.data ?? [], app.user?.id ?? '');
   return (
     <>
       <header className="simple-heading">
@@ -122,10 +113,133 @@ export function FamilyPage() {
         </p>
       ) : (
         <>
+          <section className="family-overview">
+            <div>
+              <p className="eyebrow">Acesso controlado por você</p>
+              <h2>Compartilhe só o que escolher</h2>
+              <p>O acesso só libera depois da sua aprovação. Ninguém altera seus registros.</p>
+              <p className="family-security-note">
+                <ShieldCheck size={18} /> Você pode revogar a qualquer momento.
+              </p>
+            </div>
+            <div className="family-overview-actions">
+              <Button onClick={() => setInviteOpen(true)}>
+                <Users size={18} /> Convidar pessoa
+              </Button>
+              <Button variant="secondary" onClick={() => setRequestOpen(true)}>
+                Tenho um código
+              </Button>
+            </div>
+          </section>
           <section className="simple-form">
-            <h2>Convidar alguém para consultar</h2>
+            <div className="simple-section-title">
+              <div>
+                <h2>Compartilhamentos</h2>
+                <p className="muted">Convites e acessos organizados por pessoa.</p>
+              </div>
+              <Button
+                variant="ghost"
+                title="Atualizar compartilhamentos"
+                aria-label="Atualizar compartilhamentos"
+                onClick={() => void invites.refetch()}
+              >
+                <RefreshCw size={18} />
+              </Button>
+            </div>
+            {invites.isError ? (
+              <p className="error-message" role="alert">
+                Não foi possível carregar os compartilhamentos. Confira sua conexão.
+              </p>
+            ) : invites.isPending ? (
+              <p role="status">Carregando acessos…</p>
+            ) : relationships.length ? (
+              <ul className="family-relationships">
+                {relationships.map((person) => (
+                  <li key={person.id} className="family-person-card">
+                    <header className="family-person-heading">
+                      <span className="family-person-icon" aria-hidden="true">
+                        <Users size={20} />
+                      </span>
+                      <div>
+                        <h3>{person.name}</h3>
+                        {person.email && <p className="muted">{person.email}</p>}
+                      </div>
+                    </header>
+                    {[...person.sharedByMe, ...person.sharedWithMe].map((invite) => {
+                      const sharedByMe = invite.owner_id === app.user?.id;
+                      return (
+                        <div className="family-grant" key={invite.id}>
+                          <div className="family-grant-copy">
+                            <div className="family-grant-title">
+                              <strong>{sharedByMe ? 'Você compartilha' : 'Compartilha com você'}</strong>
+                              <span className={`family-status family-status-${invite.state}`}>
+                                {labels[invite.state]}
+                              </span>
+                            </div>
+                            <p>
+                              {invite.scope === 'summary' ? 'Resumo do mês' : 'Resumo e últimas 100 anotações'}
+                              {invite.account_id ? ' · Conta selecionada' : ''}
+                            </p>
+                            {(invite.period_start || invite.period_end) && (
+                              <small className="muted">
+                                Período: {invite.period_start ?? 'Início do mês atual'} a {invite.period_end ?? 'Hoje'}
+                              </small>
+                            )}
+                            {invite.can_propose && <small className="muted">Pode sugerir correções; só você aprova.</small>}
+                          </div>
+                          <div className="family-grant-actions">
+                            {invite.state === 'pending' && sharedByMe && (
+                              <Button disabled={pending} onClick={() => setConfirm({ invite, action: 'approve' })}>
+                                <Check size={18} /> Aprovar
+                              </Button>
+                            )}
+                            {invite.state === 'active' && !sharedByMe && (
+                              <Button variant="secondary" onClick={() => setSelected(invite.id)}>
+                                Consultar
+                              </Button>
+                            )}
+                            {invite.state !== 'revoked' && (
+                              <Button
+                                variant="ghost"
+                                disabled={pending}
+                                onClick={() => setConfirm({ invite, action: 'revoke' })}
+                              >
+                                {sharedByMe ? 'Revogar acesso' : 'Sair do acesso'}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="family-empty-state">
+                <Users size={26} />
+                <p>Você ainda não compartilha finanças com ninguém.</p>
+                <Button variant="secondary" onClick={() => setInviteOpen(true)}>
+                  Criar meu primeiro convite
+                </Button>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+      {inviteOpen && !app.demo && (
+        <Dialog
+          title="Convidar alguém"
+          onClose={() => {
+            if (!pending) {
+              setInviteOpen(false);
+              setCreated('');
+            }
+          }}
+        >
+          <div className="simple-form family-invite-form">
+            <p>Você gera um código privado. A pessoa pede acesso e você aprova antes de liberar os dados.</p>
             <label>
-              O que compartilhar
+              O que essa pessoa poderá consultar?
               <select
                 value={scope}
                 onChange={(event) => {
@@ -134,95 +248,100 @@ export function FamilyPage() {
                   setCreated('');
                 }}
               >
-                <option value="summary">Somente resumo do mês</option>
-                <option value="transactions">Resumo e últimas 100 anotações</option>
+                <option value="summary">Resumo do mês</option>
+                <option value="transactions">Resumo e últimas 100 movimentações</option>
               </select>
             </label>
-            <label>
-              Conta compartilhada
-              <select
-                value={accountId}
-                onChange={(event) => {
-                  setAccountId(event.target.value);
-                  setConsent(false);
-                }}
-              >
-                <option value="">Todas as contas</option>
-                {app.data.financial_accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Período inicial (opcional)
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => {
-                  setStartDate(event.target.value);
-                  setConsent(false);
-                }}
-              />
-            </label>
-            <label>
-              Período final (opcional)
-              <input
-                type="date"
-                min={startDate || undefined}
-                value={endDate}
-                onChange={(event) => {
-                  setEndDate(event.target.value);
-                  setConsent(false);
-                }}
-              />
-            </label>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                disabled={scope !== 'transactions'}
-                checked={allowProposals && scope === 'transactions'}
-                onChange={(event) => {
-                  setAllowProposals(event.target.checked);
-                  setConsent(false);
-                }}
-              />
-              Permitir propostas de correção. Só eu posso aprovar alterações.
-            </label>
+            <details className="family-advanced">
+              <summary>Restringir conta ou período</summary>
+              <div className="simple-form">
+                <label>
+                  Conta
+                  <select
+                    value={accountId}
+                    onChange={(event) => {
+                      setAccountId(event.target.value);
+                      setConsent(false);
+                    }}
+                  >
+                    <option value="">Todas as contas</option>
+                    {app.data.financial_accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="family-date-range">
+                  <label>
+                    A partir de
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(event) => {
+                        setStartDate(event.target.value);
+                        setConsent(false);
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Até
+                    <input
+                      type="date"
+                      min={startDate || undefined}
+                      value={endDate}
+                      onChange={(event) => {
+                        setEndDate(event.target.value);
+                        setConsent(false);
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </details>
+            {scope === 'transactions' && (
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={allowProposals}
+                  onChange={(event) => {
+                    setAllowProposals(event.target.checked);
+                    setConsent(false);
+                  }}
+                />
+                Permitir que sugira correções. Nada muda sem sua aprovação.
+              </label>
+            )}
             <label className="check-label">
               <input
                 type="checkbox"
                 checked={consent}
                 onChange={(event) => setConsent(event.target.checked)}
               />
-              Concordo em criar um convite de consulta para este escopo. Vou aprovar a pessoa antes de liberar
-              os dados.
+              Confirmo este compartilhamento. Os dados só serão liberados depois que eu aprovar a pessoa.
             </label>
-            <div>
-              <Button
-                disabled={!consent || pending}
-                onClick={() =>
-                  void action(async () => {
-                    const result = await rpc<{ code: string }>('create_family_invite', {
-                      selected_scope: scope,
-                      allowed_account: accountId || null,
-                      start_date: startDate || null,
-                      end_date: endDate || null,
-                      allow_proposals: allowProposals && scope === 'transactions',
-                    });
-                    setCreated(result.code);
-                    setConsent(false);
-                  })
-                }
-              >
-                <Users size={18} />
-                Criar convite
-              </Button>
-            </div>
+            <Button
+              disabled={!consent || pending}
+              onClick={() =>
+                void action(async () => {
+                  const result = await rpc<{ code: string }>('create_family_invite', {
+                    selected_scope: scope,
+                    allowed_account: accountId || null,
+                    start_date: startDate || null,
+                    end_date: endDate || null,
+                    allow_proposals: allowProposals && scope === 'transactions',
+                  });
+                  setCreated(result.code);
+                  setConsent(false);
+                  await invites.refetch();
+                })
+              }
+            >
+              <Users size={18} /> Criar código de convite
+            </Button>
             {created && (
-              <div className="family-code">
-                <p>Código válido por 24 horas. Compartilhe apenas com a pessoa escolhida.</p>
+              <div className="family-code" role="status">
+                <p>Código válido por 24 horas. Envie somente para a pessoa escolhida.</p>
                 <code>{created}</code>
                 <Button
                   variant="secondary"
@@ -233,12 +352,16 @@ export function FamilyPage() {
                       .catch(() => setError('Selecione o código e copie manualmente.'))
                   }
                 >
-                  <Copy size={18} />
-                  Copiar código
+                  <Copy size={18} /> Copiar código
                 </Button>
               </div>
             )}
-          </section>
+            {error && <p role="alert" className="error-message">{error}</p>}
+          </div>
+        </Dialog>
+      )}
+      {requestOpen && !app.demo && (
+        <Dialog title="Usar convite" onClose={() => !pending && setRequestOpen(false)}>
           <form
             className="simple-form"
             onSubmit={(event) => {
@@ -246,92 +369,27 @@ export function FamilyPage() {
               void action(async () => {
                 await rpc('request_family_access', { invite_code: code.trim() });
                 setCode('');
-                app.toast('Pedido enviado. Aguarde a aprovação do dono.');
+                setRequestOpen(false);
+                app.toast('Pedido enviado. Aguarde a aprovação.');
               });
             }}
           >
-            <h2>Recebi um convite</h2>
+            <p>Peça acesso com o código recebido. Os dados só aparecem depois da aprovação de quem convidou.</p>
             <label>
               Código do convite
               <input
                 required
                 pattern="[a-fA-F0-9]{32}"
                 maxLength={32}
+                autoComplete="off"
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
               />
             </label>
-            <div>
-              <Button disabled={pending || !code.trim()}>Pedir acesso</Button>
-            </div>
+            {error && <p role="alert" className="error-message">{error}</p>}
+            <Button disabled={pending || !code.trim()}>Pedir acesso</Button>
           </form>
-          <section className="simple-form">
-            <div className="simple-section-title">
-              <h2>Permissões</h2>
-              <Button
-                variant="ghost"
-                title="Atualizar permissões"
-                aria-label="Atualizar permissões"
-                onClick={() => void invites.refetch()}
-              >
-                <RefreshCw size={18} />
-              </Button>
-            </div>
-            {invites.isError ? (
-              <p className="error-message" role="alert">
-                Não foi possível carregar as permissões. Confira se o banco foi atualizado.
-              </p>
-            ) : invites.isPending ? (
-              <p role="status">Carregando permissões…</p>
-            ) : invites.data?.length ? (
-              <ul className="family-list">
-                {invites.data.map((invite) => (
-                  <li key={invite.id}>
-                    <div>
-                      <h3>
-                        {invite.owner_id === app.user?.id
-                          ? (invite.viewer_name ?? 'Convite aguardando destinatário')
-                          : invite.owner_name}
-                      </h3>
-                      {invite.owner_id === app.user?.id && invite.viewer_email && (
-                        <p className="muted">{invite.viewer_email}</p>
-                      )}
-                      <p>
-                        {labels[invite.state]} ·{' '}
-                        {invite.scope === 'summary' ? 'Somente resumo' : 'Resumo e anotações'}
-                      </p>
-                    </div>
-                    <div className="simple-inline-actions">
-                      {invite.state === 'pending' && invite.owner_id === app.user?.id && (
-                        <Button disabled={pending} onClick={() => setConfirm({ invite, action: 'approve' })}>
-                          <Check size={18} />
-                          Aprovar pessoa
-                        </Button>
-                      )}
-                      {invite.state === 'active' && invite.viewer_id === app.user?.id && (
-                        <Button variant="secondary" onClick={() => setSelected(invite.id)}>
-                          Consultar
-                        </Button>
-                      )}
-                      {invite.state !== 'revoked' && (
-                        <Button
-                          variant="secondary"
-                          disabled={pending}
-                          onClick={() => setConfirm({ invite, action: 'revoke' })}
-                        >
-                          <X size={18} />
-                          Revogar acesso
-                        </Button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>Nenhum convite ou acesso compartilhado.</p>
-            )}
-          </section>
-        </>
+        </Dialog>
       )}
       {proposals.data?.length ? (
         <section className="simple-form">
@@ -340,7 +398,8 @@ export function FamilyPage() {
             <article className="verified-answer" key={item.id}>
               <h3>{item.proposed_data.description}</h3>
               <p>
-                Proposto por {item.proposer_id}: {displayMoney(Number(item.before_data.amount))} →{' '}
+                Proposto por {relationships.find((person) => person.id === item.proposer_id)?.name ?? 'Pessoa da família'}:{' '}
+                {displayMoney(Number(item.before_data.amount))} →{' '}
                 {displayMoney(Number(item.proposed_data.amount))} · {item.proposed_data.category}
               </p>
               <div className="simple-inline-actions">
@@ -379,7 +438,12 @@ export function FamilyPage() {
       )}
       {selected && (
         <section className="simple-form" aria-live="polite">
-          <h2>Consulta familiar</h2>
+          <div className="simple-section-title">
+            <h2>Consulta familiar</h2>
+            <Button variant="ghost" onClick={() => setSelected(null)}>
+              Fechar consulta
+            </Button>
+          </div>
           {snapshot.isError ? (
             <p className="error-message">
               O acesso não está disponível. Pode ter sido revogado; nenhum dado será mostrado nesta consulta.

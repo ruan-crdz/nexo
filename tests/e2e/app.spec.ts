@@ -165,9 +165,10 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   await expect(nexoLink.locator('.simple-nav-nexo-desktop-icon')).toBeVisible();
   await expect(nexoLink.locator('.simple-nav-nexo-mark')).not.toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(nav.getByRole('link')).toHaveCount(5);
+  await expect(nav.getByRole('link')).toHaveCount(6);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Histórico');
+  await expect(nav.getByRole('link', { name: 'Família', exact: true })).toHaveAttribute('href', '#/familia');
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
   await expect(nexoLink).toHaveAccessibleName('Perguntar ao Nexo');
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
@@ -180,6 +181,7 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
     ['Metas', 'metas'],
     ['Planejar', 'planejar'],
     ['Perguntar ao Nexo', 'nexo'],
+    ['Família', 'familia'],
   ]) {
     await nav.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/${path}$`));
@@ -196,6 +198,16 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
     await expect(page).toHaveURL(/#\/inicio$/);
     await expect(page.getByRole('heading', { name: 'Seu mês' })).toBeVisible();
   }
+});
+
+test('Família está na navegação principal e explica a limitação dos dados de demonstração', async ({ page }) => {
+  const family = page
+    .getByRole('navigation', { name: 'Principal' })
+    .getByRole('link', { name: 'Família', exact: true });
+  await expect(family).toBeVisible();
+  await family.click();
+  await expect(page.getByRole('heading', { name: 'Finanças em família' })).toBeVisible();
+  await expect(page.getByText(/Compartilhamento requer duas contas reais/)).toBeVisible();
 });
 
 test('datas e mês do histórico continuam utilizáveis em tela estreita e desktop', async ({ page }) => {
@@ -219,7 +231,7 @@ test('datas e mês do histórico continuam utilizáveis em tela estreita e deskt
 test('navegação desktop e ocultação de valores persistem entre páginas', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(6);
+  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(7);
   await expect(nav.getByRole('link', { name: 'Início', exact: true })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Histórico' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Você' })).toBeVisible();
