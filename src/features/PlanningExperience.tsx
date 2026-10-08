@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { SyntheticEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, ChevronRight, MoreHorizontal, Plus, Wallet } from 'lucide-react';
 import { useApp } from '../data/context';
@@ -73,6 +74,41 @@ function frequencyLabel(frequency: Frequency) {
   return 'Todo mês';
 }
 
+function keepOverflowMenuInViewport(event: SyntheticEvent<HTMLDetailsElement>) {
+  const details = event.currentTarget;
+  const menu = details.querySelector<HTMLElement>('.planning-overflow-menu');
+  const summary = details.querySelector<HTMLElement>('summary');
+  if (!menu || !summary) return;
+  if (!details.open) {
+    delete details.dataset.placement;
+    menu.style.left = '';
+    menu.style.right = '';
+    menu.style.top = '';
+    menu.style.bottom = '';
+    menu.style.maxHeight = '';
+    return;
+  }
+
+  const summaryBounds = summary.getBoundingClientRect();
+  const detailsBounds = details.getBoundingClientRect();
+  const menuWidth = menu.getBoundingClientRect().width;
+  const preferredLeft = details.classList.contains('planning-detail-overflow')
+    ? summaryBounds.left
+    : summaryBounds.right - menuWidth;
+  const left = Math.min(Math.max(preferredLeft, 8), window.innerWidth - menuWidth - 8);
+  const spaceAbove = Math.max(0, summaryBounds.top - 8);
+  const spaceBelow = Math.max(0, window.innerHeight - summaryBounds.bottom - 8);
+  const openUp = spaceBelow < menu.scrollHeight && spaceAbove > spaceBelow;
+  const availableHeight = openUp ? spaceAbove : spaceBelow;
+
+  details.dataset.placement = openUp ? 'up' : 'down';
+  menu.style.left = `${left - detailsBounds.left}px`;
+  menu.style.right = 'auto';
+  menu.style.maxHeight = `${availableHeight}px`;
+  menu.style.top = openUp ? 'auto' : 'calc(100% + 4px)';
+  menu.style.bottom = openUp ? 'calc(100% + 4px)' : 'auto';
+}
+
 function PlanningHeader({ title, backTo }: { title: string; backTo?: string }) {
   return (
     <header className="planning-page-heading">
@@ -88,7 +124,7 @@ function PlanningHeader({ title, backTo }: { title: string; backTo?: string }) {
 
 function PlanningMenu() {
   return (
-    <details className="planning-overflow">
+    <details className="planning-overflow" onToggle={keepOverflowMenuInViewport}>
       <summary aria-label="Mais opções de planejamento" title="Mais opções">
         <MoreHorizontal size={22} />
       </summary>
@@ -208,7 +244,7 @@ function PlanningOverview() {
 
 function PlanningChoice() {
   return (
-    <div className="planning-flow-page">
+    <div className="planning-flow-page planning-choice-page">
       <PlanningHeader title="Adicionar planejamento" backTo="/planejar" />
       <section className="planning-flow-step">
         <h2>O que quer planejar?</h2>
@@ -781,7 +817,7 @@ function RecurringDetail({ ruleId }: { ruleId: string }) {
         <p className="muted">As previsões ficam pendentes. O Nexo não paga nem recebe automaticamente.</p>
       </section>
       <div className="planning-detail-actions">
-        <details className="planning-overflow planning-detail-overflow">
+        <details className="planning-overflow planning-detail-overflow" onToggle={keepOverflowMenuInViewport}>
           <summary aria-label="Mais opções da conta" title="Mais opções">
             <MoreHorizontal size={22} />
           </summary>
@@ -936,7 +972,7 @@ function LimitDetail({ budgetId }: { budgetId: string }) {
         </p>
       </section>
       <div className="planning-detail-actions">
-        <details className="planning-overflow planning-detail-overflow">
+        <details className="planning-overflow planning-detail-overflow" onToggle={keepOverflowMenuInViewport}>
           <summary aria-label="Mais opções do limite" title="Mais opções">
             <MoreHorizontal size={22} />
           </summary>

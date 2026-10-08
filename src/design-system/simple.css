@@ -4305,7 +4305,9 @@ label {
   top: calc(100% + 4px);
   right: 0;
   display: grid;
-  min-width: 190px;
+  width: max-content;
+  min-width: min(190px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -4322,7 +4324,11 @@ label {
   min-height: 44px;
   align-items: center;
   padding: 8px 10px;
-  border-radius: 6px;
+  width: max-content;
+  min-width: min(190px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
   color: var(--ink);
   background: transparent;
   border: 0;
@@ -4367,20 +4373,17 @@ label {
   font-variant-numeric: tabular-nums;
 }
 .planning-total,
-.planning-goal-total,
 .planning-detail-total {
   display: grid;
   gap: 2px;
 }
 .planning-total strong,
-.planning-goal-total strong,
 .planning-detail-total strong {
   font-size: 34px;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 .planning-total span,
-.planning-goal-total span,
 .planning-detail-total span {
   color: var(--muted);
   font-size: 14px;
@@ -4442,14 +4445,12 @@ label {
   margin: 0;
   color: var(--muted);
 }
-.planning-limit-list,
-.planning-goal-list {
+.planning-limit-list {
   display: grid;
   min-width: 0;
   gap: 16px;
 }
-.planning-limit-row,
-.planning-goal-row {
+.planning-limit-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
@@ -4467,8 +4468,7 @@ label {
   font-weight: 700;
   overflow-wrap: anywhere;
 }
-.planning-limit-values,
-.planning-goal-values {
+.planning-limit-values {
   grid-area: values;
   display: flex;
   align-items: baseline;
@@ -4478,13 +4478,11 @@ label {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.planning-limit-values strong,
-.planning-goal-values > span {
+.planning-limit-values strong {
   font-size: 14px;
   font-weight: 600;
 }
-.planning-limit-values > span,
-.planning-goal-values strong {
+.planning-limit-values > span {
   color: var(--muted);
   font-size: 13px;
   white-space: nowrap;
@@ -4493,14 +4491,10 @@ label {
 .planning-detail-page .is-over-budget {
   color: var(--terracotta, #a84f35);
 }
-.planning-limit-row .progress,
-.planning-goal-row .progress {
+.planning-limit-row .progress {
   grid-area: progress;
   width: 100%;
   height: 7px;
-}
-.planning-goal-row {
-  grid-template-columns: minmax(0, 1fr) auto;
 }
 .planning-add-button {
   justify-self: stretch;
@@ -4529,6 +4523,17 @@ label {
 }
 .planning-flow-page {
   min-height: min(72dvh, 720px);
+}
+.planning-choice-page {
+  min-height: 0;
+  align-content: start;
+  gap: 4px;
+}
+.planning-choice-page .planning-flow-step {
+  padding: 4px 0 0;
+}
+.planning-choice-page .planning-flow-step h2 {
+  margin-bottom: 14px;
 }
 .planning-flow-header {
   display: grid;
@@ -4727,7 +4732,6 @@ label {
     padding: 16px 0;
   }
   .planning-total strong,
-  .planning-goal-total strong,
   .planning-detail-total strong {
     font-size: 32px;
   }
@@ -4735,11 +4739,7 @@ label {
     gap: 5px;
   }
   .planning-limit-values strong,
-  .planning-goal-values > span {
-    font-size: 12px;
-  }
-  .planning-limit-values > span,
-  .planning-goal-values strong {
+  .planning-limit-values > span {
     font-size: 12px;
   }
   .planning-add-button {

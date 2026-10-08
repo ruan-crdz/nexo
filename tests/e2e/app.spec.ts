@@ -1065,6 +1065,13 @@ test('Planejamento resume as áreas e centraliza a adição', async ({ page }) =
   await expect(page.getByRole('link', { name: 'Conta', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Limite de gastos' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Caixinha' })).toHaveCount(0);
+  await page.goto('/#/planejar/adicionar');
+  const headingSpacing = await page.evaluate(() => {
+    const header = document.querySelector('.planning-page-heading')?.getBoundingClientRect();
+    const content = document.querySelector('.planning-flow-step h2')?.getBoundingClientRect();
+    return header && content ? content.top - header.bottom : Number.POSITIVE_INFINITY;
+  });
+  expect(headingSpacing).toBeLessThanOrEqual(20);
 });
 
 test('botões de ação têm altura uniforme nas telas principais', async ({ page }) => {
@@ -1094,9 +1101,18 @@ test('recorrência persiste como pendente sem duplicar ao recarregar', async ({ 
   await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByRole('button', { name: 'Confirmar conta' }).click();
   await expect(page.getByRole('heading', { name: 'Conta recorrente e2e' })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 740 });
   await page.locator('.planning-detail-overflow > summary[aria-label="Mais opções da conta"]').click();
   await expect(page.getByRole('link', { name: 'Editar', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pausar conta' })).toBeVisible();
+  const accountMenuBounds = await page
+    .locator('.planning-detail-overflow .planning-overflow-menu')
+    .boundingBox();
+  expect(accountMenuBounds).not.toBeNull();
+  expect(accountMenuBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(accountMenuBounds!.x + accountMenuBounds!.width).toBeLessThanOrEqual(320);
+  expect(accountMenuBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(accountMenuBounds!.y + accountMenuBounds!.height).toBeLessThanOrEqual(740);
   const before = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.filter(
       (row: { description: string }) => row.description === 'Conta recorrente e2e',
@@ -1132,6 +1148,8 @@ test('limite e meta têm cálculo verificável e avisos exigem consentimento', a
   expect(menuBounds).not.toBeNull();
   expect(menuBounds!.x).toBeGreaterThanOrEqual(0);
   expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(320);
+  expect(menuBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(menuBounds!.y + menuBounds!.height).toBeLessThanOrEqual(740);
   await page.goto('/#/metas/nova');
   await page.getByRole('button', { name: 'Viagem', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
