@@ -161,14 +161,18 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   const nav = page.getByRole('navigation', { name: 'Principal' });
   const nexoLink = nav.getByRole('link', { name: 'Perguntar ao Nexo' });
   await page.setViewportSize({ width: 1280, height: 800 });
-  await expect(nexoLink).toContainText('Nexo');
-  await expect(nexoLink.locator('.simple-nav-nexo-desktop-icon')).toBeVisible();
-  await expect(nexoLink.locator('.simple-nav-nexo-mark')).not.toBeVisible();
+  await expect(nexoLink.locator('.simple-nav-nexo-mark img')).toBeVisible();
+  await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Histórico');
   await expect(nav.getByRole('link', { name: 'Família', exact: true })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Objetivos', exact: true })).toHaveAttribute('href', '#/metas');
+  await expect(nav.getByRole('link', { name: 'Planejar', exact: true })).toHaveAttribute(
+    'href',
+    '#/planejar',
+  );
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
   await expect(nexoLink).toHaveAccessibleName('Perguntar ao Nexo');
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
@@ -178,9 +182,11 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   await expect(nexoMark).toHaveCSS('width', '32px');
   await expect(page.getByRole('link', { name: 'Abrir seu perfil' })).toBeVisible();
   for (const [name, path] of [
-    ['Caixinhas', 'metas'],
-    ['Planejar', 'planejar'],
+    ['Início', 'inicio'],
+    ['Histórico', 'movimentos'],
     ['Perguntar ao Nexo', 'nexo'],
+    ['Objetivos', 'metas'],
+    ['Planejar', 'planejar'],
   ]) {
     await nav.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/${path}$`));
@@ -230,9 +236,10 @@ test('navegação desktop e ocultação de valores persistem entre páginas', as
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
   await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(6);
+  await expect(nav.locator('.simple-nav-brand img')).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Início', exact: true })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Histórico' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: 'Você' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Abrir seu perfil' })).toBeVisible();
   expect(await nav.evaluate((element) => getComputedStyle(element).position)).toBe('sticky');
   const mainBounds = await page.locator('main').boundingBox();
   const navBounds = await nav.boundingBox();
@@ -350,7 +357,9 @@ test('tour apresenta as funcionalidades principais em sequência até Começar a
       'aria-valuenow',
       String(index + 1),
     );
-    await page.getByRole('button', { name: index === titles.length - 1 ? 'Começar a usar' : 'Continuar' }).click();
+    await page
+      .getByRole('button', { name: index === titles.length - 1 ? 'Começar a usar' : 'Continuar' })
+      .click();
   }
   await expect(page).toHaveURL(/#\/inicio$/);
   expect(await page.evaluate(() => localStorage.getItem('nexo.feature-tour.demo'))).toBe('complete');
@@ -375,7 +384,7 @@ test('Anotar abre opções em uma folha e permite iniciar uma entrada manual', a
 
 test('Home identifica a demonstração e oferece a ferramenta Posso gastar?', async ({ page }) => {
   await expect(page.locator('.simple-demo')).toContainText('dados de exemplo');
-  await page.getByRole('link', { name: 'Abrir seu perfil', exact: true }).click();
+  await page.getByRole('banner').getByRole('link', { name: 'Abrir seu perfil', exact: true }).click();
   await page.getByRole('link', { name: 'Posso gastar?' }).click();
   await expect(page).toHaveURL(/#\/controle$/);
   await expect(page.locator('h1')).toHaveText('Posso gastar?');
@@ -388,7 +397,7 @@ test('Proteção descreve somente MFA realmente disponível', async ({ page }) =
   await expect(page.getByText(/sessões ativas|último acesso|proteções ativas/i)).toHaveCount(0);
 });
 
-test('insight compara meses completos, mostra evidências e prepara a pergunta do Nexo', async ({ page }) => {
+test('insight compara meses completos e prepara a pergunta do Nexo', async ({ page }) => {
   await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
     const currentMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -424,10 +433,11 @@ test('insight compara meses completos, mostra evidências e prepara a pergunta d
     localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
   });
   await page.reload();
-  await expect(page.getByRole('heading', { name: /Você gastou .* a mais/ })).toBeVisible();
-  await page.getByText('Ver registros usados').click();
-  await expect(page.getByText(/Mercado mês anterior/)).toBeVisible();
-  await expect(page.getByText(/Mercado mês recente/)).toBeVisible();
+  await expect(page.locator('.home-insight-copy')).toContainText(
+    'Seus gastos mudaram em relação ao mês passado.',
+  );
+  await expect(page.locator('.home-insight-amount')).toContainText('R$ 300,00 a mais');
+  await expect(page.locator('.home-insight')).not.toContainText('Mercado mês anterior');
   await page.getByRole('link', { name: 'Entender a diferença' }).click();
   await expect(page.getByLabel('Sua pergunta para o Nexo')).toHaveValue(
     /Calcule a diferença pelos registros disponíveis/,
@@ -453,7 +463,7 @@ test('Anotar reúne registro manual, Nexo, nota, extrato e WhatsApp', async ({ p
 });
 
 test('demonstração explica WhatsApp sem fingir conexão ou envio', async ({ page }) => {
-  await page.getByRole('link', { name: 'Conhecer o Nexo no WhatsApp' }).click();
+  await page.getByRole('link', { name: 'WhatsApp', exact: true }).click();
   await page.getByRole('button', { name: 'Conectar meu WhatsApp' }).click();
   await expect(page.getByRole('alert')).toContainText('Nenhuma mensagem foi enviada');
 });
@@ -477,7 +487,7 @@ test('nome persiste e exclusão de conta exige confirmação explícita', async 
   await page.getByRole('button', { name: 'Salvar nome' }).click();
   await expect(page.getByRole('status')).toContainText('Seu nome foi atualizado');
   await page.goto('/#/inicio');
-  await expect(page.getByText('Olá, Maria', { exact: true })).toBeVisible();
+  await expect(page.locator('.simple-nav-avatar')).toHaveText('M');
   await page.goto('/#/privacidade');
   await page.getByRole('button', { name: 'Quero excluir minha conta' }).click();
   await expect(page.getByRole('button', { name: 'Confirmar exclusão permanente' })).toBeDisabled();
@@ -626,9 +636,7 @@ test('formulário tem foco, Escape cancela e campos são acessíveis', async ({ 
   await expect(page.getByRole('dialog')).not.toBeVisible();
 });
 
-test('Home mostra o resultado calculado, WhatsApp, uma meta e no máximo três movimentos', async ({
-  page,
-}) => {
+test('Home mostra o resumo, ações rápidas, objetivos e até três movimentos', async ({ page }) => {
   const totals = await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
@@ -651,17 +659,36 @@ test('Home mostra o resultado calculado, WhatsApp, uma meta e no máximo três m
   });
   const net = totals.income - totals.expenses;
   await expect(page.getByRole('heading', { name: 'Seu mês', exact: true })).toBeVisible();
-  await expect(page.locator('.home-gross-result strong')).toHaveText(formatMoney(net));
   await expect(page.locator('.home-month-result')).toContainText(net < 0 ? 'faltou' : 'livre para planejar');
   await expect(page.locator('.home-flow-line')).toHaveText(
     `Entrou ${formatMoney(totals.income)} · Saiu ${formatMoney(totals.expenses)}`,
   );
-  await expect(
-    page.getByRole('link', { name: /Conhecer o Nexo no WhatsApp|Conectar WhatsApp/ }),
-  ).toBeVisible();
-  await expect(page.locator('.home-action-rail > *')).toHaveCount(2);
+  await expect(page.locator('.home-month-details')).toHaveCount(0);
+  await page.locator('.home-month-title').click();
+  await expect(page.locator('.home-month-details')).toContainText(
+    `Resultado dos movimentos${formatMoney(net)}`,
+  );
+  await expect(page.locator('.home-month-details')).toContainText('Objetivos');
+  await expect(page.locator('.home-month-method')).toContainText('não é saldo bancário');
+  await expect(page.getByRole('link', { name: 'WhatsApp', exact: true })).toBeVisible();
+  await expect(page.locator('.home-action-rail > *')).toHaveCount(4);
   await expect(page.locator('.home-insight').count()).resolves.toBeLessThanOrEqual(1);
   await expect(page.locator('.home-goal')).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'Objetivos', exact: true })).toBeVisible();
+  const sectionHeadingStyles = await Promise.all(
+    [
+      page.getByRole('heading', { name: 'Seu mês', exact: true }),
+      page.getByRole('heading', { name: 'Objetivos', exact: true }),
+      page.getByRole('heading', { name: 'Últimos movimentos', exact: true }),
+    ].map((heading) =>
+      heading.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight };
+      }),
+    ),
+  );
+  expect(sectionHeadingStyles[1]).toEqual(sectionHeadingStyles[0]);
+  expect(sectionHeadingStyles[2]).toEqual(sectionHeadingStyles[0]);
   await expect(page.locator('.home-recent .money-list > li').count()).resolves.toBeLessThanOrEqual(3);
   await expect(page.locator('.money-evolution, .money-breakdown, .home-upcoming')).toHaveCount(0);
 });
@@ -670,16 +697,53 @@ test('Home mantém o resultado legível e sem rolagem horizontal em mobile e des
   for (const width of [320, 360, 375, 390, 430, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole('heading', { name: 'Seu mês', exact: true })).toBeVisible();
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
-      .toBeLessThanOrEqual(width);
+    const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const overflowingElements = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('body *'))
+        .map((element) => {
+          const bounds = element.getBoundingClientRect();
+          return {
+            tag: element.tagName,
+            className: typeof element.className === 'string' ? element.className : '',
+            right: Math.round(bounds.right),
+          };
+        })
+        .filter((element) => element.right > window.innerWidth + 1)
+        .slice(0, 8),
+    );
+    const actionRailLayout = await page.locator('.home-action-rail').evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const parentRect = element.parentElement!.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        viewport: window.innerWidth,
+        rail: {
+          x: Math.round(rect.x),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          overflowX: style.overflowX,
+          overflowY: style.overflowY,
+        },
+        parent: {
+          x: Math.round(parentRect.x),
+          right: Math.round(parentRect.right),
+          width: Math.round(parentRect.width),
+        },
+      };
+    });
+    expect(
+      documentWidth,
+      `${width}px; overflow: ${JSON.stringify(overflowingElements)}; rail: ${JSON.stringify(actionRailLayout)}`,
+    ).toBeLessThanOrEqual(width);
     const amount = page.locator('.home-month-result strong');
     const dimensions = await amount.evaluate((element) => ({
       height: element.getBoundingClientRect().height,
       lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
     }));
     expect(dimensions.height, `Valor principal em ${width}px`).toBeLessThanOrEqual(dimensions.lineHeight + 1);
-    await expect(page.locator('.home-action-rail > *')).toHaveCount(2);
+    await expect(page.locator('.home-action-rail > *')).toHaveCount(4);
     await expect(page.locator('.home-recent .money-list > li').count()).resolves.toBeLessThanOrEqual(3);
   }
 });
@@ -700,10 +764,11 @@ test('Nexo responde em parágrafos com o valor livre da Home e poucas métricas'
   await expect(answer.locator('.source-list').first().locator('> div')).toHaveCount(3);
 });
 
-test('Home mantém um único CTA principal, um insight opcional e uma meta', async ({ page }) => {
-  await expect(page.locator('.home-whatsapp-cta')).toBeVisible();
+test('Home mantém WhatsApp entre os atalhos e só mostra insight quando há sinal', async ({ page }) => {
+  await expect(page.getByRole('link', { name: 'WhatsApp', exact: true })).toBeVisible();
   await expect(page.locator('.home-insight').count()).resolves.toBeLessThanOrEqual(1);
   await expect(page.locator('.home-goal')).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'Objetivos', exact: true })).toBeVisible();
 });
 
 test('meta SMART limita aporte à sobra e separar 10 deixa 54,08 sem criar gasto', async ({ page }) => {
@@ -749,8 +814,7 @@ test('meta SMART limita aporte à sobra e separar 10 deixa 54,08 sem criar gasto
   });
   await page.reload();
   await expect(page.locator('.home-month-result strong')).toHaveText(formatMoney(6408));
-  const nav = page.getByRole('navigation', { name: 'Principal' });
-  await nav.getByRole('link', { name: 'Caixinhas', exact: true }).click();
+  await page.goto('/#/metas');
   await expect(page.locator('.goal-monthly-plan')).toContainText('Cota mensal para o prazo');
   await expect(page.locator('.goal-monthly-plan .goal-next-contribution')).toContainText(formatMoney(6408));
   await page.getByRole('button', { name: 'Guardei dinheiro', exact: true }).click();
@@ -761,20 +825,21 @@ test('meta SMART limita aporte à sobra e separar 10 deixa 54,08 sem criar gasto
   await dialog.getByRole('checkbox').check();
   await dialog.getByRole('button', { name: 'Confirmar progresso' }).click();
   await expect(dialog).not.toBeVisible();
-  await nav.getByRole('link', { name: 'Início', exact: true }).click();
+  await page.goto('/#/inicio');
   await expect(page.locator('.home-month-result strong')).toHaveText(formatMoney(5408));
-  await expect(page.locator('.home-gross-result strong')).toHaveText(formatMoney(6408));
+  await page.locator('.home-month-title').click();
+  await expect(page.locator('.home-month-details')).toContainText(formatMoney(6408));
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!));
   expect(saved.transactions).toHaveLength(1);
   expect(saved.goals[0].saved).toBe(1000);
   expect(saved.goal_events).toHaveLength(1);
-  await nav.getByRole('link', { name: 'Caixinhas', exact: true }).click();
+  await page.goto('/#/metas');
   await page.getByRole('button', { name: 'Anotar retirada' }).click();
   await page.getByRole('dialog').getByLabel('Valor (R$)', { exact: true }).fill('10');
   await page.getByRole('dialog').getByRole('checkbox').check();
   await page.getByRole('dialog').getByRole('button', { name: 'Confirmar progresso' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  await nav.getByRole('link', { name: 'Início', exact: true }).click();
+  await page.goto('/#/inicio');
   await expect(page.locator('.home-month-result strong')).toHaveText(formatMoney(6408));
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!).transactions.length),
@@ -1031,7 +1096,10 @@ test('meta mostra plano mensal e urgência não apaga conquistas', async ({ page
   await page.getByRole('button', { name: 'Criar minha Caixinha' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Nome da Caixinha').fill('Minha reserva de 500');
-  const preset = dialog.getByRole('group', { name: 'Valores sugeridos para Caixinha' }).getByRole('button').nth(1);
+  const preset = dialog
+    .getByRole('group', { name: 'Valores sugeridos para Caixinha' })
+    .getByRole('button')
+    .nth(1);
   await preset.click();
   await expect(preset).toHaveAttribute('aria-pressed', 'true');
   await expect(preset).toHaveCSS('background-color', 'rgb(36, 102, 79)');

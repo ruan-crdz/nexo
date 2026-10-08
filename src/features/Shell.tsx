@@ -2,7 +2,6 @@ import { NavLink, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
 import {
   Home,
   NotebookPen,
-  Settings,
   Eye,
   EyeOff,
   ShieldCheck,
@@ -30,9 +29,8 @@ const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
   { to: '/nexo', label: 'Nexo', icon: MessageCircle },
-  { to: '/metas', label: 'Caixinhas', icon: Target },
+  { to: '/metas', label: 'Objetivos', icon: Target },
   { to: '/planejar', label: 'Planejar', icon: CalendarDays },
-  { to: '/perfil', label: 'Você', icon: Settings },
 ];
 export function Shell() {
   const app = useApp();
@@ -57,7 +55,7 @@ export function Shell() {
   if (!app.demo && app.mfaRequired) return <Navigate to="/seguranca" replace />;
   if (!app.data.profile.onboarded && !app.error && !onboardingConnection) {
     const identity = app.demo ? 'demo' : app.user?.id;
-    const step = identity ? readOnboardingStep(identity) ?? 'name' : 'name';
+    const step = identity ? (readOnboardingStep(identity) ?? 'name') : 'name';
     return <Navigate to={`/onboarding?step=${step}`} replace />;
   }
   if (app.data.profile.onboarded && !app.data.profile.feature_tour_completed)
@@ -75,35 +73,35 @@ export function Shell() {
         Pular para o conteúdo
       </a>
       <header className="simple-topbar">
-        <div className="topbar-greeting">
-          <Link className="simple-profile" to="/perfil" aria-label="Abrir seu perfil">
+        <div className="topbar-mobile-controls">
+          <Link className="simple-profile topbar-mobile-avatar" to="/perfil" aria-label="Abrir seu perfil">
             {app.data.profile.name.slice(0, 1).toUpperCase()}
           </Link>
-          <span>Olá, {app.data.profile.name.split(' ')[0]}</span>
+          <div className="simple-topbar-actions">
+            <Button
+              variant="ghost"
+              className="topbar-icon"
+              aria-label={visible ? 'Ocultar valores' : 'Mostrar valores'}
+              title={visible ? 'Ocultar valores' : 'Mostrar valores'}
+              onClick={toggle}
+            >
+              {visible ? <Eye size={20} /> : <EyeOff size={20} />}
+            </Button>
+            <Link
+              to="/seguranca"
+              className="button button-ghost topbar-icon"
+              aria-label="Abrir Proteção"
+              title="Proteção"
+            >
+              <ShieldCheck size={20} />
+            </Link>
+          </div>
         </div>
-        <div className="simple-topbar-actions">
-          <Button
-            variant="ghost"
-            className="topbar-icon"
-            aria-label={visible ? 'Ocultar valores' : 'Mostrar valores'}
-            title={visible ? 'Ocultar valores' : 'Mostrar valores'}
-            onClick={toggle}
-          >
-            {visible ? <Eye size={20} /> : <EyeOff size={20} />}
-          </Button>
-          <Link
-            to="/seguranca"
-            className="button button-ghost topbar-icon"
-            aria-label="Abrir Proteção"
-            title="Proteção"
-          >
-            <ShieldCheck size={20} />
-          </Link>
-        </div>
+        <span className="topbar-mobile-greeting">Olá, {app.data.profile.name.split(' ')[0]}</span>
       </header>
       <nav className="simple-nav" aria-label="Principal">
         <Link className="simple-nav-brand" to="/inicio" aria-label="Nexo início">
-          <Brand />
+          <Brand compact />
         </Link>
         {navigation.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -113,11 +111,11 @@ export function Shell() {
             className={
               to === '/perfil' ? 'profile-nav-link' : to === '/nexo' ? 'simple-nav-nexo-link' : undefined
             }
-            aria-label={to === '/nexo' ? 'Perguntar ao Nexo' : undefined}
+            aria-label={to === '/nexo' ? 'Perguntar ao Nexo' : label}
+            title={to === '/nexo' ? 'Perguntar ao Nexo' : label}
           >
             {to === '/nexo' ? (
               <>
-                <Icon className="simple-nav-nexo-desktop-icon" size={24} />
                 <span className="simple-nav-nexo-mark" aria-hidden="true">
                   <img src={`${import.meta.env.BASE_URL}logo_letra_n.png`} alt="" />
                 </span>
@@ -129,6 +127,15 @@ export function Shell() {
             {to !== '/nexo' && <span>{label}</span>}
           </NavLink>
         ))}
+        <NavLink
+          to="/perfil"
+          end
+          className="profile-nav-link simple-nav-profile"
+          aria-label="Abrir seu perfil"
+          title="Você"
+        >
+          <span className="simple-nav-avatar">{app.data.profile.name.slice(0, 1).toUpperCase()}</span>
+        </NavLink>
       </nav>
       <main id="main-content" ref={main} tabIndex={-1} className="simple-content" data-page={pathname}>
         <OfflineStatus />

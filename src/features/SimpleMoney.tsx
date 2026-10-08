@@ -6,6 +6,8 @@ import {
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
+  CalendarDays,
+  Sparkles,
   MessageCircle,
   FileUp,
   Pencil,
@@ -35,6 +37,11 @@ function dateLabel(date: string) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' }).format(
     new Date(`${date}T12:00:00Z`),
   );
+}
+function movementDateLabel(date: string, today: string) {
+  if (date === today) return 'Hoje';
+  if (date === shiftDays(today, -1)) return 'Ontem';
+  return dateLabel(date);
 }
 function fullDateLabel(date: string) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
@@ -297,6 +304,7 @@ export function SimpleHome() {
   const app = useApp();
   const displayMoney = useMoneyDisplay();
   const { open: openCapture } = useCaptureFlow();
+  const [monthDetailsOpen, setMonthDetailsOpen] = useState(false);
   const whatsapp = useQuery({
     queryKey: ['whatsapp-connection', app.user?.id],
     queryFn: () => invoke<{ connected: boolean; chat_url: string }>('whatsapp-link', { action: 'status' }),
@@ -326,6 +334,11 @@ export function SimpleHome() {
     .filter((t) => t.date <= today)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3);
+  const recentGroups = [...new Set(recent.map((transaction) => transaction.date))].map((date) => ({
+    date,
+    label: movementDateLabel(date, today),
+    rows: recent.filter((transaction) => transaction.date === date),
+  }));
   const latestMonth = shiftMonths(`${currentMonth}-01`, -1).slice(0, 7);
   const previousMonth = shiftMonths(`${currentMonth}-01`, -2).slice(0, 7);
   const latestComplete = { month: latestMonth, ...monthlyFlow(posted, latestMonth) };
@@ -341,23 +354,19 @@ export function SimpleHome() {
     Math.abs(expenseChange) >= Math.max(10_000, Math.round(previousComplete.expenses * 0.15));
   const insight = due.length
     ? {
-        title: `Há ${due.length} conta${due.length === 1 ? '' : 's'} prevista${due.length === 1 ? '' : 's'} nos próximos dias.`,
-        summary: `${displayMoney(sum(due.map((item) => item.amount)))} até o próximo vencimento.`,
-        evidence: due
-          .slice(0, 5)
-          .map((item) => `${item.description} · ${dateLabel(item.date)} · ${displayMoney(item.amount)}`),
+        title:
+          due.length === 1
+            ? `${due[0].description} vence em ${dateLabel(due[0].date).replace(/\.$/, '')}.`
+            : `${due.length} contas previstas nos próximos dias.`,
+        amount: displayMoney(sum(due.map((item) => item.amount))),
         destination: '/planejar',
-        action: 'Ver contas',
+        action: 'Ver contas previstas',
         question: '',
       }
     : meaningfulChange && latestComplete && previousComplete && expenseChange !== null
       ? {
-          title: `Você gastou ${displayMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'}.`,
-          summary: 'Comparado ao mês passado.',
-          evidence: [
-            `${monthLabel(latestComplete.month)}: ${displayMoney(latestComplete.expenses)} em movimentos pagos.`,
-            `${monthLabel(previousComplete.month)}: ${displayMoney(previousComplete.expenses)} em movimentos pagos.`,
-          ],
+          title: 'Seus gastos mudaram em relação ao mês passado.',
+          amount: `${displayMoney(Math.abs(expenseChange))} ${expenseChange > 0 ? 'a mais' : 'a menos'}`,
           destination: '/nexo',
           action: 'Entender a diferença',
           question: `Compare os gastos pagos que anotei em ${monthLabel(latestComplete.month)} e ${monthLabel(previousComplete.month)}. Calcule a diferença pelos registros disponíveis e explique apenas o que as fontes sustentarem; não invente causas.`,
@@ -366,9 +375,17 @@ export function SimpleHome() {
   return (
     <>
       <div className="home-layout">
-        <section className="simple-summary" aria-labelledby="monthly-summary-title">
-          <p className="eyebrow">{monthLabel(currentMonth)}</p>
-          <h1 id="monthly-summary-title">Seu mês</h1>
+        <section className="home-month-summary" aria-labelledby="monthly-summary-title">
+          <button
+            className="home-month-title"
+            type="button"
+            aria-expanded={monthDetailsOpen}
+            aria-controls="home-month-details"
+            onClick={() => setMonthDetailsOpen((open) => !open)}
+          >
+            <h1 id="monthly-summary-title">Seu mês</h1>
+            <ChevronRight size={20} aria-hidden="true" />
+          </button>
           <div className="home-month-result" data-month={currentMonth}>
             <strong>{displayMoney(flow.net < 0 ? Math.abs(flow.net) : goalBudget.available)}</strong>
             <span>{flow.net < 0 ? 'faltou nos movimentos deste mês' : 'livre para planejar neste mês'}</span>
@@ -376,43 +393,72 @@ export function SimpleHome() {
           <p className="home-flow-line">
             Entrou {displayMoney(flow.income)} · Saiu {displayMoney(flow.expenses)}
           </p>
-          <dl className="home-budget-breakdown">
-            <div className="home-gross-result">
-              <dt>Resultado dos movimentos</dt>
-              <dd>
-                <strong>{displayMoney(flow.net)}</strong>
-              </dd>
+          {monthDetailsOpen && (
+            <div className="home-month-details" id="home-month-details">
+              <dl>
+                <div>
+                  <dt>Resultado dos movimentos</dt>
+                  <dd>{displayMoney(flow.net)}</dd>
+                </div>
+                <div>
+                  <dt>Objetivos</dt>
+                  <dd>{displayMoney(goalBudget.allocated)}</dd>
+                </div>
+                <div>
+                  <dt>Reservado para contas e essenciais</dt>
+                  <dd>{displayMoney(goalBudget.reservedExpenses)}</dd>
+                </div>
+              </dl>
+              <section className="home-month-bills" aria-label="Contas previstas">
+                <h2>Contas previstas</h2>
+                {due.length ? (
+                  <ul>
+                    {due.map((item) => (
+                      <li key={item.id}>
+                        <span>
+                          {item.description} · {dateLabel(item.date)}
+                        </span>
+                        <strong>{displayMoney(item.amount)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Nenhuma conta prevista nos próximos dias.</p>
+                )}
+              </section>
+              <div className="home-month-method">
+                <strong>Como é calculado</strong>
+                <p>
+                  O valor livre considera movimentos pagos, valores destinados a objetivos e contas previstas
+                  registradas. Renda prevista não entra como dinheiro recebido; anotações incompletas podem
+                  alterar a estimativa. Isso não é saldo bancário.
+                </p>
+              </div>
             </div>
-            <div>
-              <dt>Guardado em Caixinhas</dt>
-              <dd>{displayMoney(goalBudget.allocated)}</dd>
-            </div>
-            <div>
-              <dt>Reservado para contas e despesas essenciais</dt>
-              <dd>{displayMoney(goalBudget.reservedExpenses)}</dd>
-            </div>
-          </dl>
-          <small className="muted">
-            Estimativa pelas anotações, não saldo bancário. Renda prevista não entra no valor livre.
-          </small>
+          )}
           {flow.count === 0 && <p className="muted">Mande uma mensagem para começar.</p>}
         </section>
-        {whatsapp.data?.connected ? (
-          <a
-            className="button button-primary home-whatsapp-cta"
-            href={whatsapp.data.chat_url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <MessageCircle size={20} /> Falar com o Nexo no WhatsApp <ArrowUpRight size={18} />
-          </a>
-        ) : (
-          <Link className="button button-primary home-whatsapp-cta" to="/integracoes">
-            <MessageCircle size={20} /> {app.demo ? 'Conhecer o Nexo no WhatsApp' : 'Conectar WhatsApp'}{' '}
-            <ChevronRight size={18} />
-          </Link>
-        )}
         <nav className="home-action-rail" aria-label="Ações rápidas">
+          {whatsapp.data?.connected ? (
+            <a
+              className="home-quick-action"
+              href={whatsapp.data.chat_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span>
+                <MessageCircle size={22} />
+              </span>
+              <small>WhatsApp</small>
+            </a>
+          ) : (
+            <Link className="home-quick-action" to="/integracoes">
+              <span>
+                <MessageCircle size={22} />
+              </span>
+              <small>WhatsApp</small>
+            </Link>
+          )}
           <button className="home-quick-action" onClick={openCapture}>
             <span>
               <Plus size={22} />
@@ -423,82 +469,70 @@ export function SimpleHome() {
             <span>
               <Camera size={22} />
             </span>
-            <small>Escanear recibo</small>
+            <small>Recibo</small>
+          </Link>
+          <Link className="home-quick-action" to="/planejar">
+            <span>
+              <CalendarDays size={22} />
+            </span>
+            <small>Planejar</small>
           </Link>
         </nav>
         {insight && (
           <section className="home-insight" aria-labelledby="home-insight-title">
-            <div>
-              <p className="eyebrow">O Nexo percebeu</p>
-              <h2 id="home-insight-title">{insight.title}</h2>
-              <p>{insight.summary}</p>
-              <details>
-                <summary>Ver registros usados</summary>
-                <ul className="evidence-list">
-                  {insight.evidence.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-                <small className="muted">
-                  São movimentos registrados no Nexo, não um extrato bancário completo.
-                </small>
-              </details>
+            <Sparkles size={18} aria-hidden="true" />
+            <div className="home-insight-copy">
+              <p className="eyebrow" id="home-insight-title">
+                Nexo percebeu
+              </p>
+              <p>{insight.title}</p>
             </div>
+            <strong className="home-insight-amount">{insight.amount}</strong>
             <Link
-              className="button button-secondary"
+              className="home-insight-action"
+              aria-label={insight.action}
+              title={insight.action}
               to={insight.destination}
               state={insight.question ? { question: insight.question } : undefined}
             >
-              {insight.action} <ChevronRight size={18} />
+              <ChevronRight size={20} />
             </Link>
           </section>
         )}
         <section className="home-goal" aria-labelledby="home-goal-title">
+          <div className="home-goal-heading">
+            <h2 id="home-goal-title">Objetivos</h2>
+            <Link
+              className="home-goal-more"
+              to="/metas"
+              aria-label="Ver todos os objetivos"
+              title="Ver todos os objetivos"
+            >
+              <ChevronRight size={20} />
+            </Link>
+          </div>
           {activeGoal && goalProgress ? (
             <>
-              <div>
-                <p className="eyebrow">Sua Caixinha em foco</p>
-                <h2 id="home-goal-title">{activeGoal.name}</h2>
+              <div className="home-goal-content">
+                <h3>{activeGoal.name}</h3>
                 <p className="home-goal-amount">
-                  {displayMoney(activeGoal.saved)} de {displayMoney(activeGoal.target)}
+                  <strong>{displayMoney(activeGoal.saved)}</strong>
+                  <span>de {displayMoney(activeGoal.target)}</span>
                 </p>
                 <Progress
                   value={(activeGoal.saved / activeGoal.target) * 100}
                   label={`Progresso de ${activeGoal.name}`}
                 />
-                <small>
-                  {Math.round((activeGoal.saved / activeGoal.target) * 100)}% · faltam{' '}
-                  {displayMoney(goalProgress.remaining)}
-                </small>
-                <p className="goal-next-contribution">
-                  <strong>Este mês: {displayMoney(goalProgress.suggested)}</strong> para sua Caixinha.
-                </p>
-                {activeGoal.deadline && goalProgress.monthlyTarget !== null ? (
-                  <small>
-                    Para chegar até {fullDateLabel(activeGoal.deadline)}: {displayMoney(goalProgress.monthlyTarget)}
-                    {' '}por mês.
-                  </small>
-                ) : (
-                  <small>Sem data final. Você pode guardar no seu ritmo.</small>
-                )}
-                {!goalProgress.feasibleNow && goalProgress.remaining > 0 && (
-                  <p className="muted">
-                    O prazo exige mais que a sobra atual. Você pode ajustar o prazo ou o valor da Caixinha.
-                  </p>
-                )}
+                <span className="home-goal-percent">
+                  {Math.round((activeGoal.saved / activeGoal.target) * 100)}%
+                </span>
               </div>
-              <Link className="button button-secondary" to="/metas">
-                Ver Caixinha <ChevronRight size={18} />
-              </Link>
             </>
           ) : (
             <>
-              <div>
-                <h2 id="home-goal-title">Escolha um objetivo</h2>
+              <div className="home-goal-content">
+                <h3>Escolha um objetivo</h3>
               </div>
-              <Link className="button button-secondary" to="/metas">
-                Escolher Caixinha <ChevronRight size={18} />
-              </Link>
             </>
           )}
         </section>
@@ -509,8 +543,13 @@ export function SimpleHome() {
               Histórico <ChevronRight size={18} />
             </Link>
           </div>
-          {recent.length ? (
-            <MoneyRows rows={recent} showMetadata={false} showActions={false} />
+          {recentGroups.length ? (
+            recentGroups.map((group) => (
+              <div className="home-recent-group" key={group.date}>
+                <p className="home-recent-date">{group.label}</p>
+                <MoneyRows rows={group.rows} showMetadata={false} showActions={false} compactHome />
+              </div>
+            ))
           ) : (
             <div className="home-empty">
               <p>Ainda não tem movimentos por aqui.</p>
@@ -527,10 +566,12 @@ export function MoneyRows({
   rows,
   showMetadata = true,
   showActions = true,
+  compactHome = false,
 }: {
   rows: Transaction[];
   showMetadata?: boolean;
   showActions?: boolean;
+  compactHome?: boolean;
 }) {
   const app = useApp();
   const displayMoney = useMoneyDisplay();
@@ -556,9 +597,9 @@ export function MoneyRows({
   }
   return (
     <>
-      <ul className="money-list">
+      <ul className={`money-list${compactHome ? ' home-compact-list' : ''}`}>
         {rows.map((t) => (
-          <li key={t.id}>
+          <li className={compactHome ? 'home-compact-money-row' : undefined} key={t.id}>
             <div className="money-row-top">
               <span className={`money-kind ${t.type}`} aria-hidden="true">
                 {t.type === 'income' ? <ArrowDownLeft size={24} /> : <ArrowUpRight size={24} />}
@@ -569,7 +610,7 @@ export function MoneyRows({
                     {t.description}
                   </button>
                 </h3>
-                <p className="muted">
+                <p className={compactHome ? 'sr-only' : 'muted'}>
                   {new Intl.DateTimeFormat('pt-BR', {
                     day: '2-digit',
                     month: 'short',

@@ -17,6 +17,7 @@
   --account-hero: #205c45;
   --account-hero-foreground: #ffffff;
   --account-hero-muted: #dbe9df;
+  --home-topbar: #64715a;
   --journey-line: #dce3c9;
   --journey-track: #d9e0c7;
   --radius-sm: 8px;
@@ -58,6 +59,7 @@
   --account-hero: #22392e;
   --account-hero-foreground: #f1f6ef;
   --account-hero-muted: #c6d5c9;
+  --home-topbar: #22392e;
   --journey-line: #40503a;
   --journey-track: #43553b;
   --shadow: 0 12px 44px #00000030;
