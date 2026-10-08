@@ -112,9 +112,13 @@ export function Shell() {
             aria-label={to === '/nexo' ? 'Perguntar ao Nexo' : undefined}
           >
             {to === '/nexo' ? (
-              <span className="simple-nav-nexo-mark" aria-hidden="true">
-                <img src={`${import.meta.env.BASE_URL}logo_letra_n.png`} alt="" />
-              </span>
+              <>
+                <Icon className="simple-nav-nexo-desktop-icon" size={24} />
+                <span className="simple-nav-nexo-mark" aria-hidden="true">
+                  <img src={`${import.meta.env.BASE_URL}logo_letra_n.png`} alt="" />
+                </span>
+                <span className="simple-nav-nexo-label">{label}</span>
+              </>
             ) : (
               <Icon size={24} />
             )}

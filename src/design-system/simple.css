@@ -256,10 +256,10 @@ label {
   box-shadow: none;
 }
 .simple-nav a.simple-nav-nexo-link {
-  justify-content: center;
+  justify-content: flex-start;
 }
 .simple-nav-nexo-mark {
-  display: grid;
+  display: none;
   flex: 0 0 48px;
   width: 48px;
   height: 48px;
@@ -2062,6 +2062,16 @@ label {
   .simple-nav .profile-nav-link {
     margin-top: 0;
     display: none;
+  }
+  .simple-nav a.simple-nav-nexo-link {
+    justify-content: center;
+  }
+  .simple-nav .simple-nav-nexo-desktop-icon,
+  .simple-nav .simple-nav-nexo-label {
+    display: none;
+  }
+  .simple-nav .simple-nav-nexo-mark {
+    display: grid;
   }
   .simple-shell .simple-nav a span {
     font-size: 12px;

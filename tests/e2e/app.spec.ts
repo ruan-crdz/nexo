@@ -158,15 +158,20 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
 });
 
 test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
+  const nexoLink = nav.getByRole('link', { name: 'Perguntar ao Nexo' });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(nexoLink).toContainText('Nexo');
+  await expect(nexoLink.locator('.simple-nav-nexo-desktop-icon')).toBeVisible();
+  await expect(nexoLink.locator('.simple-nav-nexo-mark')).not.toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
   await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Histórico');
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
-  await expect(nav.getByRole('link').nth(2)).toHaveAccessibleName('Perguntar ao Nexo');
-  await expect(nav.getByRole('link').nth(2)).not.toContainText('Nexo');
-  const nexoMark = nav.getByRole('link').nth(2).locator('.simple-nav-nexo-mark img');
+  await expect(nexoLink).toHaveAccessibleName('Perguntar ao Nexo');
+  await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
+  const nexoMark = nexoLink.locator('.simple-nav-nexo-mark img');
   await expect(nexoMark).toHaveAttribute('src', /logo_letra_n\.png/);
   await expect(nexoMark).toHaveCSS('filter', 'brightness(0) invert(1)');
   await expect(nexoMark).toHaveCSS('width', '32px');
