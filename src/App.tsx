@@ -62,6 +62,8 @@ export default function App() {
               <Route path="/privacidade" element={<SimplePrivacy />} />
               <Route path="/planejar" element={<PlanningHub />} />
               <Route path="/metas" element={<GoalsPage />} />
+              <Route path="/metas/nova" element={<GoalsPage />} />
+              <Route path="/metas/:goalId" element={<GoalsPage />} />
               <Route path="/perguntas" element={<FinancialQuestions />} />
               <Route path="/nexo" element={<AssistantPage />} />
               <Route path="/importar" element={<StatementImport />} />

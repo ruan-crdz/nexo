@@ -12,8 +12,6 @@ import {
   PenLine,
   ArrowUpRight,
   ArrowDownLeft,
-  Target,
-  CalendarDays,
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
@@ -29,8 +27,6 @@ const navigation = [
   { to: '/inicio', label: 'Início', icon: Home },
   { to: '/movimentos', label: 'Histórico', icon: NotebookPen },
   { to: '/nexo', label: 'Nexo', icon: MessageCircle },
-  { to: '/metas', label: 'Objetivos', icon: Target },
-  { to: '/planejar', label: 'Planejar', icon: CalendarDays },
 ];
 export function Shell() {
   const app = useApp();
