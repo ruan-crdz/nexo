@@ -61,7 +61,15 @@ export function Shell() {
   if (app.data.profile.onboarded && !app.data.profile.feature_tour_completed)
     return <Navigate to="/tour" replace />;
   return (
-    <div className={pathname === '/movimentos' ? 'simple-shell history-shell' : 'simple-shell'}>
+    <div
+      className={
+        pathname === '/movimentos'
+          ? 'simple-shell history-shell'
+          : pathname === '/nexo'
+            ? 'simple-shell nexo-shell'
+            : 'simple-shell'
+      }
+    >
       <a
         className="skip-link"
         href="#main-content"
@@ -72,33 +80,33 @@ export function Shell() {
       >
         Pular para o conteúdo
       </a>
-      {pathname !== '/movimentos' && (
+      {pathname !== '/movimentos' && pathname !== '/nexo' && (
         <header className="simple-topbar">
-        <div className="topbar-mobile-controls">
-          <Link className="simple-profile topbar-mobile-avatar" to="/perfil" aria-label="Abrir seu perfil">
-            {app.data.profile.name.slice(0, 1).toUpperCase()}
-          </Link>
-          <div className="simple-topbar-actions">
-            <Button
-              variant="ghost"
-              className="topbar-icon"
-              aria-label={visible ? 'Ocultar valores' : 'Mostrar valores'}
-              title={visible ? 'Ocultar valores' : 'Mostrar valores'}
-              onClick={toggle}
-            >
-              {visible ? <Eye size={20} /> : <EyeOff size={20} />}
-            </Button>
-            <Link
-              to="/seguranca"
-              className="button button-ghost topbar-icon"
-              aria-label="Abrir Proteção"
-              title="Proteção"
-            >
-              <ShieldCheck size={20} />
+          <div className="topbar-mobile-controls">
+            <Link className="simple-profile topbar-mobile-avatar" to="/perfil" aria-label="Abrir seu perfil">
+              {app.data.profile.name.slice(0, 1).toUpperCase()}
             </Link>
+            <div className="simple-topbar-actions">
+              <Button
+                variant="ghost"
+                className="topbar-icon"
+                aria-label={visible ? 'Ocultar valores' : 'Mostrar valores'}
+                title={visible ? 'Ocultar valores' : 'Mostrar valores'}
+                onClick={toggle}
+              >
+                {visible ? <Eye size={20} /> : <EyeOff size={20} />}
+              </Button>
+              <Link
+                to="/seguranca"
+                className="button button-ghost topbar-icon"
+                aria-label="Abrir Proteção"
+                title="Proteção"
+              >
+                <ShieldCheck size={20} />
+              </Link>
+            </div>
           </div>
-        </div>
-        <span className="topbar-mobile-greeting">Olá, {app.data.profile.name.split(' ')[0]}</span>
+          <span className="topbar-mobile-greeting">Olá, {app.data.profile.name.split(' ')[0]}</span>
         </header>
       )}
       <nav className="simple-nav" aria-label="Principal">

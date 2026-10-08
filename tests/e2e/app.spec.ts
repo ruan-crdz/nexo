@@ -782,20 +782,55 @@ test('Home mantém o resultado legível e sem rolagem horizontal em mobile e des
   }
 });
 
-test('Nexo responde em parágrafos com o valor livre da Home e poucas métricas', async ({ page }) => {
+test('Nexo responde com conclusão, métrica principal e dados recolhidos', async ({ page }) => {
   const free = await page.locator('.home-month-result strong').innerText();
   await page
     .getByRole('navigation', { name: 'Principal' })
     .getByRole('link', { name: 'Perguntar ao Nexo', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Qual meu próximo passo?', exact: true }).click();
+  await page.getByRole('button', { name: 'Como está meu mês?', exact: true }).click();
   const answer = page.locator('.chat-message.assistant').first();
-  await expect(answer.locator('.chat-answer p').first()).toBeVisible();
+  await expect(answer.locator('.nexo-answer-direct')).toBeVisible();
+  await expect(answer.locator('.nexo-answer-metric strong')).toHaveText(free);
+  await expect(answer.getByRole('link', { name: 'Ver meu mês' })).toHaveAttribute('href', '#/inicio');
   await expect(answer.locator('h2')).toHaveCount(0);
   await expect(answer).not.toContainText('A base recuperada não sustenta');
   await expect(answer).not.toContainText('Futuro se');
-  await expect(answer.locator('.source-list').first()).toContainText(free);
-  await expect(answer.locator('.source-list').first().locator('> div')).toHaveCount(3);
+  await expect(answer.locator('.nexo-answer-disclosure')).toHaveCount(3);
+  await answer.getByText('Dados usados', { exact: true }).click();
+  await expect(answer.locator('.nexo-metrics')).toContainText(free);
+  await page.getByRole('button', { name: 'Mais opções do Nexo' }).click();
+  await page.getByRole('menuitem', { name: 'Nova conversa' }).click();
+  await expect(page.getByRole('heading', { name: 'O que você quer saber?' })).toBeVisible();
+  await expect(page.locator('.chat-message')).toHaveCount(0);
+});
+
+test('Nexo resume o mês com monthlyFlow e direciona para a Home', async ({ page }) => {
+  await page.goto('/#/nexo');
+  await page.getByRole('button', { name: 'Como está meu mês?', exact: true }).click();
+  const answer = page.locator('.chat-message.assistant').first();
+  await expect(answer.locator('.nexo-answer-direct')).toContainText('Seu mês está');
+  await expect(answer.locator('.nexo-metrics')).toContainText('Entradas');
+  await expect(answer.locator('.nexo-metrics')).toContainText('Saídas');
+  await expect(answer.getByRole('link', { name: 'Ver meu mês' })).toHaveAttribute('href', '#/inicio');
+  await expect(answer.locator('.nexo-answer-disclosure[open]')).toHaveCount(0);
+});
+
+test('Nexo inicia a tela Voz na demo e mantém a alternativa de teclado', async ({ page }) => {
+  await page.goto('/#/nexo');
+  await expect(page.getByRole('heading', { name: 'O que você quer saber?' })).toBeVisible();
+  await expect(page.locator('.nexo-suggestions > *')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Posso gastar R$ 500?', exact: true })).toBeVisible();
+  await expect(page.locator('.nexo-suggestions > *').nth(2)).toContainText(
+    /Qual dívida devo priorizar\?|Quando chego nos .*\?|Como está minha reserva\?/,
+  );
+  await expect(page.getByLabel('Sua pergunta para o Nexo')).toBeVisible();
+  await page.getByRole('button', { name: 'Falar com o Nexo' }).click();
+  const voice = page.getByRole('dialog', { name: 'Nexo Voz' });
+  await expect(voice.getByRole('alert')).toContainText('exige uma conta real');
+  await voice.getByRole('button', { name: 'Usar teclado' }).click();
+  await expect(voice).not.toBeVisible();
+  await expect(page.getByLabel('Sua pergunta para o Nexo')).toBeVisible();
 });
 
 test('Home mantém WhatsApp entre os atalhos e só mostra insight quando há sinal', async ({ page }) => {

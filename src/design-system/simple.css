@@ -3199,3 +3199,453 @@ label {
     transition-duration: 0.01ms !important;
   }
 }
+
+.simple-shell.nexo-shell {
+  grid-template-rows: minmax(0, 1fr);
+}
+.simple-shell.nexo-shell .simple-content {
+  grid-row: 1;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 24px;
+  padding-bottom: 20px;
+  gap: 0;
+}
+.nexo-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 auto;
+}
+.nexo-context-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  margin-bottom: 12px;
+}
+.nexo-context-header h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+.nexo-context-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nexo-context-actions > .button,
+.nexo-context-selector > .button {
+  min-height: 44px;
+}
+.nexo-context-selector,
+.nexo-options {
+  position: relative;
+}
+.nexo-context-selector > .button {
+  gap: 8px;
+  padding-inline: 12px;
+  border-radius: 22px;
+}
+.nexo-options-menu,
+.nexo-context-menu,
+.nexo-attach-menu {
+  position: absolute;
+  z-index: 25;
+  display: grid;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.nexo-options-menu,
+.nexo-context-menu {
+  top: calc(100% + 6px);
+  right: 0;
+}
+.nexo-options-menu button,
+.nexo-context-menu button,
+.nexo-attach-menu a {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nexo-options-menu button:hover,
+.nexo-context-menu button:hover,
+.nexo-attach-menu a:hover {
+  background: var(--sand);
+}
+.nexo-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.nexo-chat .chat-messages {
+  flex: 1;
+  width: 100%;
+  max-width: 760px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 0 24px;
+  margin: 0 auto;
+  scrollbar-width: thin;
+}
+.nexo-empty.chat-intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 24px 0 36px;
+}
+.nexo-empty .brand {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  margin: 0 0 24px;
+}
+.nexo-empty .brand img {
+  width: 56px;
+  height: 56px;
+}
+.nexo-empty h2 {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 22px;
+  font-weight: 700;
+}
+.nexo-suggestions {
+  width: 100%;
+  max-width: 680px;
+  margin: 20px auto 0;
+  gap: 8px;
+}
+.nexo-suggestions .button,
+.nexo-followups .button {
+  min-height: 42px;
+  padding: 9px 14px;
+  border-radius: 22px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.chat-message {
+  padding: 14px 0;
+}
+.chat-message.user {
+  max-width: min(85%, 600px);
+  border-radius: 18px;
+}
+.chat-message.assistant {
+  padding: 12px 0;
+  border-top: 0;
+}
+.nexo-answer {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.nexo-answer-direct {
+  max-width: 680px;
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+}
+.nexo-answer-metric {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0;
+}
+.nexo-answer-metric > span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.nexo-answer-metric > strong {
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.nexo-answer-action {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  color: var(--moss);
+  font-weight: 700;
+}
+.nexo-answer-disclosure {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.nexo-answer-disclosure > summary {
+  min-height: 42px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.nexo-answer-disclosure > p {
+  max-width: 680px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.nexo-metrics {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.nexo-metrics > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.nexo-metrics dt {
+  color: var(--muted);
+}
+.nexo-metrics dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.nexo-sources {
+  display: grid;
+  gap: 8px;
+}
+.nexo-sources a {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--moss);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.nexo-followups {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0;
+  scrollbar-width: none;
+}
+.nexo-followups::-webkit-scrollbar {
+  display: none;
+}
+.nexo-error {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.nexo-error p,
+.nexo-error small {
+  margin: 0;
+}
+.nexo-composer-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  flex: 0 0 auto;
+  padding: 12px 0 6px;
+  background: var(--cream);
+}
+.nexo-attach-menu {
+  right: auto;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 260px;
+}
+.nexo-attach-menu a {
+  justify-content: flex-start;
+}
+.chat-composer.nexo-composer {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 760px;
+  padding: 6px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.chat-composer.nexo-composer > button {
+  display: grid;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+}
+.chat-composer.nexo-composer > input {
+  grid-column: auto;
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+}
+.nexo-voice-overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  justify-items: center;
+  gap: 24px;
+  padding: 20px 24px max(24px, env(safe-area-inset-bottom));
+  background: var(--cream);
+  color: var(--ink);
+}
+.nexo-voice-overlay > header {
+  display: flex;
+  width: 100%;
+  max-width: 760px;
+  align-items: center;
+  justify-content: space-between;
+}
+.nexo-voice-overlay h1,
+.nexo-voice-overlay h2 {
+  margin: 0;
+}
+.nexo-voice-orb {
+  display: grid;
+  width: 176px;
+  height: 176px;
+  align-self: center;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--brand-bg);
+}
+.nexo-voice-orb.is-recording {
+  animation: nexo-voice-pulse 1.8s ease-in-out infinite;
+}
+.nexo-voice-orb .brand img {
+  width: 88px;
+  height: 88px;
+}
+.nexo-voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.voice-record-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@keyframes nexo-voice-pulse {
+  50% {
+    transform: scale(1.06);
+  }
+}
+@media (max-width: 700px) {
+  .simple-shell.nexo-shell {
+    display: block;
+    min-height: 100dvh;
+  }
+  .simple-shell.nexo-shell .simple-content {
+    display: flex;
+    height: calc(100dvh - 84px);
+    min-height: 0;
+    padding: 14px 16px 10px;
+    overflow: hidden;
+  }
+  .nexo-page {
+    width: 100%;
+    max-width: none;
+  }
+  .nexo-context-header {
+    margin-bottom: 4px;
+  }
+  .nexo-empty.chat-intro {
+    padding: 12px 0 24px;
+  }
+  .nexo-suggestions {
+    justify-content: center;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .nexo-suggestions .button {
+    max-width: 100%;
+    white-space: normal;
+  }
+  .chat-message.user {
+    max-width: 92%;
+  }
+  .nexo-answer-direct {
+    font-size: 17px;
+  }
+  .nexo-answer-metric > strong {
+    font-size: 29px;
+  }
+  .nexo-composer-dock {
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+  .chat-composer.nexo-composer {
+    grid-template-columns: 38px minmax(0, 1fr) 38px 38px;
+    gap: 2px;
+    padding: 5px;
+  }
+  .chat-composer.nexo-composer > button {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+  .chat-composer.nexo-composer > input {
+    grid-column: auto;
+    min-width: 0;
+    font-size: 15px;
+  }
+  .nexo-error {
+    flex-wrap: wrap;
+  }
+  .nexo-voice-overlay {
+    gap: 18px;
+    padding: 14px 18px max(18px, env(safe-area-inset-bottom));
+  }
+  .nexo-voice-orb {
+    width: 148px;
+    height: 148px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nexo-voice-orb.is-recording {
+    animation: none;
+  }
+}
