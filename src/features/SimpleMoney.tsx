@@ -473,10 +473,14 @@ export function SimpleHome() {
                 <p className="goal-next-contribution">
                   <strong>Este mês: {displayMoney(goalProgress.suggested)}</strong> para sua meta.
                 </p>
-                <small>
-                  Para chegar até {fullDateLabel(activeGoal.deadline)}:{' '}
-                  {displayMoney(goalProgress.monthlyTarget)} por mês.
-                </small>
+                {activeGoal.deadline && goalProgress.monthlyTarget !== null ? (
+                  <small>
+                    Para chegar até {fullDateLabel(activeGoal.deadline)}: {displayMoney(goalProgress.monthlyTarget)}
+                    {' '}por mês.
+                  </small>
+                ) : (
+                  <small>Sem data final. Você pode guardar no seu ritmo.</small>
+                )}
                 {!goalProgress.feasibleNow && goalProgress.remaining > 0 && (
                   <p className="muted">
                     O prazo exige mais que a sobra atual. Você pode ajustar o prazo ou o valor da meta.
@@ -712,11 +716,15 @@ export function MoneyRows({
 
 export function SimpleHistory() {
   const app = useApp();
-  const [month, setMonth] = useState(() => civilDate(new Date(), app.data.profile.timezone).slice(0, 7));
+  const today = civilDate(new Date(), app.data.profile.timezone);
+  const [month, setMonth] = useState(() => today.slice(0, 7));
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'expense' | 'income' | 'pending'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | Transaction['source']>('all');
   const [adding, setAdding] = useState<Transaction['type'] | null>(null);
+  const monthOptions = Array.from({ length: 133 }, (_, index) =>
+    shiftMonths(`${today.slice(0, 7)}-01`, index - 120).slice(0, 7),
+  );
   const rows = app.data.transactions
     .filter(
       (t) =>
@@ -749,13 +757,14 @@ export function SimpleHistory() {
           </Button>
           <label>
             Mês dos movimentos
-            <input
-              type="month"
-              value={month}
-              onChange={(e) => {
-                if (e.target.value) setMonth(e.target.value);
-              }}
-            />
+            <select value={month} onChange={(event) => setMonth(event.target.value)}>
+              {!monthOptions.includes(month) && <option value={month}>{monthLabel(month)}</option>}
+              {monthOptions.map((option) => (
+                <option key={option} value={option}>
+                  {monthLabel(option)}
+                </option>
+              ))}
+            </select>
           </label>
           <Button
             variant="secondary"

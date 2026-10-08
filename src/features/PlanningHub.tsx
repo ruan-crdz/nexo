@@ -4,7 +4,7 @@ import { Check, Plus, Trash2, Pencil } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button, Dialog, Progress } from '../design-system/components';
 import { useMoneyDisplay } from '../design-system/financial-visibility';
-import { categories, budgetSchema, goalSchema, recurringRuleSchema } from '../../shared/domain';
+import { categories, budgetSchema, goalSchema, recurringRuleSchema, transactionSchema } from '../../shared/domain';
 import type { Budget, Goal, RecurringRule } from '../../shared/domain';
 import { civilDate, parseMoney, shiftDays } from '../../shared/financial-engine';
 import { budgetUsage } from '../../shared/planning';
@@ -30,12 +30,18 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
     value && 'saved' in value ? String(value.saved / 100).replace('.', ',') : '0',
   );
   const [date, setDate] = useState(
-    value && 'start_date' in value ? value.start_date : value && 'deadline' in value ? value.deadline : today,
+    value && 'start_date' in value
+      ? value.start_date
+      : value && 'deadline' in value
+        ? value.deadline ?? today
+        : today,
   );
   const [category, setCategory] = useState(value && 'category' in value ? value.category : 'Outros');
   const [month, setMonth] = useState(value && 'month' in value ? value.month : today.slice(0, 7));
   const [active, setActive] = useState(value && 'active' in value ? value.active : true);
-  const [frequency, setFrequency] = useState(value && 'frequency' in value ? value.frequency : 'monthly');
+  const [frequency, setFrequency] = useState<'once' | 'weekly' | 'monthly' | 'yearly'>(
+    value && 'frequency' in value ? value.frequency : 'monthly',
+  );
   const [ruleType, setRuleType] = useState(value && 'type' in value ? value.type : 'expense');
   const [endDate, setEndDate] = useState(value && 'end_date' in value ? (value.end_date ?? '') : '');
   const [adjustment, setAdjustment] = useState(
@@ -49,21 +55,40 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
     setError('');
     try {
       const id = value?.id ?? crypto.randomUUID();
-      if (kind === 'recurring')
-        await app.repository.saveRecurring(
-          recurringRuleSchema.parse({
-            id,
-            description: name,
-            amount: parseMoney(amount),
-            category,
-            start_date: date,
-            active,
-            frequency,
-            type: ruleType,
-            end_date: endDate || null,
-            annual_adjustment_bps: adjustment,
-          }),
-        );
+      if (kind === 'recurring') {
+        if (frequency === 'once') {
+          await app.repository.save(
+            'transactions',
+            transactionSchema.parse({
+              id,
+              description: name,
+              amount: parseMoney(amount),
+              type: ruleType,
+              category,
+              date,
+              status: 'planned',
+              source: 'manual',
+              account_id: null,
+            }),
+            null,
+          );
+        } else {
+          await app.repository.saveRecurring(
+            recurringRuleSchema.parse({
+              id,
+              description: name,
+              amount: parseMoney(amount),
+              category,
+              start_date: date,
+              active,
+              frequency,
+              type: ruleType,
+              end_date: endDate || null,
+              annual_adjustment_bps: adjustment,
+            }),
+          );
+        }
+      }
       if (kind === 'budget') {
         const previous = app.data.budgets.find(
           (budget) => budget.category === category && budget.month === month,
@@ -94,7 +119,7 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
           null,
         );
       await app.refresh();
-      app.toast('Planejamento salvo.');
+      app.toast(frequency === 'once' && kind === 'recurring' ? 'Conta única anotada como pendente.' : 'Planejamento salvo.');
       onClose();
     } catch {
       setError('Confira os valores, as datas e sua conexão. Nada foi confirmado nesta tela.');
@@ -105,7 +130,13 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
   return (
     <Dialog
       title={
-        kind === 'recurring' ? 'Conta recorrente' : kind === 'budget' ? 'Limite por categoria' : 'Sua meta'
+        kind === 'recurring'
+          ? frequency === 'once'
+            ? 'Conta a pagar'
+            : 'Conta recorrente'
+          : kind === 'budget'
+            ? 'Limite por categoria'
+            : 'Sua meta'
       }
       onClose={() => {
         if (!pending) onClose();
@@ -178,6 +209,7 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
                   <option value="weekly">Semanal</option>
                   <option value="monthly">Mensal</option>
                   <option value="yearly">Anual</option>
+                  {!value && <option value="once">Única vez</option>}
                 </select>
               </label>
               <label>
@@ -190,37 +222,44 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
                   <option value="income">Renda prevista</option>
                 </select>
               </label>
-              <label>
-                Data final (opcional)
-                <input
-                  type="date"
-                  min={date}
-                  value={endDate}
-                  onChange={(event) => setEndDate(event.target.value)}
-                />
-              </label>
-              <label>
-                Reajuste anual (pontos-base: 100 = 1%)
-                <input
-                  type="number"
-                  min={0}
-                  max={10000}
-                  value={adjustment}
-                  onChange={(event) => setAdjustment(Number(event.target.value))}
-                />
-              </label>
+              {frequency !== 'once' && (
+                <>
+                  <label>
+                    Data final (opcional)
+                    <input
+                      type="date"
+                      min={date}
+                      value={endDate}
+                      onChange={(event) => setEndDate(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Reajuste anual (pontos-base: 100 = 1%)
+                    <input
+                      type="number"
+                      min={0}
+                      max={10000}
+                      value={adjustment}
+                      onChange={(event) => setAdjustment(Number(event.target.value))}
+                    />
+                  </label>
+                </>
+              )}
               <p className="muted">
-                Os vencimentos ficam pendentes, nunca pagos ou recebidos automaticamente. Alterações valem
-                para próximos vencimentos ainda não gerados.
+                {frequency === 'once'
+                  ? 'Será anotada como pendente uma única vez. Nenhum pagamento é feito pelo app.'
+                  : 'Os vencimentos ficam pendentes, nunca pagos ou recebidos automaticamente. Alterações valem para próximos vencimentos ainda não gerados.'}
               </p>
-              <label className="check-label">
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={(event) => setActive(event.target.checked)}
-                />{' '}
-                Recorrência ativa
-              </label>
+              {frequency !== 'once' && (
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={(event) => setActive(event.target.checked)}
+                  />{' '}
+                  Recorrência ativa
+                </label>
+              )}
             </>
           )}
           {error && (
@@ -230,7 +269,7 @@ function PlanningForm({ editing, onClose }: { editing: Editing; onClose: () => v
           )}
           <Button type="submit" disabled={pending}>
             <Check size={18} />
-            {pending ? 'Salvando…' : 'Salvar planejamento'}
+            {pending ? 'Salvando…' : frequency === 'once' && kind === 'recurring' ? 'Anotar conta' : 'Salvar planejamento'}
           </Button>
           <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
             Cancelar
@@ -370,9 +409,6 @@ export function PlanningHub() {
       <section className="planning-section" aria-labelledby="planning-goals-title">
         <div className="simple-section-title">
           <h2 id="planning-goals-title">Metas</h2>
-          <Button variant="secondary" onClick={() => setEditing({ kind: 'goal' })}>
-            <Plus size={18} /> Nova meta
-          </Button>
         </div>
         {app.data.goals.length ? (
           <div className="plan-list">
@@ -385,8 +421,10 @@ export function PlanningHub() {
                   </p>
                   <Progress value={(goal.saved / goal.target) * 100} label={`Progresso de ${goal.name}`} />
                   <p className="muted">
-                    Faltam {displayMoney(Math.max(0, goal.target - goal.saved))} · alcançar até{' '}
-                    {goal.deadline.split('-').reverse().join('/')}
+                    Faltam {displayMoney(Math.max(0, goal.target - goal.saved))} ·{' '}
+                    {goal.deadline
+                      ? `alcançar até ${goal.deadline.split('-').reverse().join('/')}`
+                      : 'sem data final'}
                   </p>
                 </div>
                 {actions('goal', goal, goal.name)}

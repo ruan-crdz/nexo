@@ -22,7 +22,7 @@ import { formatMoney } from '../../../shared/financial-engine.ts';
 import { hashToken } from './whatsapp.ts';
 
 type Context = { userId: string; phone: string; messageId: string; today: string; onCommit: () => void };
-type Result = { reply?: string; buttons?: WhatsAppButton[]; text?: string };
+type Result = { reply?: string; buttons?: WhatsAppButton[]; text?: string; silent?: boolean };
 const recordId = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 const editFields = {
   amount: 'Valor',
@@ -256,9 +256,8 @@ export async function handleWhatsAppNavigation(
         const cleared = await db.from('whatsapp_guided_sessions').delete().eq('user_id', context.userId);
         if (cleared.error) throw new HttpError(503, 'Não consegui encerrar o cadastro anterior.');
       }
-      const prompts: Record<GuideKind, string> = {
-        expense:
-          '*Anotar gasto*\nEscreva ou mande um áudio com o que aconteceu. Exemplo: “Gastei 25 reais na farmácia hoje”. Se faltar algo, eu pergunto só o necessário.',
+      if (key === 'expense') return { silent: true };
+      const prompts: Record<Exclude<GuideKind, 'expense'>, string> = {
         income:
           '*Anotar entrada*\nEscreva ou mande um áudio com o valor, de onde veio e quando aconteceu. Exemplo: “Recebi 2.000 reais de salário hoje”. Se faltar algo, eu pergunto só o necessário.',
         goal:
@@ -266,7 +265,7 @@ export async function handleWhatsAppNavigation(
         recurring:
           '*Criar conta fixa*\nDescreva o valor, o vencimento e a frequência em uma frase. Exemplo: “Internet, 120 reais por mês, vencimento todo dia 10”. Se faltar uma data essencial, eu pergunto.',
       };
-      const prompt = prompts[key as GuideKind];
+      const prompt = prompts[key as Exclude<GuideKind, 'expense'>];
       await savePrompt(context.userId, prompt);
       return { reply: prompt, buttons: [backChoice] };
     }

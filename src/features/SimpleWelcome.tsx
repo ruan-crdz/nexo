@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MessageCircle, Mic, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { startFeatureTour } from '../data/feature-tour';
+import {
+  clearOnboardingStep,
+  readOnboardingStep,
+  saveOnboardingStep,
+  type OnboardingStep,
+} from '../data/onboarding-progress';
 import { Brand, Button, Card } from '../design-system/components';
 
 export function SimpleLanding() {
@@ -71,13 +77,26 @@ export function SimpleOnboarding() {
   const navigate = useNavigate();
   const location = useLocation();
   const initialStep = new URLSearchParams(location.search).get('step');
-  const [step, setStep] = useState<'name' | 'whatsapp' | 'objective'>(
-    initialStep === 'objective' ? 'objective' : initialStep === 'whatsapp' ? 'whatsapp' : 'name',
-  );
+  const identity = app.demo ? 'demo' : app.user?.id ?? null;
+  const requestedStep: OnboardingStep | null =
+    initialStep === 'name' || initialStep === 'whatsapp' || initialStep === 'objective'
+      ? initialStep
+      : null;
+  const [step, setStep] = useState<OnboardingStep>(requestedStep ?? 'name');
+  const [progressRestored, setProgressRestored] = useState(false);
   const [name, setName] = useState(app.data.profile.name);
   const [objective, setObjective] = useState(app.data.profile.objective);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    if (!app.authReady || app.loading || (!app.demo && !app.user)) return;
+    const nextStep = requestedStep ?? (identity ? readOnboardingStep(identity) : null) ?? 'name';
+    setStep(nextStep);
+    setProgressRestored(true);
+  }, [app.authReady, app.demo, app.loading, app.user, identity, location.search, requestedStep]);
+  useEffect(() => {
+    if (identity && progressRestored) saveOnboardingStep(identity, step);
+  }, [identity, progressRestored, step]);
   if (!app.authReady || app.loading || !app.mfaReady)
     return (
       <main className="center-loading" role="status">
@@ -87,6 +106,12 @@ export function SimpleOnboarding() {
   if (!app.user && !app.demo) return <Navigate to="/login" replace />;
   if (!app.demo && app.mfaRequired) return <Navigate to="/seguranca" replace />;
   if (app.data.profile.onboarded) return <Navigate to="/inicio" replace />;
+  if (!progressRestored)
+    return (
+      <main className="center-loading" role="status">
+        Retomando seu cadastro…
+      </main>
+    );
   async function saveName(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
@@ -110,7 +135,10 @@ export function SimpleOnboarding() {
     setError('');
     try {
       const tourIdentity = app.demo ? 'demo' : app.user?.id;
-      if (tourIdentity) startFeatureTour(tourIdentity);
+      if (tourIdentity) {
+        startFeatureTour(tourIdentity);
+        clearOnboardingStep(tourIdentity);
+      }
       await app.repository.profile({
         ...app.data.profile,
         name: name.trim(),

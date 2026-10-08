@@ -42,7 +42,7 @@ export const goalSchema = z.object({
   target: centsSchema.positive(),
   saved: centsSchema,
   monthly_contribution: centsSchema,
-  deadline: dateSchema,
+  deadline: dateSchema.nullable(),
   priority: z.enum(['high', 'medium', 'low']),
   weekly_amount: centsSchema.default(0),
   high_water: centsSchema.default(0),

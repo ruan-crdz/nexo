@@ -1398,6 +1398,16 @@ label {
   height: 44px;
   padding: 0;
 }
+.journey-title-actions .journey-new-goal {
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.journey-title-actions > .button[aria-label='Personalizar acompanhamento'] {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
 .journey-purpose {
   color: var(--muted);
   margin-top: -8px;
@@ -1531,6 +1541,41 @@ label {
   overflow-wrap: anywhere;
   font-size: 16px;
   font-variant-numeric: tabular-nums;
+  transition:
+    background var(--motion),
+    color var(--motion),
+    box-shadow var(--motion),
+    transform var(--motion);
+}
+.goal-presets .button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px #192b251a;
+}
+.goal-presets .button[aria-pressed='true'] {
+  transform: translateY(-2px);
+  border-color: var(--moss);
+  background: var(--moss);
+  color: var(--paper);
+  box-shadow: 0 0 0 3px var(--lime-soft);
+  animation: goal-preset-selected 180ms ease-out;
+}
+@keyframes goal-preset-selected {
+  50% {
+    transform: translateY(-3px) scale(1.025);
+  }
+}
+.journey-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-presets .button,
+  .goal-presets .button[aria-pressed='true'] {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
 }
 .journey-rewards {
   margin: 0;
@@ -1582,6 +1627,22 @@ label {
 @media (max-width: 400px) {
   .simple-shell .simple-nav a span {
     font-size: 11px;
+  }
+  .journey-title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .journey-title-actions {
+    gap: 4px;
+  }
+  .journey-title-actions .journey-new-goal {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+  }
+  .journey-title-actions .journey-new-goal span {
+    display: none;
   }
 }
 @media (max-width: 370px) {

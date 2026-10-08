@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApp } from '../data/context';
+import { readOnboardingStep } from '../data/onboarding-progress';
 import { Brand, Button, Dialog } from '../design-system/components';
 import { OfflineStatus } from './OfflineStatus';
 import { useFinancialVisibility } from '../design-system/financial-visibility';
@@ -54,8 +55,11 @@ export function Shell() {
     );
   if (!app.demo && !app.user) return <Navigate to="/login" replace />;
   if (!app.demo && app.mfaRequired) return <Navigate to="/seguranca" replace />;
-  if (!app.data.profile.onboarded && !app.error && !onboardingConnection)
-    return <Navigate to="/onboarding" replace />;
+  if (!app.data.profile.onboarded && !app.error && !onboardingConnection) {
+    const identity = app.demo ? 'demo' : app.user?.id;
+    const step = identity ? readOnboardingStep(identity) ?? 'name' : 'name';
+    return <Navigate to={`/onboarding?step=${step}`} replace />;
+  }
   if (app.data.profile.onboarded && !app.data.profile.feature_tour_completed)
     return <Navigate to="/tour" replace />;
   return (

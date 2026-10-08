@@ -125,6 +125,17 @@ export const demoRepository: Repository = {
     const goal = goalSchema.parse(value);
     const data = readDemo();
     const existing = data.goals.find((row) => row.id === goal.id);
+    if (existing && existing.saved !== goal.saved) {
+      const delta = goal.saved - existing.saved;
+      data.goal_events.push({
+        id: crypto.randomUUID(),
+        goal_id: goal.id,
+        delta,
+        reason: delta > 0 ? 'saving' : 'withdrawal',
+        balance_after: goal.saved,
+        created_at: new Date().toISOString(),
+      });
+    }
     goal.high_water = Math.max(goal.saved, existing?.high_water ?? 0, existing?.saved ?? 0);
     data.goals = [...data.goals.filter((row) => row.id !== goal.id), goal];
     data.profile.active_goal_id = goal.id;

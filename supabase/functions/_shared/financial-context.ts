@@ -101,11 +101,14 @@ export async function financialContext(db: SupabaseClient, userId: string, organ
               goal_name: goal.name,
               goal_saved: formatMoney(goal.saved),
               goal_remaining: formatMoney(goalPlan.remaining),
-              goal_deadline: new Intl.DateTimeFormat('pt-BR', {
-                dateStyle: 'medium',
-                timeZone: 'UTC',
-              }).format(new Date(`${goal.deadline}T12:00:00Z`)),
-              goal_monthly_required: formatMoney(goalPlan.monthlyTarget),
+              goal_deadline: goal.deadline
+                ? new Intl.DateTimeFormat('pt-BR', {
+                    dateStyle: 'medium',
+                    timeZone: 'UTC',
+                  }).format(new Date(`${goal.deadline}T12:00:00Z`))
+                : 'Sem prazo final',
+              goal_monthly_required:
+                goalPlan.monthlyTarget === null ? 'Sem prazo final' : formatMoney(goalPlan.monthlyTarget),
               goal_next_contribution: formatMoney(goalPlan.suggested),
             }
           : {}),

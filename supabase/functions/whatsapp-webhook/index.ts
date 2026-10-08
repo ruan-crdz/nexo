@@ -90,11 +90,7 @@ async function processMessage(message: Message) {
   let committed = false;
   let connectedUserId: string | undefined;
   let moneyToday = '';
-  let messagePoints = 0;
-  let showPoints = false;
   async function finish(reply: string, userId?: string, buttons: WhatsAppButton[] = []) {
-    if (showPoints && messagePoints > 0)
-      reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
     if (userId && !buttons.length) {
       buttons = rootChoices;
       if (!reply.includes(nextStepText)) reply = withNextStep(reply);
@@ -120,8 +116,6 @@ async function processMessage(message: Message) {
     mimeType: 'image/png' | 'image/jpeg',
   ) {
     let reply = caption;
-    if (showPoints && messagePoints > 0)
-      reply += `\n\n🌱 +${messagePoints} pontos de hábito (não são dinheiro nem crédito).`;
     await cacheImageReply(message.id, image, mimeType);
     const prepared = await prepareWhatsAppReply(message.id, userId, withNextStep(reply), rootChoices, true);
     const stored = await db
@@ -182,7 +176,7 @@ async function processMessage(message: Message) {
     await showTypingIndicator(message.id);
     const profile = await db
       .from('profiles')
-      .select('timezone,show_journey_points,monthly_income')
+      .select('timezone,monthly_income')
       .eq('id', userId)
       .single();
     if (profile.error) throw new Error('profile');
@@ -213,6 +207,21 @@ async function processMessage(message: Message) {
           },
         },
       );
+      if (navigation?.silent) {
+        const stored = await db
+          .from('whatsapp_messages_metadata')
+          .update({
+            state: 'complete',
+            reply: null,
+            reply_buttons: [],
+            user_id: userId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('message_id', message.id);
+        if (stored.error) throw new HttpError(503, 'Não consegui registrar essa escolha.');
+        committed = true;
+        return;
+      }
       if (navigation?.reply) {
         await finish(navigation.reply, userId, navigation.buttons);
         return;
@@ -242,8 +251,6 @@ async function processMessage(message: Message) {
         event_key: `wa:${message.id}`,
       });
       if (award.error) throw new HttpError(503, 'Não foi possível registrar o hábito.');
-      messagePoints = Number(award.data);
-      showPoints = profile.data.show_journey_points;
     }
     const receiptMedia =
       message.type === 'image' && message.image

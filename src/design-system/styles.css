@@ -87,6 +87,28 @@ textarea {
   border-radius: var(--radius-sm);
   color: var(--ink);
 }
+input[type='date'],
+input[type='month'] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  font-size: 16px;
+  line-height: 1.25;
+  appearance: auto;
+  -webkit-appearance: auto;
+}
+input[type='date']::-webkit-date-and-time-value,
+input[type='month']::-webkit-date-and-time-value {
+  min-height: 1.25em;
+  text-align: left;
+}
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='month']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
 input[type='checkbox'] {
   width: 20px;
   min-height: 20px;

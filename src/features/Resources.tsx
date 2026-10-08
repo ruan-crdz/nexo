@@ -269,12 +269,14 @@ export function GoalsPage() {
       ) : (
         <div className="grid grid-3">
           {app.data.goals.map((g, i) => {
-            const months = Math.max(
-              0,
-              (Number(g.deadline.slice(0, 4)) - Number(today.slice(0, 4))) * 12 +
-                Number(g.deadline.slice(5, 7)) -
-                Number(today.slice(5, 7)),
-            );
+            const months = g.deadline
+              ? Math.max(
+                  0,
+                  (Number(g.deadline.slice(0, 4)) - Number(today.slice(0, 4))) * 12 +
+                    Number(g.deadline.slice(5, 7)) -
+                    Number(today.slice(5, 7)),
+                )
+              : 0;
             const plan = goalPlan(g.target, g.saved, months, g.monthly_contribution);
             const Icon = i % 2 ? Palmtree : Target;
             return (
@@ -287,7 +289,9 @@ export function GoalsPage() {
                 </Badge>
                 <h3 style={{ marginTop: 12 }}>{g.name}</h3>
                 <p className="muted" style={{ fontSize: 11 }}>
-                  Até {new Date(`${g.deadline}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                  {g.deadline
+                    ? `Até ${new Date(`${g.deadline}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`
+                    : 'Sem data final'}
                 </p>
                 <Progress value={plan.progress} label={g.name} />
                 <div className="goal-meta">
@@ -296,11 +300,16 @@ export function GoalsPage() {
                 </div>
                 <Why title="Este plano cabe no meu momento?">
                   <p>
-                    Faltam {formatMoney(plan.remaining)}. Para o prazo informado: {formatMoney(plan.required)}
-                    /mês. Aporte planejado: {formatMoney(g.monthly_contribution)}.
+                    Faltam {formatMoney(plan.remaining)}.{' '}
+                    {g.deadline
+                      ? `Para o prazo informado: ${formatMoney(plan.required)}/mês.`
+                      : 'Sem prazo final, não há cota mensal obrigatória.'}{' '}
+                    Aporte planejado: {formatMoney(g.monthly_contribution)}.
                   </p>
                   <p>
-                    {plan.feasible
+                    {!g.deadline
+                      ? 'Você pode avançar no seu ritmo, sem data limite.'
+                      : plan.feasible
                       ? 'O aporte informado alcança a meta no prazo.'
                       : 'Revise prazo ou aporte para tornar o plano viável.'}{' '}
                     O total de aportes das suas metas é {formatMoney(s.goalAllocation)} por mês.

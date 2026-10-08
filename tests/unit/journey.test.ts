@@ -26,6 +26,20 @@ it('plano mensal respeita prazo e dinheiro restante sem inventar renda', () => {
     savedThisMonth: 1000,
   });
 });
+it('meta sem prazo final não inventa cota nem cobrança mensal', () => {
+  expect(goalMonthlyPlan({ target: 100000, saved: 2500, deadline: null }, '2026-10-08', 20000, 5000)).toMatchObject({
+    remaining: 97500,
+    months: null,
+    required: 0,
+    suggested: 0,
+    gap: 0,
+    monthlyTarget: null,
+    savedThisMonth: 5000,
+    overdue: false,
+    feasibleNow: true,
+    projectedMonth: null,
+  });
+});
 it('separar dinheiro reduz livre para planejar, mas não muda entradas ou gastos', () => {
   const data = {
     transactions: [

@@ -198,6 +198,24 @@ test('navegação oferece metas, planejamento e Nexo sem passar pelo perfil', as
   }
 });
 
+test('datas e mês do histórico continuam utilizáveis em tela estreita e desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.getByRole('button', { name: 'Anotar', exact: true }).click();
+  await page.getByRole('button', { name: 'Digitar' }).click();
+  await page.getByRole('button', { name: 'Um gasto' }).click();
+  const date = page.locator('input[type="date"]');
+  await expect(date).toBeVisible();
+  await date.fill('2026-10-05');
+  await expect(date).toHaveValue('2026-10-05');
+  await page.getByRole('button', { name: 'Cancelar' }).click();
+  await page.goto('/#/movimentos');
+  const month = page.getByLabel('Mês dos movimentos');
+  await month.selectOption('2026-08');
+  await expect(month).toHaveValue('2026-08');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(month).toHaveValue('2026-08');
+});
+
 test('navegação desktop e ocultação de valores persistem entre páginas', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
@@ -264,6 +282,10 @@ test('onboarding pergunta nome, oferece WhatsApp e salva objetivo opcional', asy
   await expect(page.getByRole('heading', { name: 'Use pelo WhatsApp' })).toBeVisible();
   await page.getByRole('link', { name: 'Conectar WhatsApp' }).click();
   await expect(page).toHaveURL(/#\/integracoes\?onboarding=1$/);
+  await page.goto('/#/inicio');
+  await expect(page).toHaveURL(/#\/onboarding\?step=whatsapp$/);
+  await expect(page.getByRole('heading', { name: 'Use pelo WhatsApp' })).toBeVisible();
+  await page.getByRole('link', { name: 'Conectar WhatsApp' }).click();
   await expect(page.getByRole('link', { name: 'Continuar sem conectar' })).toBeVisible();
   await page.getByRole('link', { name: 'Continuar sem conectar' }).click();
   await expect(page.getByRole('heading', { name: 'O que você mais quer melhorar?' })).toBeVisible();
@@ -737,7 +759,7 @@ test('meta SMART limita aporte à sobra e separar 10 deixa 54,08 sem criar gasto
   expect(saved.goals[0].saved).toBe(1000);
   expect(saved.goal_events).toHaveLength(1);
   await nav.getByRole('link', { name: 'Metas', exact: true }).click();
-  await page.getByRole('button', { name: 'Corrigir valor separado' }).click();
+  await page.getByRole('button', { name: 'Anotar retirada' }).click();
   await page.getByRole('dialog').getByLabel('Valor (R$)', { exact: true }).fill('10');
   await page.getByRole('dialog').getByRole('checkbox').check();
   await page.getByRole('dialog').getByRole('button', { name: 'Confirmar progresso' }).click();
@@ -882,11 +904,12 @@ test('limite e meta têm cálculo verificável e avisos exigem consentimento', a
   await expect(
     page.locator('.planning-section[aria-labelledby="planning-budgets-title"] .plan-list'),
   ).toContainText('Acima do limite');
+  await page.goto('/#/metas');
   await page.getByRole('button', { name: 'Nova meta' }).click();
   await page.getByLabel('Nome da meta', { exact: true }).fill('Viagem e2e');
   await page.getByLabel('Valor que quer alcançar (R$)').fill('1000,00');
   await page.getByLabel('Quanto está guardado agora? (R$)').fill('200,00');
-  await page.getByRole('button', { name: 'Colocar meta em foco' }).click();
+  await page.getByRole('button', { name: 'Criar meta' }).click();
   await expect(page.getByRole('heading', { name: 'Viagem e2e' })).toBeVisible();
   await page.goto('/#/perguntas');
   await page.getByRole('button', { name: 'Quanto falta para minha meta?' }).click();
@@ -997,7 +1020,12 @@ test('meta mostra plano mensal e urgência não apaga conquistas', async ({ page
   await page.getByRole('button', { name: 'Criar minha meta' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Nome da meta').fill('Minha reserva de 500');
-  await dialog.getByRole('button', { name: 'Colocar meta em foco' }).click();
+  const preset = dialog.getByRole('group', { name: 'Valores sugeridos para meta' }).getByRole('button').nth(1);
+  await preset.click();
+  await expect(preset).toHaveAttribute('aria-pressed', 'true');
+  await expect(preset).toHaveCSS('background-color', 'rgb(36, 102, 79)');
+  await dialog.getByLabel('Tenho uma data para alcançar esta meta').check();
+  await dialog.getByRole('button', { name: 'Criar meta' }).click();
   await expect(page.getByRole('heading', { name: 'Minha reserva de 500', exact: true })).toBeVisible();
   await expect(page.locator('.goal-monthly-plan')).toContainText('Cota mensal para o prazo');
   await expect(page.locator('.journey-coaching')).toContainText('Neste mês');
@@ -1018,6 +1046,86 @@ test('meta mostra plano mensal e urgência não apaga conquistas', async ({ page
   await page.goto('/#/metas');
   await page.reload();
   await expect(page.locator('.journey-coaching')).toContainText('não foi apagado');
+});
+test('cria meta sem prazo final e sem exigir data', async ({ page }) => {
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    data.goals = [];
+    data.profile.active_goal_id = null;
+    data.goal_events = [];
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  });
+  await page.reload();
+  await page.goto('/#/metas');
+  await page.getByRole('button', { name: 'Criar minha meta' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Nome da meta').fill('Caixinha para sempre');
+  await dialog.getByLabel('Valor que quer alcançar (R$)').fill('1.000');
+  await expect(dialog.locator('input[type="date"]')).not.toBeVisible();
+  await dialog.getByRole('button', { name: 'Criar meta' }).click();
+  await expect(page.getByRole('heading', { name: 'Caixinha para sempre' })).toBeVisible();
+  await expect(page.locator('.goal-monthly-plan')).toContainText('Sem data final');
+  await expect(page.locator('.journey-coaching')).toContainText('Sem prazo final');
+});
+test('edita o valor guardado sem apagar o histórico nem o pico da meta', async ({ page }) => {
+  const id = '12345678-1234-4234-8234-123456789abc';
+  await page.evaluate((goalId) => {
+    const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
+    data.goals = [
+      {
+        id: goalId,
+        name: 'Reserva editável',
+        target: 50000,
+        saved: 12000,
+        monthly_contribution: 0,
+        deadline: null,
+        priority: 'medium',
+        weekly_amount: 0,
+        high_water: 12000,
+        purpose: '',
+      },
+    ];
+    data.goal_events = [];
+    data.profile.active_goal_id = goalId;
+    localStorage.setItem('nexo.demo.v1', JSON.stringify(data));
+  }, id);
+  await page.reload();
+  await page.goto('/#/metas');
+  await expect(page.getByRole('button', { name: 'Nova meta', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Editar meta' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Quanto está guardado agora? (R$)').fill('25,00');
+  await dialog.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.locator('.journey-amount strong')).toContainText('25,00');
+  const data = await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!));
+  expect(data.goals[0]).toMatchObject({ saved: 2500, high_water: 12000 });
+  expect(data.goal_events).toContainEqual(
+    expect.objectContaining({ goal_id: id, delta: -9500, reason: 'withdrawal', balance_after: 2500 }),
+  );
+});
+test('conta única vira um gasto previsto sem criar recorrência', async ({ page }) => {
+  await page.goto('/#/planejar');
+  await expect(page.getByRole('button', { name: 'Nova meta', exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Nome').fill('Consulta médica única');
+  await dialog.getByLabel('Valor (R$)').fill('85,00');
+  await dialog.getByLabel('Frequência').selectOption('once');
+  await expect(dialog.getByText(/pendente uma única vez/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Anotar conta' }).click();
+  await expect(dialog).not.toBeVisible();
+  const data = await page.evaluate(() => JSON.parse(localStorage.getItem('nexo.demo.v1')!));
+  expect(data.transactions).toContainEqual(
+    expect.objectContaining({
+      description: 'Consulta médica única',
+      amount: 8500,
+      type: 'expense',
+      status: 'planned',
+    }),
+  );
+  expect(data.recurring_rules).not.toContainEqual(
+    expect.objectContaining({ description: 'Consulta médica única' }),
+  );
 });
 test('check-in único mantém pontos e pausa lembretes sem perder nível', async ({ page }) => {
   await page.goto('/#/metas');

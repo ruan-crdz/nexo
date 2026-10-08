@@ -68,9 +68,29 @@ export function goalMonthlyPlan(
   money(goal.saved);
   money(available);
   money(contributed);
-  if (goal.target <= 0 || goal.saved < 0 || available < 0 || !validDate(today) || !validDate(goal.deadline))
+  if (
+    goal.target <= 0 ||
+    goal.saved < 0 ||
+    available < 0 ||
+    !validDate(today) ||
+    (goal.deadline !== null && !validDate(goal.deadline))
+  )
     throw new Error('Valores de planejamento inválidos.');
   const remaining = Math.max(0, goal.target - goal.saved);
+  const savedThisMonth = Math.max(0, contributed);
+  if (!goal.deadline)
+    return {
+      remaining,
+      months: null,
+      required: 0,
+      suggested: 0,
+      gap: 0,
+      monthlyTarget: null,
+      savedThisMonth,
+      overdue: false,
+      feasibleNow: true,
+      projectedMonth: null,
+    };
   const months = Math.max(
     1,
     (Number(goal.deadline.slice(0, 4)) - Number(today.slice(0, 4))) * 12 +
@@ -78,7 +98,6 @@ export function goalMonthlyPlan(
       Number(today.slice(5, 7)) +
       1,
   );
-  const savedThisMonth = Math.max(0, contributed);
   const monthlyTarget = remaining > 0 ? Math.ceil(sum([remaining, savedThisMonth]) / months) : 0;
   const required = Math.max(0, monthlyTarget - savedThisMonth);
   const suggested = Math.min(remaining, required, available);

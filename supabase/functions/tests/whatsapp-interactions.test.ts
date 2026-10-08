@@ -6,7 +6,12 @@ import { handleWhatsAppNavigation } from '../_shared/whatsapp-navigation.ts';
 import { rootChoices, nextStepText } from '../../../shared/whatsapp-navigation.ts';
 import { createGuide, guideQuestion } from '../../../shared/whatsapp-guide.ts';
 import { proposalButtons } from '../../../shared/whatsapp-presentation.ts';
-import { executeChatTool, chatWithWhatsApp, chatToolDefinitions } from '../_shared/whatsapp-chat.ts';
+import {
+  executeChatTool,
+  chatWithWhatsApp,
+  chatToolDefinitions,
+} from '../_shared/whatsapp-chat.ts';
+import { chatInstructions } from '../../../shared/whatsapp-chat.ts';
 import {
   whatsappMoneySnapshot,
   whatsappMoneyReply,
@@ -75,11 +80,18 @@ Deno.test('menu é nativo e não chama IA; texto livre continua disponível', as
   );
 });
 
-Deno.test('anotar gasto orienta uma frase livre e deixa o chat tratar o relato', async () => {
+Deno.test('gasto relatado como ocorrido é pago por padrão sem perguntar situação', () => {
+  assert.match(chatInstructions, /gastei.*registre como pago sem perguntar/i);
+  assert.match(chatInstructions, /nunca pergunte "já pagou\?"/i);
+});
+
+Deno.test('tocar em anotar gasto não envia instrução nem cria sessão de formulário', async () => {
   await mocked(
     async (requests) => {
       const prompt = await handleWhatsAppNavigation({ id: 'nexo:nav:expense' }, context);
-      assert.match(prompt!.reply!, /Gastei 25 reais na farmácia hoje/);
+      assert.equal(prompt?.silent, true);
+      assert.equal(prompt?.reply, undefined);
+      assert.equal(requests.filter((request) => request.url.pathname.endsWith('whatsapp_chat_sessions')).length, 0);
       assert.equal(requests.filter((request) => request.url.pathname.endsWith('advance_whatsapp_guide')).length, 0);
       assert.equal(await handleWhatsAppNavigation({ text: 'Gastei 25 reais na farmácia hoje' }, context), null);
       assert.equal(requests.filter((request) => request.url.pathname.endsWith('advance_whatsapp_guide')).length, 0);

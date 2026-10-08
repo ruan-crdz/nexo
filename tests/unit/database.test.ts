@@ -58,11 +58,41 @@ beforeAll(async () => {
     'bob@example.test',
   ]);
   await db.exec(readFileSync('supabase/migrations/202610080002_feature_tour.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/202610080003_flexible_goals.sql', 'utf8'));
 }, 60_000);
 afterAll(async () => {
   await db?.close();
 });
 describe('migrations e autorização real do Postgres (PGlite)', () => {
+  it('permite meta sem prazo e registra correção do valor guardado sem apagar o pico', async () => {
+    await asUser(alice);
+    const goal = crypto.randomUUID();
+    const payload = {
+      id: goal,
+      name: 'Reserva',
+      target: 50000,
+      saved: 12000,
+      monthly_contribution: 0,
+      deadline: null,
+      priority: 'medium',
+      weekly_amount: 0,
+      purpose: '',
+    };
+    await db.query('select save_journey_goal($1::jsonb)', [JSON.stringify(payload)]);
+    await db.query('select save_journey_goal($1::jsonb)', [JSON.stringify({ ...payload, saved: 2500 })]);
+    const current = await db.query<{ saved: number; high_water: number; deadline: string | null }>(
+      'select saved,high_water,deadline from goals where id=$1',
+      [goal],
+    );
+    expect(current.rows[0]).toMatchObject({ saved: 2500, high_water: 12000, deadline: null });
+    const events = await db.query<{ delta: number; reason: string; balance_after: number }>(
+      'select delta,reason,balance_after from goal_events where goal_id=$1',
+      [goal],
+    );
+    expect(events.rows).toEqual([{ delta: -9500, reason: 'withdrawal', balance_after: 2500 }]);
+    await db.exec('reset role');
+    await db.query('delete from goals where id=$1', [goal]);
+  });
   it('marca perfis existentes como concluídos e novos perfis como pendentes do tour', async () => {
     await db.exec('reset role');
     const existing = await db.query<{ feature_tour_completed: boolean }>(
