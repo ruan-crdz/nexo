@@ -19,7 +19,12 @@ import { generateWhatsAppImage } from './openai.ts';
 import { spendabilityAppAssumptions, spendingAllowance } from '../../../shared/financial-decisions.ts';
 import { recurringTransactions, recurringOccurrenceId } from '../../../shared/planning.ts';
 import { centsSchema, dateSchema } from '../../../shared/domain.ts';
-import { whatsappMoneySnapshot, compareReportedMoney, budgetUntilDate } from './whatsapp-money.ts';
+import {
+  whatsappMoneySnapshot,
+  whatsappBudgetOverages,
+  compareReportedMoney,
+  budgetUntilDate,
+} from './whatsapp-money.ts';
 import type { WhatsAppMoneySnapshot } from './whatsapp-money.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -46,6 +51,28 @@ export type AppChatResponse = {
   evidence_status: 'records';
   engine_version: '1.0.0';
 };
+type BudgetOverage = { category: string; limit: number; spent: number; overage: number };
+
+async function budgetOveragesForWrite(
+  saved: number,
+  changes: { entity: string; action?: string; payload: Record<string, unknown>; expected?: Record<string, unknown> | null }[],
+  context: ChatContext,
+) {
+  if (saved <= 0) return [] as BudgetOverage[];
+  const categories = changes.flatMap((change) => {
+    const values = { ...(change.expected ?? {}), ...change.payload };
+    return change.entity === 'transactions' && change.action !== 'delete' &&
+        values.type === 'expense' && values.status === 'paid' && typeof values.category === 'string'
+      ? [values.category]
+      : [];
+  });
+  if (!categories.length) return [] as BudgetOverage[];
+  try {
+    return await whatsappBudgetOverages(context.userId, context.today, categories, context.db);
+  } catch {
+    return [] as BudgetOverage[];
+  }
+}
 const tools: Tool[] = [
   {
     name: 'reconcile_recurring_payment',
@@ -405,7 +432,8 @@ export async function executeChatTool(name: string, raw: unknown, context: ChatC
         'Não consegui concluir o pedido. Os registros podem ter mudado; consulte novamente antes de tentar. Não afirme que algo foi salvo.',
       );
     context.onCommit();
-    return result.data;
+    const budgetOverages = await budgetOveragesForWrite(result.data?.saved ?? 0, changes, context);
+    return { ...result.data, budget_overages_after_save: budgetOverages };
   }
   if (name === 'save_records') {
     const args = z
@@ -447,7 +475,8 @@ export async function executeChatTool(name: string, raw: unknown, context: ChatC
         'Não consegui confirmar o lote. Não afirme que foi salvo; confira os registros antes de tentar novamente.',
       );
     context.onCommit();
-    return result.data;
+    const budgetOverages = await budgetOveragesForWrite(result.data?.saved ?? 0, changes, context);
+    return { ...result.data, budget_overages_after_save: budgetOverages };
   }
   if (name === 'purchase_assessment') {
     const args = z
@@ -826,6 +855,7 @@ export async function chatWithWhatsApp(text: string, context: ChatContext): Prom
   let confirmed = false;
   let hasImage = false;
   let currentMoney = initialMoney;
+  let budgetOverages: BudgetOverage[] = [];
   const toolContext = {
     ...context,
     onCommit: () => {
@@ -906,6 +936,10 @@ export async function chatWithWhatsApp(text: string, context: ChatContext): Prom
       let output: unknown;
       try {
         output = await executeChatTool(call.name, JSON.parse(call.arguments), toolContext);
+        if (output && typeof output === 'object' && 'budget_overages_after_save' in output) {
+          const warnings = output.budget_overages_after_save;
+          if (Array.isArray(warnings)) budgetOverages.push(...warnings as BudgetOverage[]);
+        }
         if (output && typeof output === 'object' && 'status' in output && output.status === 'applied') {
           const updatedMoney = await whatsappMoneySnapshot(context.userId, context.today,db).catch(() => null);
           currentMoney = updatedMoney;
@@ -929,6 +963,12 @@ export async function chatWithWhatsApp(text: string, context: ChatContext): Prom
     resultText = confirmed
       ? 'A alteração foi confirmada no Nexo. Confira o registro no app.'
       : 'Preciso de mais um detalhe para concluir. Pode especificar o que você quer consultar ou alterar?';
+  if (budgetOverages.length) {
+    const unique = [...new Map(budgetOverages.map((warning) => [warning.category, warning])).values()];
+    resultText += `\n\n${unique
+      .map((warning) => `Atenção ao limite de ${warning.category}: era ${formatMoney(warning.limit)}, você já anotou ${formatMoney(warning.spent)} neste mês e passou ${formatMoney(warning.overage)}.`)
+      .join('\n')}`;
+  }
   const fullHistory = [
     ...history,
     { role: 'user' as const, content: text.slice(0, 8000) },

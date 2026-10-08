@@ -16,6 +16,7 @@ import {
   whatsappMoneySnapshot,
   whatsappMoneyReply,
   replyWithMoneySnapshot,
+  whatsappBudgetOverages,
   budgetUntilDate,
   compareReportedMoney,
 } from '../_shared/whatsapp-money.ts';
@@ -457,14 +458,14 @@ Deno.test('resumo distingue sobra dos movimentos de dinheiro protegido em metas'
   );
 });
 
-Deno.test('gasto salvo recebe sobra atualizada mesmo se o modelo omitir o saldo', async () => {
+Deno.test('gasto salvo avisa automaticamente quando ultrapassa o limite da categoria', async () => {
   let saved = false;
   let modelCalls = 0;
   let committed = false;
   const initial = {
     id: proposal,
     description: 'Sobra inicial',
-    amount: 6933,
+    amount: 20000,
     type: 'income',
     category: 'Outros',
     date: '2026-10-07',
@@ -473,26 +474,28 @@ Deno.test('gasto salvo recebe sobra atualizada mesmo se o modelo omitir o saldo'
     account_id: null,
   };
   const expense = {
-    description: 'Ajuste autorizado',
-    amount: 525,
+    description: 'Remédio',
+    amount: 10000,
     type: 'expense',
-    category: 'Outros',
+    category: 'Saúde',
     date: '2026-10-07',
     status: 'paid',
     account_id: null,
   };
   await mocked(
     async (requests) => {
-      const reply = await chatWithWhatsApp('Gastei 5,25 no ajuste não identificado hoje', {
+      const reply = await chatWithWhatsApp('Gastei 100 reais no remédio hoje', {
         ...context,
         onCommit: () => {
           committed = true;
         },
       });
       assert.ok(committed);
-      assert.equal(reply, 'Gasto registrado.');
+      assert.match(reply, /Gasto registrado/);
+      assert.match(reply, /limite de Saúde: era R\$\s*10,00/i);
+      assert.match(reply, /anotou R\$\s*100,00 neste mês e passou R\$\s*90,00/i);
       const delivered = await replyWithMoneySnapshot(reply, context.userId, context.today);
-      assert.match(delivered, /Sobrou nos movimentos deste mês: R\$\s64,08/);
+      assert.match(delivered, /Sobrou nos movimentos deste mês: R\$\s100,00/);
       assert.match(delivered, /Gasto registrado/);
       assert.equal(
         requests.filter((request) => request.url.pathname.endsWith('save_whatsapp_batch')).length,
@@ -502,7 +505,7 @@ Deno.test('gasto salvo recebe sobra atualizada mesmo se o modelo omitir o saldo'
     (url, body) => {
       if (url.hostname === 'api.openai.com') {
         if (++modelCalls === 1) {
-          assert.ok(String(body.instructions).includes('"recorded_surplus":6933'));
+          assert.ok(String(body.instructions).includes('"recorded_surplus":20000'));
           return {
             status: 'completed',
             output: [
@@ -520,7 +523,10 @@ Deno.test('gasto salvo recebe sobra atualizada mesmo se o modelo omitir o saldo'
         const result = (body.input as { type: string; output: string }[]).find(
           (item) => item.type === 'function_call_output',
         )!;
-        assert.equal(JSON.parse(result.output).money_snapshot_after_save.recorded_surplus, 6408);
+        assert.equal(JSON.parse(result.output).money_snapshot_after_save.recorded_surplus, 10000);
+        assert.deepEqual(JSON.parse(result.output).budget_overages_after_save, [
+          { category: 'Saúde', limit: 1000, spent: 10000, overage: 9000 },
+        ]);
         return {
           status: 'completed',
           output: [{ type: 'message', content: [{ type: 'output_text', text: 'Gasto registrado.' }] }],
@@ -534,6 +540,8 @@ Deno.test('gasto salvo recebe sobra atualizada mesmo se o modelo omitir o saldo'
         return saved
           ? [initial, { ...expense, id: '12345678-1234-4234-8234-123456789ab1', source: 'whatsapp' }]
           : [initial];
+      if (url.pathname.endsWith('budgets'))
+        return [{ id: '12345678-1234-4234-8234-123456789ab2', category: 'Saúde', limit_amount: 1000, month: '2026-10' }];
       if (url.pathname.endsWith('profiles')) return { fixed_expenses: 0, timezone: 'America/Sao_Paulo' };
       if (url.pathname.endsWith('whatsapp_chat_sessions')) return body.history ? {} : null;
       return [];
@@ -909,10 +917,10 @@ Deno.test('edição direta consulta o registro e envia apenas os campos pedidos 
         },
       );
       assert.ok(committed);
-      assert.equal(requests.length, 2);
-      assert.equal(requests[0].url.searchParams.get('user_id'), 'eq.user-1');
-      assert.ok(requests[1].url.pathname.endsWith('save_whatsapp_batch'));
-      const changes = requests[1].body.changes as { payload: unknown; expected: unknown; action: string }[];
+      const read = requests.find((request) => request.url.pathname.endsWith('transactions'))!;
+      const write = requests.find((request) => request.url.pathname.endsWith('save_whatsapp_batch'))!;
+      assert.equal(read.url.searchParams.get('user_id'), 'eq.user-1');
+      const changes = write.body.changes as { payload: unknown; expected: unknown; action: string }[];
       assert.deepEqual(changes[0].payload, { amount: 12000 });
       assert.deepEqual(changes[0].expected, row);
       assert.equal(changes[0].action, 'update');

@@ -1,7 +1,8 @@
-import { goalEventSchema, goalSchema, profileSchema, transactionSchema } from '../../../shared/domain.ts';
+import { budgetSchema, goalEventSchema, goalSchema, profileSchema, transactionSchema } from '../../../shared/domain.ts';
 import { formatMoney, money, shiftDays, sum, validDate } from '../../../shared/financial-engine.ts';
 import type { Transaction } from '../../../shared/domain.ts';
 import { goalMonthlyBudget } from '../../../shared/journey.ts';
+import { budgetUsage } from '../../../shared/planning.ts';
 import { readPages } from '../../../shared/pagination.ts';
 import { admin, HttpError } from './http.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -11,7 +12,7 @@ export async function whatsappMoneySnapshot(userId: string, today: string, clien
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const [transactions, goals, events, profile] = await Promise.all([
+    const [transactions, goals, events, profile, budgets] = await Promise.all([
       readPages((from, to) =>
         db
           .from('transactions')
@@ -45,12 +46,23 @@ export async function whatsappMoneySnapshot(userId: string, today: string, clien
         .eq('id', userId)
         .abortSignal(controller.signal)
         .single(),
+      readPages((from, to) =>
+        db
+          .from('budgets')
+          .select('*')
+          .eq('user_id', userId)
+          .order('id')
+          .range(from, to)
+          .abortSignal(controller.signal),
+      ),
     ]);
     if (profile.error) throw new HttpError(503, 'Não consegui conferir o resumo atual do app.');
     const settings = profileSchema.pick({ fixed_expenses: true, timezone: true }).parse(profile.data);
+    const parsedTransactions = transactionSchema.array().parse(transactions);
+    const parsedBudgets = budgetSchema.array().parse(budgets);
     const budget = goalMonthlyBudget(
       {
-        transactions: transactionSchema.array().parse(transactions),
+        transactions: parsedTransactions,
         goals: goalSchema.array().parse(goals),
         goal_events: goalEventSchema.array().parse(events),
         profile: settings,
@@ -67,6 +79,12 @@ export async function whatsappMoneySnapshot(userId: string, today: string, clien
       protected_goals: budget.allocated,
       reserved_expenses: budget.reservedExpenses,
       free_to_plan: budget.available,
+      budget_usage: budgetUsage(parsedBudgets, parsedTransactions, today).map((item) => ({
+        category: item.category,
+        limit: item.limit_amount,
+        spent: item.spent,
+        remaining: item.remaining,
+      })),
       bank_balance_confirmed: false,
       explanation:
         'Mesmo cálculo da Home do app. Valores dos registros, não saldo bancário. Não exige conta cadastrada e não conta renda prevista como recebida.',
@@ -85,6 +103,58 @@ export function whatsappMoneyReply(snapshot: Awaited<ReturnType<typeof whatsappM
 }
 
 export type WhatsAppMoneySnapshot = Awaited<ReturnType<typeof whatsappMoneySnapshot>>;
+
+export type WhatsAppBudgetOverage = { category: string; limit: number; spent: number; overage: number };
+
+export async function whatsappBudgetOverages(
+  userId: string,
+  today: string,
+  categories: string[],
+  client?: SupabaseClient,
+): Promise<WhatsAppBudgetOverage[]> {
+  const focused = [...new Set(categories.filter(Boolean))];
+  if (!focused.length) return [];
+  const db = client ?? admin();
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const [budgets, transactions] = await Promise.all([
+    readPages((from, to) =>
+      db
+        .from('budgets')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('month', today.slice(0, 7))
+        .in('category', focused)
+        .order('id')
+        .range(from, to),
+    ),
+    readPages((from, to) =>
+      db
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('type', 'expense')
+        .eq('status', 'paid')
+        .gte('date', monthStart)
+        .lte('date', today)
+        .in('category', focused)
+        .order('id')
+        .range(from, to),
+    ),
+  ]);
+  const usage = budgetUsage(
+    budgetSchema.array().parse(budgets),
+    transactionSchema.array().parse(transactions),
+    today,
+  );
+  return usage
+    .filter((item) => item.remaining < 0)
+    .map((item) => ({
+      category: item.category,
+      limit: item.limit_amount,
+      spent: item.spent,
+      overage: -item.remaining,
+    }));
+}
 
 export async function replyWithMoneySnapshot(
   reply: string,
