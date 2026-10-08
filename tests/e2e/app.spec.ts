@@ -229,7 +229,7 @@ test('datas e mês do histórico continuam utilizáveis em tela estreita e deskt
 test('navegação desktop e ocultação de valores persistem entre páginas', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(7);
+  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(6);
   await expect(nav.getByRole('link', { name: 'Início', exact: true })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Histórico' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Você' })).toBeVisible();
