@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, ChevronRight, MoreHorizontal, Plus, Target, Wallet } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronRight, MoreHorizontal, Plus, Wallet } from 'lucide-react';
 import { useApp } from '../data/context';
 import { Button, Dialog, Progress } from '../design-system/components';
 import { useMoneyDisplay } from '../design-system/financial-visibility';
@@ -95,7 +95,6 @@ function PlanningMenu() {
       <div className="planning-overflow-menu">
         <Link to="/planejar/contas">Contas</Link>
         <Link to="/planejar/limites">Limites do mês</Link>
-        <Link to="/metas">Caixinhas</Link>
       </div>
     </details>
   );
@@ -139,8 +138,6 @@ function PlanningOverview() {
       return secondUse - firstUse;
     })
     .slice(0, 2);
-  const goals = app.data.goals.slice(0, 2);
-  const totalSaved = sum(app.data.goals.map((goal) => goal.saved));
 
   return (
     <div className="planning-overview">
@@ -202,43 +199,6 @@ function PlanningOverview() {
         )}
       </section>
 
-      <section className="planning-overview-section" aria-labelledby="planning-goals-title">
-        <div className="planning-overview-section-title">
-          <h2 id="planning-goals-title">Caixinhas</h2>
-          <Link className="planning-section-link" to="/metas" aria-label="Ver Caixinhas">
-            <ChevronRight size={20} />
-          </Link>
-        </div>
-        <div className="planning-goal-total">
-          <strong>{displayMoney(totalSaved)}</strong>
-          <span>guardados</span>
-        </div>
-        {goals.length ? (
-          <div className="planning-goal-list">
-            {goals.map((goal) => {
-              const percentage = goal.target > 0 ? Math.min(100, (goal.saved / goal.target) * 100) : 0;
-              return (
-                <Link className="planning-goal-row" to={`/metas/${goal.id}`} key={goal.id}>
-                  <span className="planning-row-title">{goal.name}</span>
-                  <span className="planning-goal-values">
-                    <span>
-                      {displayMoney(goal.saved)} de {displayMoney(goal.target)}
-                    </span>
-                    <strong>{Math.round(percentage)}%</strong>
-                  </span>
-                  <Progress value={percentage} label={`Progresso de ${goal.name}`} />
-                </Link>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="planning-empty">Guarde para algo que importa.</p>
-        )}
-        <Link className="planning-section-link" to="/metas">
-          Ver Caixinhas <ChevronRight size={19} />
-        </Link>
-      </section>
-
       <Link className="button planning-add-button" to="/planejar/adicionar">
         <Plus size={20} /> Adicionar planejamento
       </Link>
@@ -261,11 +221,6 @@ function PlanningChoice() {
           <Link to="/planejar/adicionar?tipo=limite" className="planning-choice">
             <Wallet size={22} />
             <span>Limite de gastos</span>
-            <ChevronRight size={20} />
-          </Link>
-          <Link to="/metas/nova" className="planning-choice">
-            <Target size={22} />
-            <span>Caixinha</span>
             <ChevronRight size={20} />
           </Link>
         </div>

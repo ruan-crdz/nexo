@@ -181,19 +181,22 @@ test('mantém campos antigos ao corrigir e não soma previsões no resumo', asyn
   await expect(page.locator('.home-month-result')).toHaveText(result, { useInnerText: true });
 });
 
-test('navegação tem três destinos e Planejamento fica acessível pela Home', async ({ page }) => {
+test('navegação oferece os cinco destinos principais em celular e desktop', async ({ page }) => {
   const nav = page.getByRole('navigation', { name: 'Principal' });
   const nexoLink = nav.getByRole('link', { name: 'Perguntar ao Nexo' });
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(nexoLink.locator('.simple-nav-nexo-mark img')).toBeVisible();
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(nav.getByRole('link')).toHaveCount(3);
+  await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav).toContainText('Início');
   await expect(nav).toContainText('Histórico');
   await expect(nav.getByRole('link', { name: 'Família', exact: true })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'Objetivos', exact: true })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'Planejar', exact: true })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Objetivos', exact: true })).toHaveAttribute('href', '#/metas');
+  await expect(nav.getByRole('link', { name: 'Planejar', exact: true })).toHaveAttribute(
+    'href',
+    '#/planejar',
+  );
   await expect(nav.getByRole('link').nth(2)).toHaveAttribute('href', '#/nexo');
   await expect(nexoLink).toHaveAccessibleName('Perguntar ao Nexo');
   await expect(nexoLink.locator('.simple-nav-nexo-label')).not.toBeVisible();
@@ -219,18 +222,16 @@ test('navegação tem três destinos e Planejamento fica acessível pela Home', 
     ['Início', 'inicio'],
     ['Histórico', 'movimentos'],
     ['Perguntar ao Nexo', 'nexo'],
+    ['Objetivos', 'metas'],
+    ['Planejar', 'planejar'],
   ]) {
     await nav.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/${path}$`));
   }
   await nav.getByRole('link', { name: 'Início', exact: true }).click();
-  await expect(page.getByRole('link', { name: 'Planejar', exact: true })).toBeVisible();
   await expect(
     page.locator('.home-goal').getByRole('link', { name: 'Ver todos os objetivos' }),
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Planejar', exact: true }).click();
-  await expect(page).toHaveURL(/#\/planejar$/);
-  await page.goto('/#/inicio');
   const linkWidths = await nav
     .getByRole('link')
     .evaluateAll((links) => links.map((link) => link.getBoundingClientRect().width));
@@ -281,7 +282,7 @@ test('datas e mês do histórico continuam utilizáveis em tela estreita e deskt
 test('navegação desktop e ocultação de valores persistem entre páginas', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole('navigation', { name: 'Principal' });
-  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(4);
+  await expect(nav.locator('a:not(.simple-nav-brand)')).toHaveCount(6);
   await expect(nav.locator('.simple-nav-brand img')).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Início', exact: true })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Histórico' })).toBeVisible();
@@ -1055,7 +1056,7 @@ test('Planejamento resume as áreas e centraliza a adição', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Planejamento', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Próximos 30 dias' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Limites do mês' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Caixinhas' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Caixinhas' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Contas recorrentes' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Editar|Excluir/ })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1063,7 +1064,21 @@ test('Planejamento resume as áreas e centraliza a adição', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'O que quer planejar?' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Conta', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Limite de gastos' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Caixinha' })).toHaveAttribute('href', '#/metas/nova');
+  await expect(page.getByRole('link', { name: 'Caixinha' })).toHaveCount(0);
+});
+
+test('botões de ação têm altura uniforme nas telas principais', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  for (const path of ['/#/inicio', '/#/planejar', '/#/planejar/adicionar?tipo=limite', '/#/metas/nova']) {
+    await page.goto(path);
+    await expect(page.locator('#root .button:visible').first()).toBeVisible();
+    const heights = await page
+      .locator('#root .button:visible')
+      .evaluateAll((buttons) =>
+        [...new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().height)))].sort(),
+      );
+    expect(heights).toEqual([48]);
+  }
 });
 
 test('recorrência persiste como pendente sem duplicar ao recarregar', async ({ page }) => {

@@ -4746,3 +4746,11 @@ label {
     padding: 18px 0;
   }
 }
+
+#root .button {
+  height: 48px;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding-block: 4px;
+  line-height: 1.2;
+}
