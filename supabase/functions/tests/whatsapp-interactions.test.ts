@@ -74,6 +74,10 @@ Deno.test('menu é nativo e não chama IA; texto livre continua disponível', as
       await sendText(context.phone, result!.reply!, result!.buttons);
       const sent = requests.find((request) => request.url.hostname === 'graph.facebook.com')!;
       assert.equal((sent.body.interactive as { type: string }).type, 'list');
+      const rows = (sent.body.interactive as { action: { sections: { rows: { title: string; description?: string }[] }[] } })
+        .action.sections[0].rows;
+      assert.equal(rows.find((row) => row.title === 'Consultar dinheiro')?.description, undefined);
+      assert.ok(rows.every((row) => row.description === undefined));
       assert.equal(await handleWhatsAppNavigation({ text: 'Paguei 50 reais no mercado' }, context), null);
       assert.ok(!requests.some((request) => request.url.hostname === 'api.openai.com'));
     },

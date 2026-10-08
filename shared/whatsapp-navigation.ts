@@ -3,22 +3,21 @@ import type { WhatsAppButton } from './whatsapp-presentation.ts';
 export const nexoAppUrl = 'https://ruan-crdz.github.io/nexo/';
 export const nextStepText = 'O que deseja fazer a seguir?';
 export type NavigationPage = { reply: string; buttons: WhatsAppButton[] };
-const option = (key: string, title: string, description?: string): WhatsAppButton => ({
+const option = (key: string, title: string): WhatsAppButton => ({
   id: `nexo:nav:${key}`,
   title,
-  ...(description ? { description } : {}),
 });
 export const rootChoices = [
-  option('expense', 'Anotar gasto', 'Conte em uma frase o que aconteceu'),
-  option('income', 'Anotar entrada', 'Conte em uma frase valor, origem e data'),
-  option('money', 'Consultar dinheiro', 'Resumo, histórico e contas a pagar'),
-  option('goals', 'Minhas metas', 'Criar uma meta ou acompanhar o dinheiro guardado'),
-  option('planning', 'Me planejar', 'Contas fixas, limites de gastos, dívidas e bens'),
-  option('accounts', 'Contas e cartões', 'Consultar ou cadastrar contas manuais'),
-  option('receipts', 'Enviar comprovante', 'Como registrar por foto ou PDF'),
-  option('corrections', 'Corrigir ou excluir', 'Ajustar um registro que já foi salvo'),
-  option('help', 'Ajuda e preferências', 'Como usar, avisos, família e dados pessoais'),
-  option('app', 'Abrir o app', 'Ver seus dados com mais detalhes'),
+  option('expense', 'Anotar gasto'),
+  option('income', 'Anotar entrada'),
+  option('money', 'Consultar dinheiro'),
+  option('goals', 'Minhas metas'),
+  option('planning', 'Me planejar'),
+  option('accounts', 'Contas e cartões'),
+  option('receipts', 'Enviar comprovante'),
+  option('corrections', 'Corrigir ou excluir'),
+  option('help', 'Ajuda e preferências'),
+  option('app', 'Abrir o app'),
 ];
 export const backChoice = option('home', 'Menu principal');
 const page = (reply: string, choices: WhatsAppButton[]): NavigationPage => ({
@@ -41,12 +40,12 @@ export const navigationPages: Record<string, NavigationPage> = {
   ]),
   goals: page('*Minhas metas*\nO que você quer fazer?', [
     option('goal-list', 'Ver minhas metas'),
-    option('goal', 'Criar uma meta', 'Conte objetivo, valor e prazo em uma frase'),
+    option('goal', 'Criar uma meta'),
     option('saving-help', 'Anotar valor guardado'),
     option('withdrawal-help', 'Anotar uma retirada'),
   ]),
   planning: page('*Me planejar*\nEscolha por onde começar.', [
-    option('recurring', 'Criar conta fixa', 'Conte valor, vencimento e frequência em uma frase'),
+    option('recurring', 'Criar conta fixa'),
     option('recurring-list', 'Ver contas fixas'),
     option('budget-help', 'Limites de gastos'),
     option('debt-help', 'Minhas dívidas'),
