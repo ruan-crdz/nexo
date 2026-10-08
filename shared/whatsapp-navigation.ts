@@ -10,7 +10,7 @@ const option = (key: string, title: string, description?: string): WhatsAppButto
 });
 export const rootChoices = [
   option('expense', 'Anotar gasto', 'Conte em uma frase o que aconteceu'),
-  option('income', 'Anotar entrada', 'Salário, aposentadoria ou outro recebimento'),
+  option('income', 'Anotar entrada', 'Conte em uma frase valor, origem e data'),
   option('money', 'Consultar dinheiro', 'Resumo, histórico e contas a pagar'),
   option('goals', 'Minhas metas', 'Criar uma meta ou acompanhar o dinheiro guardado'),
   option('planning', 'Me planejar', 'Contas fixas, limites de gastos, dívidas e bens'),
@@ -28,7 +28,7 @@ const page = (reply: string, choices: WhatsAppButton[]): NavigationPage => ({
 export const navigationPages: Record<string, NavigationPage> = {
   home: {
     reply:
-      '*Olá! Sou o Nexo.* 🌿\nVamos cuidar do seu dinheiro, um passo de cada vez.\n\nEscolha uma opção abaixo. Se preferir, escreva ou mande um áudio.',
+      '*Olá! Sou o Nexo.* 🌿\nVamos cuidar do seu dinheiro do seu jeito.\n\nEscolha uma opção abaixo ou escreva ou mande um áudio com o que aconteceu.',
     buttons: rootChoices,
   },
   money: page('*Consultar dinheiro*\nO que você quer conferir?', [
@@ -41,12 +41,12 @@ export const navigationPages: Record<string, NavigationPage> = {
   ]),
   goals: page('*Minhas metas*\nO que você quer fazer?', [
     option('goal-list', 'Ver minhas metas'),
-    option('goal', 'Criar uma meta'),
+    option('goal', 'Criar uma meta', 'Conte objetivo, valor e prazo em uma frase'),
     option('saving-help', 'Anotar valor guardado'),
     option('withdrawal-help', 'Anotar uma retirada'),
   ]),
   planning: page('*Me planejar*\nEscolha por onde começar.', [
-    option('recurring', 'Criar conta fixa'),
+    option('recurring', 'Criar conta fixa', 'Conte valor, vencimento e frequência em uma frase'),
     option('recurring-list', 'Ver contas fixas'),
     option('budget-help', 'Limites de gastos'),
     option('debt-help', 'Minhas dívidas'),
@@ -82,7 +82,7 @@ export const navigationPages: Record<string, NavigationPage> = {
     option('app', 'Abrir o app'),
   ]),
   tutorial: page(
-    '*Seu dinheiro, sem complicação*\n\n• Use o menu para ir passo a passo.\n• Ou mande: “Paguei 35 reais na farmácia hoje”. Pode mandar vários gastos juntos.\n• Áudio funciona como texto. Foto e PDF servem para ler notas.\n• Pedidos completos são salvos direto. Se faltar algo, eu pergunto.\n• Para recomeçar, escreva *menu*.\n\nEu organizo os registros; não faço pagamentos nem transferências.',
+    '*Seu dinheiro, sem complicação*\n\n• Use o menu como atalho ou escreva do seu jeito.\n• Exemplo: “Paguei 35 reais na farmácia hoje”. Pode mandar vários gastos juntos.\n• Áudio funciona como texto. Foto e PDF servem para ler notas.\n• Pedidos completos são salvos direto. Se faltar algo, eu pergunto só o necessário.\n• Para abrir o menu, escreva *menu*.\n\nEu organizo os registros; não faço pagamentos nem transferências.',
     [],
   ),
   app: page(`*Seu Nexo no app*\nToque no link para consultar e organizar seus dados:\n${nexoAppUrl}`, []),

@@ -1,6 +1,5 @@
 import { admin, HttpError } from './http.ts';
 import {
-  createGuide,
   guideAnswer,
   guideChange,
   guideQuestion,
@@ -44,10 +43,10 @@ async function recordFingerprint(row: Record<string, unknown>) {
   ).slice(0, 12);
 }
 
-function isNaturalExpenseMessage(text: string) {
+function isNaturalGuideMessage(text: string) {
   const normalized = text.normalize('NFD').replace(/\p{Diacritic}/gu, '');
-  const hasAmount = /(?:r\$\s*\d[\d.,]*|\d[\d.,]*\s*(?:reais?|real)\b)/i.test(normalized);
-  const hasIntent = /\b(gastei|paguei|comprei|desembolsei|passei)\b/i.test(normalized);
+  const hasAmount = /(?:r\$\s*\d[\d.,]*(?:\s*(?:mil|milhao|milhoes))?|\d[\d.,]*(?:\s*(?:mil|milhao|milhoes))?\s*(?:reais?|real)\b)/i.test(normalized);
+  const hasIntent = /\b(gastei|paguei|comprei|desembolsei|passei|recebi|receberei|vou receber|ganhei|salario|aposentadoria|juntar|guardar|meta|reserva|recorrente|mensal|semanal|anual|todo mes|por mes|cada mes|toda semana|vence|vencimento)\b/i.test(normalized);
   const hasDescription = /\b(?:na|no|em|de|da|do|para)\s+[\p{L}\d]/iu.test(normalized);
   return hasAmount && (hasIntent || hasDescription);
 }
@@ -242,9 +241,9 @@ export async function handleWhatsAppNavigation(
       current,
       'Há um cadastro em andamento. Termine ou cancele este cadastro; depois, envie a foto ou o PDF novamente.',
     );
-  if (current?.kind === 'expense' && input.text && isNaturalExpenseMessage(input.text)) {
+  if (current && input.text && isNaturalGuideMessage(input.text)) {
     const cleared = await db.from('whatsapp_guided_sessions').delete().eq('user_id', context.userId);
-    if (cleared.error) throw new HttpError(503, 'Não consegui retomar sua frase livre.');
+    if (cleared.error) throw new HttpError(503, 'Não consegui retomar sua frase.');
     return null;
   }
   if (!current) {
@@ -252,19 +251,24 @@ export async function handleWhatsAppNavigation(
     if (records) return records;
   }
   if (key) {
-    if (key === 'expense') {
+    if (['expense', 'income', 'goal', 'recurring'].includes(key)) {
       if (current) {
         const cleared = await db.from('whatsapp_guided_sessions').delete().eq('user_id', context.userId);
         if (cleared.error) throw new HttpError(503, 'Não consegui encerrar o cadastro anterior.');
       }
-      const prompt =
-        '*Anotar gasto*\nEscreva ou mande um áudio com o que aconteceu. Exemplo: “Gastei 25 reais na farmácia hoje”. Se faltar algo, eu pergunto.';
+      const prompts: Record<GuideKind, string> = {
+        expense:
+          '*Anotar gasto*\nEscreva ou mande um áudio com o que aconteceu. Exemplo: “Gastei 25 reais na farmácia hoje”. Se faltar algo, eu pergunto só o necessário.',
+        income:
+          '*Anotar entrada*\nEscreva ou mande um áudio com o valor, de onde veio e quando aconteceu. Exemplo: “Recebi 2.000 reais de salário hoje”. Se faltar algo, eu pergunto só o necessário.',
+        goal:
+          '*Criar uma meta*\nConte o objetivo, o valor e o prazo em uma frase. Exemplo: “Quero juntar 5 mil reais para uma viagem até dezembro de 2026, com prioridade alta e 300 reais por mês”. Se faltar algo, eu pergunto junto, sem formulário.',
+        recurring:
+          '*Criar conta fixa*\nDescreva o valor, o vencimento e a frequência em uma frase. Exemplo: “Internet, 120 reais por mês, vencimento todo dia 10”. Se faltar uma data essencial, eu pergunto.',
+      };
+      const prompt = prompts[key as GuideKind];
       await savePrompt(context.userId, prompt);
       return { reply: prompt, buttons: [backChoice] };
-    }
-    if (['expense', 'income', 'goal', 'recurring'].includes(key)) {
-      const state = createGuide(key as GuideKind, context.today);
-      return advance(context, state, state, guideQuestion(state), null, true);
     }
     if (current) {
       const cancelled = await advance(context, current, null, {

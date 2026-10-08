@@ -88,19 +88,41 @@ Deno.test('anotar gasto orienta uma frase livre e deixa o chat tratar o relato',
   );
 });
 
-Deno.test('relato completo retoma o chat e encerra uma sessão antiga de gasto', async () => {
-  const state = createGuide('expense', context.today);
+Deno.test('entrada, meta e conta fixa também começam com uma frase', async () => {
+  const options = [
+    ['nexo:nav:income', /Recebi 2\.000 reais de salário hoje/],
+    ['nexo:nav:goal', /Quero juntar 5 mil reais para uma viagem/],
+    ['nexo:nav:recurring', /120 reais por mês/],
+  ] as const;
   await mocked(
     async (requests) => {
-      const result = await handleWhatsAppNavigation(
-        { text: 'Gastei 25 reais na farmácia hoje' },
-        context,
-      );
-      assert.equal(result, null);
-      assert.equal(
-        requests.filter((request) => request.url.pathname.endsWith('whatsapp_guided_sessions')).length,
-        2,
-      );
+      for (const [id, example] of options) {
+        const result = await handleWhatsAppNavigation({ id }, context);
+        assert.match(result!.reply!, example);
+      }
+      assert.equal(requests.filter((request) => request.url.pathname.endsWith('advance_whatsapp_guide')).length, 0);
+    },
+    () => null,
+  );
+});
+
+Deno.test('frases completas retomam o chat e encerram sessões guiadas antigas', async () => {
+  const cases = [
+    { kind: 'expense' as const, text: 'Gastei 25 reais na farmácia hoje' },
+    { kind: 'income' as const, text: 'Recebi 2.000 reais de salário hoje' },
+    { kind: 'goal' as const, text: 'Quero juntar 5 mil reais para uma viagem' },
+    { kind: 'recurring' as const, text: 'A internet custa 120 reais por mês' },
+  ];
+  let state = createGuide(cases[0].kind, context.today);
+  await mocked(
+    async (requests) => {
+      for (const item of cases) {
+        state = createGuide(item.kind, context.today);
+        const before = requests.length;
+        const result = await handleWhatsAppNavigation({ text: item.text }, context);
+        assert.equal(result, null, `${item.kind} deve retomar o chat`);
+        assert.equal(requests.slice(before).filter((request) => request.url.pathname.endsWith('whatsapp_guided_sessions')).length, 2);
+      }
       assert.equal(requests.filter((request) => request.url.pathname.endsWith('advance_whatsapp_guide')).length, 0);
     },
     (url) => (url.pathname.endsWith('whatsapp_guided_sessions') ? { state } : null),
