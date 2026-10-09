@@ -540,7 +540,8 @@ test('Home identifica a demonstração e abre o índice de Perfil', async ({ pag
 test('Proteção descreve somente MFA realmente disponível', async ({ page }) => {
   await page.goto('/#/seguranca');
   await expect(page.getByRole('heading', { name: 'Proteção', exact: true })).toBeVisible();
-  await expect(page.getByText('MFA está disponível para contas reais conectadas ao Supabase.')).toBeVisible();
+  await expect(page.getByText('A proteção em duas etapas está disponível em uma conta real.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Criar minha conta' })).toBeVisible();
   await expect(page.getByText(/sessões ativas|último acesso|proteções ativas/i)).toHaveCount(0);
 });
 
@@ -637,7 +638,8 @@ test('nome persiste e exclusão de conta exige confirmação explícita', async 
   await page.goto('/#/inicio');
   await expect(page.locator('.simple-nav-avatar')).toHaveText('M');
   await page.goto('/#/privacidade');
-  await expect(page.getByRole('switch', { name: /Métricas de uso/ })).toBeDisabled();
+  await expect(page.getByRole('link', { name: /Métricas de uso/ })).toHaveAttribute('href', '#/cadastro');
+  await expect(page.getByRole('switch', { name: /Métricas de uso/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Excluir minha conta' }).click();
   await expect(page.getByRole('button', { name: 'Confirmar exclusão permanente' })).toBeDisabled();
   await page.getByRole('button', { name: 'Cancelar e voltar' }).click();
