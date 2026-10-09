@@ -1355,7 +1355,6 @@ export function MoneyRows({
               onClick={() => {
                 setEditing(details);
                 setDetails(null);
-                setMoreOptionsOpen(false);
               }}
             >
               <Pencil size={16} /> Corrigir movimento
