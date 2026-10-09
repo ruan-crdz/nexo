@@ -4315,7 +4315,7 @@ label {
 }
 .planning-overflow-menu {
   position: absolute;
-  z-index: 20;
+  z-index: 40;
   top: calc(100% + 4px);
   right: 0;
   display: grid;
@@ -4341,8 +4341,7 @@ label {
   width: max-content;
   min-width: min(190px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 24px);
-  overflow: auto;
+  overflow-wrap: anywhere;
   color: var(--ink);
   background: transparent;
   border: 0;

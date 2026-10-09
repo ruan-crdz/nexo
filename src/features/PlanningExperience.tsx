@@ -86,6 +86,7 @@ function keepOverflowMenuInViewport(event: SyntheticEvent<HTMLDetailsElement>) {
     menu.style.top = '';
     menu.style.bottom = '';
     menu.style.maxHeight = '';
+    menu.style.overflowY = '';
     return;
   }
 
@@ -97,7 +98,12 @@ function keepOverflowMenuInViewport(event: SyntheticEvent<HTMLDetailsElement>) {
     : summaryBounds.right - menuWidth;
   const left = Math.min(Math.max(preferredLeft, 8), window.innerWidth - menuWidth - 8);
   const spaceAbove = Math.max(0, summaryBounds.top - 8);
-  const spaceBelow = Math.max(0, window.innerHeight - summaryBounds.bottom - 8);
+  const bottomNavigation =
+    window.innerWidth <= 700
+      ? document.querySelector<HTMLElement>('.simple-nav')?.getBoundingClientRect().height ?? 0
+      : 0;
+  const usableBottom = window.innerHeight - bottomNavigation - 8;
+  const spaceBelow = Math.max(0, usableBottom - summaryBounds.bottom);
   const openUp = spaceBelow < menu.scrollHeight && spaceAbove > spaceBelow;
   const availableHeight = openUp ? spaceAbove : spaceBelow;
 
@@ -105,6 +111,7 @@ function keepOverflowMenuInViewport(event: SyntheticEvent<HTMLDetailsElement>) {
   menu.style.left = `${left - detailsBounds.left}px`;
   menu.style.right = 'auto';
   menu.style.maxHeight = `${availableHeight}px`;
+  menu.style.overflowY = 'auto';
   menu.style.top = openUp ? 'auto' : 'calc(100% + 4px)';
   menu.style.bottom = openUp ? 'calc(100% + 4px)' : 'auto';
 }
