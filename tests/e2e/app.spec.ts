@@ -24,11 +24,15 @@ test('anota, persiste, corrige e exclui um gasto com confirmação', async ({ pa
   await page.reload();
   await page.getByRole('button', { name: 'Buscar no histórico' }).click();
   await page.getByRole('searchbox').fill('Farmácia teste');
-  await page.getByRole('button', { name: 'Farmácia teste' }).click();
+  await page
+    .locator('.history-money-list .money-row-top')
+    .filter({ hasText: 'Farmácia teste' })
+    .locator('.money-kind')
+    .click();
   await page.getByRole('button', { name: 'Corrigir movimento' }).click();
   await page.getByLabel('Quanto foi? (R$)').fill('50,00');
   await page.getByRole('button', { name: 'Salvar movimento' }).click();
-  await expect(page.locator('.money-row-top > strong')).toContainText('50,00');
+  await expect(page.locator('.money-row-top .money-row-amount')).toContainText('50,00');
   await page.getByRole('button', { name: 'Farmácia teste' }).click();
   await page.getByRole('button', { name: 'Excluir movimento' }).click();
   await page.getByRole('button', { name: 'Não, voltar' }).click();

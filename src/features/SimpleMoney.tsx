@@ -1220,22 +1220,17 @@ export function MoneyRows({
       <ul className={`money-list${compactHome ? ' home-compact-list' : ''}${timeline ? ' history-money-list' : ''}`}>
         {rows.map((t) => (
           <li className={compactHome ? 'home-compact-money-row' : undefined} key={t.id}>
-            <div className="money-row-top">
+            <button
+              type="button"
+              className="money-row-top money-row-open"
+              onClick={() => setDetails(t)}
+            >
               <span className={`money-kind ${t.type}`} aria-hidden="true">
                 {t.type === 'income' ? <ArrowDownLeft size={24} /> : <ArrowUpRight size={24} />}
               </span>
-              <div className="money-description">
-                <h3>
-                  <button
-                    className="money-detail-trigger"
-                    onClick={() => {
-                      setDetails(t);
-                    }}
-                  >
-                    {t.description}
-                  </button>
-                </h3>
-                <p className={compactHome ? 'sr-only' : 'muted'}>
+              <span className="money-description">
+                <span className="money-description-title">{t.description}</span>
+                <span className={compactHome ? 'sr-only' : 'money-row-metadata muted'}>
                   {timeline ? (
                     <>
                       {t.category}
@@ -1252,13 +1247,13 @@ export function MoneyRows({
                       {showMetadata && <> · {t.category} · {sourceLabels[t.source]}</>}
                     </>
                   )}
-                </p>
-              </div>
-              <strong className={t.type === 'income' ? 'positive' : ''}>
+                </span>
+              </span>
+              <span className={`money-row-amount${t.type === 'income' ? ' positive' : ''}`}>
                 <span className="sr-only">{t.type === 'income' ? 'Entrada' : 'Gasto'}</span>
                 {t.type === 'income' ? '+' : '−'} {displayMoney(t.amount)}
-              </strong>
-            </div>
+              </span>
+            </button>
             {showActions && !timeline && (
               <div className="money-row-bottom">
                 <span className="muted">

@@ -514,7 +514,21 @@ label {
   align-items: center;
   gap: 14px;
 }
-.money-row-top > strong {
+.money-row-open {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.money-row-open:focus-visible {
+  outline: 3px solid var(--moss);
+  outline-offset: 3px;
+}
+.money-row-amount {
   margin-left: auto;
   flex-shrink: 0;
   font-size: 18px;
@@ -535,19 +549,17 @@ label {
   color: var(--moss);
   background: var(--lime-soft);
 }
-.money-description h3 {
+.money-description {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.money-description-title {
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
-.money-detail-trigger {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  text-align: left;
-}
 .money-description p,
+.money-row-metadata,
 .money-row-bottom > span {
   font-size: 14px;
 }
@@ -930,15 +942,11 @@ label {
   width: 20px;
   height: 20px;
 }
-.history-money-list .money-description h3 {
-  margin: 0;
-}
-.history-money-list .money-description p {
-  margin: 2px 0 0;
+.history-money-list .money-row-metadata {
   color: var(--muted);
   font-size: 13px;
 }
-.history-money-list .money-row-top > strong {
+.history-money-list .money-row-amount {
   font-size: 16px;
 }
 .history-empty {
@@ -1779,10 +1787,10 @@ label {
   width: 18px;
   height: 18px;
 }
-.home-compact-list .money-row-top > strong {
+.home-compact-list .money-row-amount {
   font-size: 16px;
 }
-.home-compact-list .money-detail-trigger {
+.home-compact-list .money-description-title {
   font-size: 16px;
 }
 .home-layout .simple-totals strong {
@@ -3130,7 +3138,7 @@ label {
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 10px;
   }
-  .money-row-top > strong {
+  .money-row-amount {
     margin: 0;
     width: auto;
     grid-column: 2;
