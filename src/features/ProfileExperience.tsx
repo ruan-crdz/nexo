@@ -8,6 +8,13 @@ import { supabase } from '../data/client';
 import { Button, Dialog } from '../design-system/components';
 import { useTheme } from '../design-system/theme';
 import { cacheDataset, offlineEnabled, pendingTransactions, setOffline } from '../data/offline';
+import { formatDateTimePtBr } from '../../shared/date-format';
+import {
+  ProfileSubpageLayout,
+  SettingsRadioRow,
+  SettingsRow,
+  SettingsToggleRow,
+} from './ProfileSubpageLayout';
 
 function initials(name: string) {
   return name
@@ -211,16 +218,15 @@ function EditProfilePage() {
   const [name, setName] = useState(app.data.profile.name);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
+  const changed = name.trim() !== app.data.profile.name;
   async function save(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     setError('');
-    setSaved(false);
     try {
       await app.repository.profile({ ...app.data.profile, name: name.trim() });
       await app.refresh();
-      setSaved(true);
+      app.toast('Nome atualizado.');
     } catch {
       setError('Não foi possível salvar. Tente novamente.');
     } finally {
@@ -228,15 +234,14 @@ function EditProfilePage() {
     }
   }
   return (
-    <div className="profile-page">
-      <ProfileHeader title="Editar perfil" />
+    <ProfileSubpageLayout title="Editar perfil">
       <form className="profile-edit-form" onSubmit={(event) => void save(event)}>
         <div className="profile-identity profile-edit-identity">
           <span className="profile-avatar" aria-hidden="true">
             {initials(name)}
           </span>
-          <span className="muted">Foto</span>
-          <p>Alteração de foto não está disponível no momento.</p>
+          <h2>{name.trim() || 'Seu nome'}</h2>
+          <p>{app.user?.email ?? 'E-mail não disponível'}</p>
         </div>
         <label>
           Nome
@@ -247,57 +252,63 @@ function EditProfilePage() {
             value={name}
             onChange={(event) => {
               setName(event.target.value);
-              setSaved(false);
             }}
           />
         </label>
-        <div className="profile-readonly-field">
-          <span>E-mail</span>
-          <strong>{app.user?.email ?? 'Não disponível'}</strong>
-        </div>
         {error && (
           <p role="alert" className="error-message">
             {error}
           </p>
         )}
-        {saved && (
-          <p role="status" className="notice">
-            Alterações salvas.
-          </p>
-        )}
-        <Button disabled={pending}>{pending ? 'Salvando…' : 'Salvar alterações'}</Button>
+        {changed && <Button disabled={pending}>{pending ? 'Salvando…' : 'Salvar alterações'}</Button>}
       </form>
-    </div>
+    </ProfileSubpageLayout>
   );
 }
 
 function AppearancePage() {
   const { theme, setTheme } = useTheme();
-  const themes = [
+  const themes: { value: 'system' | 'light' | 'dark'; label: string; description?: string }[] = [
+    {
+      value: 'system',
+      label: 'Usar configuração do celular',
+      description: 'Acompanha automaticamente o tema do aparelho.',
+    },
     { value: 'light', label: 'Claro' },
     { value: 'dark', label: 'Escuro' },
-    { value: 'system', label: 'Usar configuração do celular' },
   ] as const;
   return (
-    <div className="profile-page">
-      <ProfileHeader title="Aparência" />
+    <ProfileSubpageLayout title="Aparência">
       <fieldset className="profile-theme-settings">
         <legend>Tema</legend>
         {themes.map((option) => (
-          <label className="profile-theme-option" key={option.value}>
-            <span>{option.label}</span>
-            <input
-              type="radio"
-              name="profile-theme"
-              value={option.value}
-              checked={theme === option.value}
-              onChange={() => setTheme(option.value)}
-            />
-          </label>
+          <SettingsRadioRow
+            key={option.value}
+            title={option.label}
+            description={option.description}
+            name="profile-theme"
+            value={option.value}
+            checked={theme === option.value}
+            onChange={() => setTheme(option.value)}
+          />
         ))}
       </fieldset>
-    </div>
+    </ProfileSubpageLayout>
   );
+}
+
+async function readPendingOfflineQueue(userId: string) {
+  let timeout: number | undefined;
+  try {
+    return await Promise.race([
+      pendingTransactions(userId),
+      new Promise<never>((_, reject) => {
+        timeout = window.setTimeout(() => reject(new Error('timeout')), 8000);
+      }),
+    ]);
+  } finally {
+    if (timeout) window.clearTimeout(timeout);
+  }
 }
 
 function OfflinePage() {
@@ -305,27 +316,48 @@ function OfflinePage() {
   const userId = app.user?.id;
   const [enabled, setEnabled] = useState(() => (userId ? offlineEnabled(userId) : false));
   const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [syncState, setSyncState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [confirmingDisable, setConfirmingDisable] = useState(false);
+  const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
     let current = true;
     if (!userId || !enabled) {
       setPendingCount(0);
+      setSyncState('ready');
       return () => {
         current = false;
       };
     }
-    void pendingTransactions(userId)
+    setSyncState('loading');
+    void readPendingOfflineQueue(userId)
       .then((rows) => {
-        if (current) setPendingCount(rows.length);
+        if (current) {
+          setPendingCount(rows.length);
+          setSyncState('ready');
+        }
       })
       .catch(() => {
-        if (current) setPendingCount(null);
+        if (current) {
+          setPendingCount(null);
+          setSyncState('error');
+        }
       });
     return () => {
       current = false;
     };
   }, [enabled, userId]);
+  useEffect(() => {
+    const updateOnline = () => setOnline(navigator.onLine);
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+    };
+  }, []);
   async function update(enabledNow: boolean) {
     if (!userId || busy) return;
     setBusy(true);
@@ -341,43 +373,79 @@ function OfflinePage() {
       setBusy(false);
     }
   }
+  async function syncNow() {
+    if (!userId || busy || !online) return;
+    setBusy(true);
+    setSyncState('loading');
+    setError('');
+    try {
+      await app.refresh();
+      const rows = await readPendingOfflineQueue(userId);
+      setPendingCount(rows.length);
+      setSyncState('ready');
+    } catch {
+      setSyncState('error');
+      setError('Não foi possível sincronizar agora. Tente novamente.');
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
-    <div className="profile-page">
-      <ProfileHeader title="Uso sem internet" />
+    <ProfileSubpageLayout title="Uso sem internet">
       {!userId || app.demo ? (
-        <p className="muted">Disponível somente em uma conta real.</p>
+        <div className="profile-demo-guard">
+          <p className="muted">O uso sem internet precisa de uma conta real.</p>
+          <Link className="button button-primary" to="/cadastro">
+            Criar minha conta
+          </Link>
+          <Link className="profile-secondary-link" to="/perfil">
+            Voltar ao Perfil
+          </Link>
+        </div>
       ) : (
         <>
-          <section className="profile-detail-section">
-            <label className="profile-switch-row">
-              <span>Disponível neste aparelho</span>
-              <input
-                type="checkbox"
-                checked={enabled}
-                disabled={busy}
-                onChange={(event) => void update(event.target.checked)}
-              />
-            </label>
-            <p className="muted">Use o Nexo mesmo quando estiver temporariamente sem conexão.</p>
-            <p className="muted">Não recomendado em aparelhos compartilhados.</p>
-          </section>
+          <SettingsToggleRow
+            title="Disponível neste aparelho"
+            description="Use o Nexo mesmo quando estiver temporariamente sem conexão."
+            checked={enabled}
+            disabled={busy}
+            onChange={(value) => {
+              if (value && !enabled) setConfirming(true);
+              else if (!value && (pendingCount === null || pendingCount > 0)) setConfirmingDisable(true);
+              else void update(value);
+            }}
+          />
+          <p className="muted">Evite ativar em aparelhos compartilhados.</p>
           {enabled && (
-            <section className="profile-detail-section">
-              <h2>Dados neste aparelho</h2>
-              {pendingCount === null ? (
-                <p role="status">Não foi possível conferir as alterações pendentes.</p>
-              ) : pendingCount > 0 ? (
-                <p role="status">{pendingCount} alterações aguardam sincronização.</p>
+            <section className="profile-sync-section" aria-labelledby="offline-sync-title">
+              <h2 id="offline-sync-title">Sincronização</h2>
+              {syncState === 'loading' ? (
+                <p role="status">Conferindo alterações…</p>
+              ) : syncState === 'error' ? (
+                <div className="profile-inline-status" role="alert">
+                  <p>Não consegui conferir agora.</p>
+                  <Button variant="secondary" disabled={busy} onClick={() => void syncNow()}>
+                    Tentar novamente
+                  </Button>
+                </div>
+              ) : pendingCount && pendingCount > 0 ? (
+                <>
+                  <p role="status">{pendingCount} alterações aguardando envio.</p>
+                  {!online ? (
+                    <p role="status">Sem conexão. Serão enviadas quando a internet voltar.</p>
+                  ) : (
+                    <Button variant="secondary" disabled={busy} onClick={() => void syncNow()}>
+                      {busy ? 'Sincronizando…' : 'Sincronizar agora'}
+                    </Button>
+                  )}
+                </>
+              ) : !online ? (
+                <p role="status">Sem conexão. As alterações serão enviadas quando a internet voltar.</p>
               ) : (
-                <p className="muted">Nenhuma alteração pendente.</p>
+                <p className="profile-inline-status" role="status">
+                  Tudo atualizado.
+                </p>
               )}
-              <Button
-                variant="secondary"
-                disabled={busy || !navigator.onLine}
-                onClick={() => void app.refresh()}
-              >
-                Sincronizar agora
-              </Button>
             </section>
           )}
           {error && (
@@ -388,9 +456,70 @@ function OfflinePage() {
           <Link className="profile-secondary-link" to="/privacidade">
             Como seus dados são protegidos
           </Link>
+          {confirming && (
+            <Dialog title="Usar Nexo sem internet?" onClose={() => !busy && setConfirming(false)}>
+              <div className="simple-form">
+                <p>Uma cópia protegida dos dados necessários será mantida neste aparelho.</p>
+                <p>Evite ativar em aparelhos compartilhados.</p>
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    setConfirming(false);
+                    void update(true);
+                  }}
+                >
+                  Ativar
+                </Button>
+                <Button variant="secondary" disabled={busy} onClick={() => setConfirming(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </Dialog>
+          )}
+          {confirmingDisable && (
+            <Dialog title="Desativar uso sem internet?" onClose={() => !busy && setConfirmingDisable(false)}>
+              <div className="simple-form">
+                <p>
+                  {pendingCount === null
+                    ? 'Não foi possível conferir a fila. Desativar removerá a cópia e pode apagar alterações ainda não sincronizadas.'
+                    : `${pendingCount} alterações ainda não foram sincronizadas. Desativar removerá a cópia deste aparelho.`}
+                </p>
+                {pendingCount !== 0 && online && (
+                  <Button variant="secondary" disabled={busy} onClick={() => void syncNow()}>
+                    {busy ? 'Sincronizando…' : 'Sincronizar primeiro'}
+                  </Button>
+                )}
+                {pendingCount === 0 ? (
+                  <Button
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirmingDisable(false);
+                      void update(false);
+                    }}
+                  >
+                    Desativar
+                  </Button>
+                ) : (
+                  <Button
+                    variant="danger"
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirmingDisable(false);
+                      void update(false);
+                    }}
+                  >
+                    Desativar mesmo assim
+                  </Button>
+                )}
+                <Button variant="secondary" disabled={busy} onClick={() => setConfirmingDisable(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </Dialog>
+          )}
         </>
       )}
-    </div>
+    </ProfileSubpageLayout>
   );
 }
 
@@ -430,14 +559,16 @@ function ProfileNoticesPage() {
   const history = useQuery({
     queryKey: ['financial-notifications', app.user?.id],
     enabled: historyOnly && !app.demo && !!app.user && app.data.profile.whatsapp_notifications,
-    retry: false,
-    queryFn: async () => {
+    retry: 1,
+    retryDelay: 1000,
+    queryFn: async ({ signal }) => {
       const result = await supabase!
         .from('financial_notifications')
         .select('id,kind,state,error_code,created_at')
         .eq('user_id', app.user!.id)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(5)
+        .abortSignal(AbortSignal.any([signal, AbortSignal.timeout(12000)]));
       if (result.error) throw new Error('Não foi possível conferir o histórico.');
       return result.data;
     },
@@ -447,27 +578,44 @@ function ProfileNoticesPage() {
     { key: 'weekly_digest', label: 'Resumo semanal', group: 'Nexo' },
     { key: 'whatsapp_notifications', label: 'Enviar avisos', group: 'WhatsApp' },
   ] as const;
+  const notificationStates: Record<string, string> = {
+    pending: 'Aguardando',
+    processing: 'Em processamento',
+    accepted: 'Recebido pelo serviço',
+    delivered: 'Entregue',
+    read: 'Lido',
+    failed: 'Não entregue',
+    retry: 'Nova tentativa programada',
+    reconcile: 'Status indisponível',
+    uncertain: 'Status indisponível',
+    cancelled: 'Cancelado',
+  };
   return (
-    <div className="profile-page">
-      <ProfileHeader title={historyOnly ? 'Histórico de avisos' : 'Avisos'} />
+    <ProfileSubpageLayout title={historyOnly ? 'Histórico de avisos' : 'Avisos'}>
       {!historyOnly && (
         <>
           {(['Nexo', 'WhatsApp'] as const).map((group) => (
-            <section className="profile-detail-section" key={group}>
+            <section className="profile-settings-section" key={group}>
               <h2>{group}</h2>
-              {choices
-                .filter((item) => item.group === group)
-                .map((item) => (
-                  <label className="profile-switch-row" key={item.key}>
-                    <span>{item.label}</span>
-                    <input
-                      type="checkbox"
+              {app.demo && group === 'WhatsApp' ? (
+                <SettingsRow
+                  title="Conectar WhatsApp"
+                  description="Crie uma conta para gerenciar esta integração."
+                  to="/cadastro"
+                />
+              ) : (
+                choices
+                  .filter((item) => item.group === group)
+                  .map((item) => (
+                    <SettingsToggleRow
+                      key={item.key}
+                      title={item.label}
                       checked={preferences[item.key]}
-                      disabled={pending || (app.demo && item.key === 'whatsapp_notifications')}
-                      onChange={(event) => void update(item.key, event.target.checked)}
+                      disabled={pending}
+                      onChange={(value) => void update(item.key, value)}
                     />
-                  </label>
-                ))}
+                  ))
+              )}
             </section>
           ))}
           {!app.demo && preferences.whatsapp_notifications && (
@@ -478,7 +626,17 @@ function ProfileNoticesPage() {
           )}
         </>
       )}
-      {historyOnly && (app.demo || !app.data.profile.whatsapp_notifications) ? (
+      {historyOnly && app.demo ? (
+        <div className="profile-demo-guard">
+          <p className="muted">O histórico de avisos do WhatsApp precisa de uma conta real.</p>
+          <Link className="button button-primary" to="/cadastro">
+            Criar minha conta
+          </Link>
+          <Link className="profile-secondary-link" to="/perfil">
+            Voltar ao Perfil
+          </Link>
+        </div>
+      ) : historyOnly && !app.data.profile.whatsapp_notifications ? (
         <p className="muted">Ative avisos pelo WhatsApp em Avisos para consultar este histórico.</p>
       ) : (
         historyOnly && (
@@ -502,8 +660,10 @@ function ProfileNoticesPage() {
                           : 'Vencimento'}
                     </span>
                     <span>
-                      {item.state}
-                      {item.error_code ? ` · ${item.error_code}` : ''}
+                      {notificationStates[item.state] ?? 'Status indisponível'}
+                      <small>
+                        {formatDateTimePtBr(item.created_at, { timeZone: app.data.profile.timezone })}
+                      </small>
                     </span>
                   </li>
                 ))}
@@ -519,7 +679,7 @@ function ProfileNoticesPage() {
           {error}
         </p>
       )}
-    </div>
+    </ProfileSubpageLayout>
   );
 }
 

@@ -1,82 +1,107 @@
-# Perfil: layout atual
+# Telas da aba Perfil
 
-Ficha factual das rotas de Perfil, sob `/#/perfil`. Perfil é um índice de destinos; edição, aparência, uso sem internet e avisos ficam em páginas próprias. Os destinos disponíveis variam entre conta real e demonstração.
+Ficha das telas e ações acessíveis pelo índice `/#/perfil`. Cada destino abaixo é uma página própria, não um formulário embutido no índice. Os itens variam entre conta real e demonstração.
 
-## Mapa das telas
+## Índice do Perfil
 
-```text
-PERFIL · CONTA REAL
-Perfil
-Avatar · nome · e-mail · Editar perfil
-Conta          Aparência · Uso sem internet
-Conexões       WhatsApp · Família · Importar dados
-Preferências   Avisos · Privacidade e dados
-Segurança      Proteção
-Ajuda          Como usar o Nexo
-Sair
+- **Conta real:** avatar com iniciais, nome e e-mail; destinos Editar perfil, Aparência, Uso sem internet, WhatsApp, Família, Importar dados, Avisos, Privacidade e dados, Proteção e Como usar o Nexo; ação Sair.
+- **Demonstração:** avatar, aviso do modo demonstração e Criar minha conta; destinos Aparência, Como usar o Nexo e Sobre o Nexo. Não oferece configurações indisponíveis ou controles desabilitados.
+- O header global é ocultado nas rotas `/perfil/*` e nos destinos WhatsApp, Família, Importação, Avisos, Privacidade e Ajuda; no mobile, a navegação inferior também some nessas subpáginas. Cada uma usa cabeçalho local. Sobre o Nexo abre `/`.
 
-PERFIL · DEMONSTRAÇÃO
-Perfil
-Avatar · modo demonstração · Criar minha conta
-Preferências   Aparência
-Ajuda          Como usar o Nexo · Sobre o Nexo
+## 1. Editar perfil
 
-PÁGINAS DE DESTINO
-Editar perfil · Aparência · Uso sem internet · Avisos · Histórico de avisos
-```
+- **Rota:** `/#/perfil/editar` — destino **Editar perfil** na identidade da conta real.
+- Mostra avatar por iniciais, campo obrigatório **Nome** (até 80 caracteres) e e-mail somente leitura.
+- **Salvar alterações** persiste o nome e atualiza os dados do app; apresenta confirmação ou erro.
+- A alteração de foto não está disponível. Não há edição de e-mail ou credenciais nesta tela.
 
-## Perfil como índice
+## 2. Aparência
 
-- A rota `/perfil/*` carrega `ProfileExperience`; `/perfil` não contém formulários nem controles de preferência.
-- O cabeçalho local tem título e retorno para Início. O header global do Shell é ocultado nas rotas de Perfil.
-- Em conta real, o índice mostra avatar com iniciais, nome e e-mail (quando disponível), além dos grupos Conta, Conexões, Preferências, Segurança e Ajuda. **Editar perfil** e **Sair** são ações próprias.
-- Na demonstração, o índice mostra o avatar, o modo de demonstração, o convite **Criar minha conta**, Aparência, Como usar o Nexo e Sobre o Nexo. Não oferece links indisponíveis, formulários ou checkboxes.
-- As linhas de destino navegam para telas separadas; não expandem configurações dentro do índice.
+- **Rota:** `/#/perfil/aparencia` — disponível também na demonstração.
+- Oferece os temas **Claro**, **Escuro** e **Usar configuração do celular** por opções de seleção.
+- A escolha fica guardada como preferência local; o tema de sistema acompanha a configuração de cores do dispositivo.
 
-## Editar perfil
+## 3. Uso sem internet
 
-- Rota `/#/perfil/editar`.
-- O nome é obrigatório, aceita até 80 caracteres e é salvo pelo repositório. Sucesso e falha são comunicados na própria tela.
-- O e-mail é somente leitura. Alteração de foto não está disponível e não é simulada como ação.
-- Salvar atualiza os dados do app e as iniciais/nome mostrados no índice.
+- **Rota:** `/#/perfil/offline` — disponível apenas para conta real autenticada.
+- O controle **Disponível neste aparelho** habilita ou desabilita o uso offline, com armazenamento local cifrado. A tela recomenda não ativar em aparelho compartilhado.
+- Ao ativar pela primeira vez, confirma que uma cópia cifrada ficará no aparelho. Se houver fila pendente ou não for possível consultá-la, desativar pede confirmação e oferece sincronizar antes.
+- Mostra estados de consulta, sincronização, fila pendente, sem conexão ou erro com tentativa novamente; **Sincronizar agora** só aparece quando há pendências e conexão.
+- Na demonstração ou sem usuário real, oferece criar conta e voltar ao Perfil, sem switch desabilitado.
 
-## Aparência
+## 4. WhatsApp
 
-- Rota `/#/perfil/aparencia`; opções **Claro**, **Escuro** e **Usar configuração do celular**.
-- A escolha é persistida pela preferência local de tema e o modo de sistema acompanha a configuração do dispositivo.
+- **Rota:** `/#/integracoes` — destino **WhatsApp** em Conexões.
+- Mostra o estado da conexão. Em conta real, **Conectar WhatsApp** gera um código temporário e abre a conversa com a mensagem de vínculo; o status é atualizado enquanto aguarda o envio. Também permite abrir a conversa ou copiar a mensagem como alternativa, com verificação novamente e timeout.
+- Após conectar, exibe os últimos quatro dígitos do número, o estado de entrega quando disponível, **Abrir conversa**, **Receber dicas no WhatsApp** e **Desconectar WhatsApp**. Desconectar exige confirmação; movimentos já salvos permanecem no Nexo.
+- A demonstração oferece cadastro; não conecta um número nem envia mensagens.
+- **O que você pode mandar** resume exemplos de gasto, entrada, áudio e resumo. Dicas avançadas ficam em Gerenciar quando conectado. O vínculo não significa que o envio proativo esteja homologado.
 
-## Uso sem internet
+## 5. Família
 
-- Rota `/#/perfil/offline`; disponível apenas em conta real autenticada.
-- A preferência habilita o armazenamento local cifrado e o uso com conexão temporariamente indisponível. A página informa que não é recomendado em aparelho compartilhado.
-- Com o modo habilitado, mostra o total de alterações pendentes e oferece **Sincronizar agora**. Erros de leitura e configuração são informados sem apresentar uma operação como concluída.
+- **Rota:** `/#/familia` — destino **Família** em Conexões.
+- **Demonstração:** explica que o compartilhamento requer duas contas reais; nenhum dado da demonstração é enviado.
+- **Conta real:** acessos ativos são consultados automaticamente ao abrir a página, cada um em seu próprio estado de carregamento/erro e retry. O snapshot respeita o escopo autorizado e atualiza periodicamente para refletir revogações.
+- O botão **+** abre um wizard de convite em três passos: escopo, limites opcionais de conta/período e revisão. No escopo de movimentações é possível permitir propostas de correção. A pessoa só consulta depois que o dono aprovar; o código expira em 24 horas.
+- **Tenho um código** envia pedido de acesso, também sujeito à aprovação de quem convidou. A lista organiza convites, acessos e estados; o dono pode aprovar ou revogar e a outra pessoa pode sair do acesso.
+- Os grupos separados são **Quem compartilha comigo**, **Meus compartilhamentos** e **Convites e pedidos**; não há botão **Consultar** nem seletor de pessoa. O resumo é somente leitura; propostas de correção não alteram registros até o dono aprovar. Revogar bloqueia novas consultas, mas não apaga o que a outra pessoa já viu ou copiou.
+- Datas são formatadas em pt-BR; datas inválidas viram **Data indisponível**, sem exibir texto ISO.
 
-## Avisos e histórico
+## 6. Importar dados
 
-- Rota `/#/perfil/avisos` contém as preferências **Vencimentos e limites**, **Resumo semanal** e **Enviar avisos**. Os estados são salvos pelo repositório; enquanto a gravação ocorre, os controles ficam desabilitados.
-- **Enviar avisos** fica desabilitado na demonstração. Em conta real, quando ativado, a tela oferece o destino **Histórico de avisos**.
-- Rota `/#/perfil/avisos/historico` consulta até cinco registros recentes do WhatsApp, apenas quando há conta real e consentimento ativo. A consulta e o estado vazio/erro aparecem nesta página, não no índice nem na tela de preferências.
-- Métricas de uso não fazem parte de Avisos; a preferência fica em **Privacidade e dados** (`/#/privacidade`) e está desabilitada na demonstração.
+- **Rota:** `/#/importar` — destino **Importar dados** em Conexões; o título da página é **Importar extrato**.
+- Antes de arquivo, a tela oferece escolher CSV/OFX/QFX ou baixar modelo. Conta e ajustes CSV aparecem após seleção; colunas reconhecidas automaticamente não abrem o mapeamento. Quando necessário, **Ajustar colunas** expande data, descrição, valor, tipo e formatos.
+- **Revisar registros** mostra uma prévia paginada de 50 itens por vez. Registros inválidos são listados e não salvos; possíveis duplicatas começam desmarcadas e duplicatas confirmadas não podem ser selecionadas. Uma possível duplicata pode ser conciliada com um movimento existente.
+- Só os itens selecionados são salvos após revisão. A tela informa quantos foram salvos e quantas duplicatas foram ignoradas; erros não apresentam a importação como concluída.
+- Conexão bancária automática ainda não está disponível. CSV/OFX não pedem senha do banco. **Ler recibo por foto** abre a rota `/#/recibo`, que é outro recurso.
 
-## Sair e privacidade
+## 7. Avisos
 
-- **Sair** abre confirmação antes de encerrar a sessão. Sem alterações locais pendentes, o diálogo oferece sair ou cancelar.
-- Se houver alterações pendentes, o diálogo informa a quantidade e oferece **Sincronizar primeiro** ou **Sair mesmo assim**. A sincronização verifica novamente a fila antes de encerrar a sessão; falhas preservam as pendências e mostram erro.
-- Se não for possível conferir a fila local, o diálogo informa que sair pode remover alterações locais e oferece as mesmas opções explícitas de sincronização ou saída forçada.
-- Exportação de dados e exclusão permanente ficam em `/#/privacidade`. A exclusão exige confirmação textual explícita.
+- **Rota:** `/#/perfil/avisos` — destino **Avisos** em Preferências.
+- Permite controlar **Vencimentos e limites**, **Resumo semanal** e **Enviar avisos**. As preferências são salvas ao alterar; controles ficam temporariamente desabilitados durante a gravação e erros são apresentados na tela.
+- Na demonstração, **Vencimentos e limites** e **Resumo semanal** continuam locais; WhatsApp vira destino **Conectar WhatsApp**, sem switch desabilitado. Em conta real, ativar essa preferência revela **Histórico de avisos**.
+- **Rota do histórico:** `/#/perfil/avisos/historico`. Só consulta registros quando há conta real e autorização ativa; mostra até cinco avisos, estados traduzidos, horário, retry/erro e estado vazio. Na demo oferece cadastro e retorno ao Perfil.
+- Métricas não ficam em Avisos; são configuradas em Privacidade e dados.
 
-## Responsividade e acessibilidade
+## 8. Privacidade e dados
 
-- A página usa uma coluna central com largura máxima de 680 px. As linhas têm altura mínima de 56 px e a tipografia do título reduz em telas de até 700 px.
-- Títulos, grupos, links, labels e estados de formulário usam estrutura semântica; opções binárias usam checkboxes e a aparência usa radios.
-- Os E2Es cobrem as rotas de Perfil, a demonstração, persistência do nome/tema, avisos e telas estreitas.
+- **Rota:** `/#/privacidade` — destino **Privacidade e dados** em Preferências.
+- Apresenta um resumo curto; **Como usamos seus dados** expande os detalhes sobre armazenamento, banco, IA e acesso técnico. Na demonstração, informa que os dados ficam neste navegador.
+- **Métricas de uso** é uma preferência separada; na demo leva ao cadastro, sem switch desabilitado. Em conta real, salva a preferência do perfil.
+- **Baixar meus dados** abre `/#/privacidade/exportar`, uma tela própria com **Preparar download**, estado de carregamento e arquivo JSON. Na demonstração, exporta o conjunto local; em conta real, solicita a exportação da conta.
+- **Quero excluir minha conta** abre confirmação irreversível. É necessário digitar exatamente `EXCLUIR MINHA CONTA`; cancelar fecha o fluxo sem excluir.
+- **Gerenciar meu WhatsApp** leva a `/#/integracoes`.
 
-## Referências de implementação
+## 9. Proteção
 
-- `src/features/ProfileExperience.tsx`: índice e páginas de destino.
-- `src/features/Shell.tsx`: moldura de navegação compartilhada.
-- `src/features/SimplePrivacy.tsx`: métricas, exportação e exclusão de dados.
-- `src/design-system/theme.tsx`: preferência de aparência.
-- `src/data/offline.ts`: armazenamento e fila local.
-- `src/design-system/simple.css`: layout responsivo do Perfil.
-- `tests/e2e/app.spec.ts`: cobertura de Perfil, preferências e avisos.
+- **Rota:** `/#/seguranca` — destino **Proteção** em Segurança.
+- Usa autenticação em duas etapas TOTP por aplicativo autenticador. Em conta real, mostra se há fator ativo, permite iniciar configuração com QR code ou chave manual e verificar o código de seis dígitos.
+- Fatores TOTP ativos podem ser removidos; a remoção pode exigir verificar um código. Erros ao consultar, configurar ou verificar são informados.
+- É standalone, com o mesmo header local e gutter mobile. Na demonstração, oferece criar conta e voltar ao Perfil; sem sessão real de produção, a rota direciona ao login.
+
+## 10. Como usar o Nexo
+
+- **Rota:** `/#/ajuda` — destino **Como usar o Nexo** em Ajuda.
+- Apresenta disclosures curtos para gasto, entrada, WhatsApp e correção; os números do mês e a ausência de saldo bancário têm explicações recolhidas. Oferece atalhos para Início, WhatsApp e Movimentos.
+
+## 11. Sair
+
+- A ação **Sair** fica no fim do índice de conta real e abre o diálogo **Sair do Nexo?**.
+- Sem pendências locais, oferece **Sair** ou **Cancelar**. Havendo pendências, informa a quantidade e oferece **Sincronizar primeiro** ou **Sair mesmo assim**; a fila é consultada novamente após sincronizar.
+- Se não for possível ler a fila, informa a incerteza e o risco de remover alterações locais, mantendo as mesmas opções explícitas. Erros de sincronização preservam a fila e exibem uma mensagem.
+
+## Referências
+
+- `src/features/ProfileExperience.tsx`: índice, editar perfil, aparência, offline e avisos.
+- `src/features/ProfileSubpageLayout.tsx`: header local e linhas de navegação/switch/radio.
+- `src/features/Integrations.tsx`: WhatsApp.
+- `src/features/Family.tsx`: compartilhamento familiar.
+- `src/features/StatementImport.tsx`: importação CSV/OFX.
+- `src/features/SimplePrivacy.tsx`: privacidade, métricas, exportação e exclusão.
+- `src/features/Mfa.tsx`: proteção TOTP.
+- `shared/date-format.ts`: datas civis, timestamps e meses em pt-BR com validação.
+- `src/features/SimpleSettings.tsx`: conteúdo de Ajuda.
+- `src/features/Shell.tsx` e `src/design-system/simple.css`: moldura, navegação e layout.
+- `tests/e2e/app.spec.ts`: cobertura E2E das rotas de Perfil e fluxos relacionados.
+- `PROFILE_UX_REFACTOR.md`: tabela de problema, mudança, motivo, componentes, testes e status por tela.
+- `docs/screenshots/profile-before-*` e `docs/screenshots/profile-after-*`: comparação visual em 390×844 e 1440×900.

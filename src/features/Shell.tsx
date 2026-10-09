@@ -39,6 +39,10 @@ export function Shell() {
   const location = useLocation();
   const { pathname } = location;
   const isProfileRoute = pathname === '/perfil' || pathname.startsWith('/perfil/');
+  const isProfileSubpage =
+    pathname.startsWith('/perfil/') ||
+    ['/ajuda', '/familia', '/importar', '/integracoes', '/privacidade'].includes(pathname) ||
+    pathname.startsWith('/privacidade/');
   const onboardingConnection =
     pathname === '/integracoes' && new URLSearchParams(location.search).get('onboarding') === '1';
   const main = useRef<HTMLElement>(null);
@@ -64,11 +68,13 @@ export function Shell() {
   return (
     <div
       className={
-        pathname === '/movimentos'
-          ? 'simple-shell history-shell'
-          : pathname === '/nexo'
-            ? 'simple-shell nexo-shell'
-            : 'simple-shell'
+        isProfileSubpage
+          ? 'simple-shell profile-subpage-shell'
+          : pathname === '/movimentos'
+            ? 'simple-shell history-shell'
+            : pathname === '/nexo'
+              ? 'simple-shell nexo-shell'
+              : 'simple-shell'
       }
     >
       <a
@@ -81,7 +87,7 @@ export function Shell() {
       >
         Pular para o conteúdo
       </a>
-      {pathname !== '/nexo' && !isProfileRoute && (
+      {pathname !== '/nexo' && !isProfileRoute && !isProfileSubpage && (
         <header className="simple-topbar">
           <div className="topbar-mobile-controls">
             <Link className="simple-profile topbar-mobile-avatar" to="/perfil" aria-label="Abrir seu perfil">
@@ -110,7 +116,7 @@ export function Shell() {
           <span className="topbar-mobile-greeting">Olá, {app.data.profile.name.split(' ')[0]}</span>
         </header>
       )}
-      <nav className="simple-nav" aria-label="Principal">
+      <nav className={`simple-nav${isProfileSubpage ? ' profile-subpage-nav' : ''}`} aria-label="Principal">
         <Link className="simple-nav-brand" to="/inicio" aria-label="Nexo início">
           <Brand compact />
         </Link>
@@ -149,8 +155,8 @@ export function Shell() {
         </NavLink>
       </nav>
       <main id="main-content" ref={main} tabIndex={-1} className="simple-content" data-page={pathname}>
-        <OfflineStatus />
-        {app.demo && (
+        {!isProfileSubpage && <OfflineStatus />}
+        {app.demo && !isProfileSubpage && (
           <div className="simple-demo">
             Você está experimentando com dados de exemplo. <Link to="/cadastro">Criar minha conta</Link>
           </div>

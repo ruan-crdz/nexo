@@ -260,8 +260,71 @@ test('Perfil na demonstração mantém só destinos disponíveis e Família expl
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.locator('.profile-page input')).toHaveCount(0);
   await page.goto('/#/familia');
-  await expect(page.getByRole('heading', { name: 'Finanças em família' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Família', exact: true })).toBeVisible();
   await expect(page.getByText(/Compartilhamento requer duas contas reais/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Criar minha conta' })).toBeVisible();
+});
+
+test('rotas exclusivas não exibem controles desabilitados na demonstração', async ({ page }) => {
+  const routes = [
+    ['/perfil/offline', 'Uso sem internet'],
+    ['/integracoes', 'WhatsApp'],
+    ['/familia', 'Família'],
+    ['/privacidade', 'Privacidade e dados'],
+    ['/seguranca', 'Proteção'],
+    ['/perfil/avisos', 'Avisos'],
+    ['/perfil/avisos/historico', 'Histórico de avisos'],
+  ] as const;
+  for (const [route, heading] of routes) {
+    await page.goto(`/#${route}`);
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    if (route === '/perfil/avisos') {
+      await expect(page.getByRole('switch', { name: 'Enviar avisos' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Conectar WhatsApp' })).toBeVisible();
+    } else if (route === '/privacidade') {
+      await expect(page.getByRole('switch', { name: 'Métricas de uso' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Métricas de uso' })).toHaveAttribute('href', '#/cadastro');
+    } else if (route !== '/integracoes') {
+      await expect(page.getByRole('link', { name: 'Criar minha conta' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Voltar ao Perfil' })).toBeVisible();
+    }
+  }
+});
+
+test('subpáginas do Perfil usam cabeçalho local e escondem navegação global no mobile', async ({ page }) => {
+  const routes = [
+    '/perfil/editar',
+    '/perfil/aparencia',
+    '/perfil/offline',
+    '/perfil/avisos',
+    '/perfil/avisos/historico',
+    '/integracoes',
+    '/familia',
+    '/importar',
+    '/privacidade',
+    '/privacidade/exportar',
+    '/seguranca',
+    '/ajuda',
+  ];
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const route of routes) {
+      await page.goto(`/#${route}`);
+      await expect(page.locator('h1').first()).toBeVisible();
+      await expect(page.locator('.simple-topbar')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Voltar' })).toBeVisible();
+      if (viewport.width <= 700) {
+        await expect(page.getByRole('navigation', { name: 'Principal' })).toBeHidden();
+      }
+    }
+  }
+  await page.goto('/#/perfil');
+  await page.getByRole('link', { name: 'Como usar o Nexo' }).click();
+  await page.getByRole('button', { name: 'Voltar' }).click();
+  await expect(page).toHaveURL(/#\/perfil$/);
 });
 
 test('datas e mês do histórico continuam utilizáveis em tela estreita e desktop', async ({ page }) => {
@@ -548,8 +611,9 @@ test('Anotar reúne registro manual, Nexo, nota, extrato e WhatsApp', async ({ p
 
 test('demonstração explica WhatsApp sem fingir conexão ou envio', async ({ page }) => {
   await page.getByRole('link', { name: 'WhatsApp', exact: true }).click();
-  await page.getByRole('button', { name: 'Conectar meu WhatsApp' }).click();
-  await expect(page.getByRole('alert')).toContainText('Nenhuma mensagem foi enviada');
+  await expect(page.getByRole('heading', { name: 'WhatsApp', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Criar conta para conectar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Conectar WhatsApp' })).toHaveCount(0);
 });
 
 test('modo noturno persiste e acompanha a preferência do aparelho', async ({ page }) => {
@@ -569,16 +633,26 @@ test('nome persiste e exclusão de conta exige confirmação explícita', async 
   await page.goto('/#/perfil/editar');
   await page.getByLabel('Nome', { exact: true }).fill('Maria');
   await page.getByRole('button', { name: 'Salvar alterações' }).click();
-  await expect(page.getByRole('status')).toContainText('Alterações salvas');
+  await expect(page.getByRole('status')).toContainText('Nome atualizado.');
   await page.goto('/#/inicio');
   await expect(page.locator('.simple-nav-avatar')).toHaveText('M');
   await page.goto('/#/privacidade');
-  await expect(page.getByRole('checkbox', { name: /Compartilhar métricas técnicas/ })).toBeDisabled();
-  await page.getByRole('button', { name: 'Quero excluir minha conta' }).click();
+  await expect(page.getByRole('switch', { name: /Métricas de uso/ })).toBeDisabled();
+  await page.getByRole('button', { name: 'Excluir minha conta' }).click();
   await expect(page.getByRole('button', { name: 'Confirmar exclusão permanente' })).toBeDisabled();
   await page.getByRole('button', { name: 'Cancelar e voltar' }).click();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Seus dados', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Privacidade e dados', exact: true })).toBeVisible();
+});
+
+test('exportação de dados tem confirmação e download em página própria', async ({ page }) => {
+  await page.goto('/#/privacidade');
+  await page.getByRole('link', { name: 'Baixar meus dados' }).click();
+  await expect(page.getByRole('heading', { name: 'Baixar meus dados', exact: true })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Preparar download' }).click();
+  expect((await download).suggestedFilename()).toBe('nexo-meus-dados.json');
+  await expect(page.getByRole('status')).toContainText('Cópia dos seus dados preparada');
 });
 
 test('telas em claro e escuro passam verificações de acessibilidade', async ({ page }) => {
@@ -595,6 +669,7 @@ test('telas em claro e escuro passam verificações de acessibilidade', async ({
       'perfil',
       'ajuda',
       'privacidade',
+      'privacidade/exportar',
       'planejar',
       'metas',
       'perguntas',
@@ -628,6 +703,7 @@ test('telas cabem em celular estreito e texto ampliado', async ({ page }) => {
       'perfil',
       'ajuda',
       'privacidade',
+      'privacidade/exportar',
       'planejar',
       'metas',
       'perguntas',
@@ -1182,9 +1258,9 @@ test('limite e meta têm cálculo verificável e avisos exigem consentimento', a
   await expect(page.locator('.verified-answer')).toContainText('Viagem e2e');
   await expect(page.locator('.verified-answer')).toContainText('800,00');
   await page.goto('/#/perfil/avisos');
-  await page.getByRole('checkbox', { name: 'Vencimentos e limites' }).check();
-  await expect(page.getByRole('checkbox', { name: 'Vencimentos e limites' })).toBeChecked();
-  await expect(page.getByRole('checkbox', { name: 'Métricas de uso' })).toHaveCount(0);
+  await page.getByRole('switch', { name: 'Vencimentos e limites' }).check();
+  await expect(page.getByRole('switch', { name: 'Vencimentos e limites' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Métricas de uso' })).toHaveCount(0);
   await expect(page.getByText(/Conferindo disponibilidade/)).toHaveCount(0);
   await page.goto('/#/inicio');
   await expect(page.locator('.attention-band')).toHaveCount(0);
@@ -1198,7 +1274,7 @@ test('extrato só é salvo após revisão e o mesmo lote não entra duas vezes',
     buffer: Buffer.from('Data;Descrição;Valor\n04/10/2026;Importação e2e;-12,34'),
   };
   await page.goto('/#/importar');
-  await page.getByLabel('Extrato CSV ou OFX').setInputFiles(file);
+  await page.getByLabel('Escolher arquivo CSV, OFX ou QFX').setInputFiles(file);
   await page.getByRole('button', { name: 'Revisar registros' }).click();
   await expect(page.locator('.import-preview')).toContainText('Importação e2e');
   expect(
@@ -1211,7 +1287,7 @@ test('extrato só é salvo após revisão e o mesmo lote não entra duas vezes',
   ).toBe(0);
   await page.getByRole('button', { name: 'Salvar 1 registros selecionados' }).click();
   await expect(page.getByRole('status')).toContainText('1 registros salvos');
-  await page.getByLabel('Extrato CSV ou OFX').setInputFiles(file);
+  await page.getByLabel('Escolher arquivo CSV, OFX ou QFX').setInputFiles(file);
   await page.getByRole('button', { name: 'Revisar registros' }).click();
   await expect(page.locator('.import-preview')).toContainText('Já importado');
   await expect(page.getByRole('button', { name: 'Salvar 0 registros selecionados' })).toBeDisabled();
@@ -1268,7 +1344,7 @@ test('renda semanal é prevista e fatura não transforma limite em saldo', async
 });
 test('CSV lista linha inválida sem impedir revisão das válidas', async ({ page }) => {
   await page.goto('/#/importar');
-  await page.getByLabel('Extrato CSV ou OFX').setInputFiles({
+  await page.getByLabel('Escolher arquivo CSV, OFX ou QFX').setInputFiles({
     name: 'com-erros.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from('Data;Descrição;Valor\n04/10/2026;Válida;-12,34\n31/02/2026;Inválida;-1,00'),

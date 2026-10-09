@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { MessageCircle, ShieldCheck, ChevronRight, LogOut, Pencil, Info } from 'lucide-react';
+import { MessageCircle, ShieldCheck, ChevronRight, LogOut } from 'lucide-react';
 import { useApp } from '../data/context';
 import { invoke, supabase } from '../data/client';
 import { useTheme } from '../design-system/theme';
 import { Button, Dialog } from '../design-system/components';
 import { offlineEnabled, setOffline, cacheDataset } from '../data/offline';
+import { ProfileSubpageLayout, SettingsRow } from './ProfileSubpageLayout';
 
 export function SimpleSettings() {
   const app = useApp();
@@ -361,73 +362,70 @@ export function SimpleSettings() {
 
 export function SimpleHelp() {
   return (
-    <>
-      <header className="simple-heading">
-        <h1>Vamos por partes.</h1>
-        <p>Você só precisa anotar o que recebeu ou gastou.</p>
-      </header>
-      <ol className="help-steps">
-        <li>
-          <span className="help-number">1</span>
-          <div>
-            <h2>Para anotar um gasto</h2>
-            <p>
-              No início, toque em “Anotar gasto”. Digite o valor e com o que gastou, como “mercado”. Depois
-              toque em “Salvar movimento”.
-            </p>
-            <Link className="button button-secondary" to="/inicio">
+    <ProfileSubpageLayout title="Como usar o Nexo">
+      <section className="profile-settings-section">
+        <h2>Começando</h2>
+        <details className="profile-help-disclosure">
+          <summary>Anotar um gasto</summary>
+          <div className="profile-disclosure-content">
+            <p>Escreva o valor e onde gastou, como “gastei 25 no mercado”.</p>
+            <Link className="profile-secondary-link" to="/inicio">
+              Anotar no aplicativo
+            </Link>
+          </div>
+        </details>
+        <details className="profile-help-disclosure">
+          <summary>Anotar uma entrada</summary>
+          <div className="profile-disclosure-content">
+            <p>Toque em Anotar entrada e informe o valor recebido.</p>
+            <Link className="profile-secondary-link" to="/inicio">
               Ir para o início
             </Link>
           </div>
-        </li>
-        <li>
-          <span className="help-number">2</span>
-          <div>
-            <h2>Para anotar dinheiro recebido</h2>
-            <p>Toque em “Anotar entrada”. Pode ser aposentadoria, salário ou qualquer dinheiro que entrou.</p>
-          </div>
-        </li>
-        <li>
-          <span className="help-number">3</span>
-          <div>
-            <h2>Para usar sua voz</h2>
-            <p>
-              Abra a área “WhatsApp” e conecte seu número. Na conversa com o Nexo, envie um áudio dizendo, por
-              exemplo: “Gastei 30 reais na farmácia hoje”.
-            </p>
-            <Link className="button button-secondary" to="/integracoes">
-              Abrir área do WhatsApp
+        </details>
+        <details className="profile-help-disclosure">
+          <summary>Usar o Nexo no WhatsApp</summary>
+          <div className="profile-disclosure-content">
+            <p>Envie, por exemplo, “gastei 25 no mercado”, ou mande um áudio.</p>
+            <Link className="profile-secondary-link" to="/integracoes">
+              Abrir WhatsApp
             </Link>
           </div>
-        </li>
-        <li>
-          <span className="help-number" aria-hidden="true">
-            <Pencil size={18} />
-          </span>
-          <div>
-            <h2>Anotou algo errado?</h2>
+        </details>
+        <details className="profile-help-disclosure">
+          <summary>Corrigir um movimento</summary>
+          <div className="profile-disclosure-content">
             <p>
-              Abra “Movimentos” e toque em “Corrigir”. Para tirar um movimento, toque em “Excluir”. O Nexo vai
-              pedir sua confirmação.
+              Abra Movimentos, escolha o registro e toque em Corrigir ou Excluir. A exclusão pede confirmação.
             </p>
-            <Link className="button button-secondary" to="/movimentos">
-              Ver meus movimentos
+            <Link className="profile-secondary-link" to="/movimentos">
+              Ver movimentos
             </Link>
           </div>
-        </li>
-        <li>
-          <span className="help-number" aria-hidden="true">
-            <Info size={18} />
-          </span>
-          <div>
-            <h2>De onde vem o resumo?</h2>
-            <p>
-              “Entrou” soma o que você recebeu no mês. “Saiu” soma o que pagou. A diferença mostra quanto
-              sobrou ou faltou, com base nos seus movimentos. O Nexo não consulta seu banco.
-            </p>
-          </div>
-        </li>
-      </ol>
-    </>
+        </details>
+      </section>
+      <section className="profile-settings-section">
+        <h2>Entenda seus números</h2>
+        <details className="profile-help-disclosure">
+          <summary>Como o Nexo calcula seu mês</summary>
+          <p className="profile-disclosure-content">
+            Entrou soma o que você recebeu; Saiu soma o que pagou. A diferença usa suas anotações.
+          </p>
+        </details>
+        <details className="profile-help-disclosure">
+          <summary>Por que não é saldo bancário</summary>
+          <p className="profile-disclosure-content">
+            O Nexo não consulta sua conta bancária. O resumo reflete apenas os movimentos anotados ou
+            importados.
+          </p>
+        </details>
+      </section>
+      <section className="profile-settings-section">
+        <h2>Atalhos</h2>
+        <SettingsRow title="Ir para o Início" to="/inicio" />
+        <SettingsRow title="Abrir WhatsApp" to="/integracoes" />
+        <SettingsRow title="Ver Histórico" to="/movimentos" />
+      </section>
+    </ProfileSubpageLayout>
   );
 }

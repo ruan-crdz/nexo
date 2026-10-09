@@ -6,14 +6,17 @@ import { Button } from '../design-system/components';
 import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { csvCandidates, csvTable, ofxCandidates, inferCsvMapping } from '../../shared/statement-import';
 import { merchantKey } from '../../shared/financial-decisions';
+import { formatDatePtBr } from '../../shared/date-format';
 import type { CsvMapping, ImportCandidate } from '../../shared/statement-import';
 import { download } from './Resources';
+import { ProfileSubpageLayout } from './ProfileSubpageLayout';
 export function StatementImport() {
   const app = useApp();
   const displayMoney = useMoneyDisplay();
   const [text, setText] = useState('');
   const [name, setName] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
+  const [mappingOpen, setMappingOpen] = useState(false);
   const [account, setAccount] = useState('');
   const [mapping, setMapping] = useState<CsvMapping>({
     date: 0,
@@ -44,7 +47,7 @@ export function StatementImport() {
     setPage(0);
     try {
       if (file.size > 10_000_000) throw new Error('Use um arquivo de até 10 MB.');
-      if (!/\.(csv|ofx|qfx)$/i.test(file.name)) throw new Error('Escolha CSV ou OFX.');
+      if (!/\.(csv|ofx|qfx)$/i.test(file.name)) throw new Error('Escolha CSV, OFX ou QFX.');
       const content = await file.text();
       setText(content);
       setName(file.name);
@@ -52,6 +55,7 @@ export function StatementImport() {
         const columns = csvTable(content).headers;
         setHeaders(columns);
         const inferred = inferCsvMapping(columns);
+        setMappingOpen(!inferred);
         if (inferred) setMapping(inferred);
       }
     } catch (err) {
@@ -131,22 +135,19 @@ export function StatementImport() {
     </label>
   );
   return (
-    <>
-      <header className="simple-heading">
-        <h1>Importar extrato</h1>
-        <p>Revise o arquivo e escolha o que salvar. Seus dados ficam separados dos de outras pessoas.</p>
-      </header>
-      <Link className="button button-secondary" to="/recibo">
-        Ler recibo por foto
-      </Link>
-      <section className="simple-form">
-        <label>
-          Extrato CSV ou OFX
+    <ProfileSubpageLayout title="Importar extrato">
+      {!text && (
+        <p className="profile-page-intro">Adicione um arquivo do seu banco. CSV, OFX ou QFX · até 10 MB.</p>
+      )}
+      <section className="profile-import-start">
+        <label className="profile-file-picker">
+          <Upload size={18} /> Escolher arquivo
           <input
             disabled={pending}
             type="file"
             className="statement-file"
             accept=".csv,.ofx,.qfx"
+            aria-label="Escolher arquivo CSV, OFX ou QFX"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void open(file);
@@ -154,101 +155,105 @@ export function StatementImport() {
             }}
           />
         </label>
-        <div>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              download(
-                'nexo-modelo.csv',
-                'Data;Descrição;Valor;Tipo\n04/10/2026;Mercado;-25,50;Gasto\n04/10/2026;Salário;2000,00;Entrada',
-                'text/csv;charset=utf-8',
-              )
-            }
-          >
-            <Download size={18} />
-            Baixar modelo CSV
-          </Button>
-        </div>
-        <label>
-          Conta deste extrato
-          <select
-            value={account}
-            onChange={(event) => {
-              setAccount(event.target.value);
-              setCandidates([]);
-            }}
-          >
-            <option value="">Sem conta vinculada</option>
-            {app.data.financial_accounts.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {headers.length > 0 && (
-          <div className="import-mapping">
-            {column('date')}
-            {column('description')}
-            {column('amount')}
-            <label>
-              Coluna de tipo
-              <select
-                value={mapping.type ?? ''}
-                onChange={(event) => {
-                  setMapping({
-                    ...mapping,
-                    type: event.target.value === '' ? null : Number(event.target.value),
-                  });
-                  setCandidates([]);
-                }}
-              >
-                <option value="">Valor negativo = gasto; positivo = entrada</option>
-                {headers.map((header, index) => (
-                  <option key={index} value={index}>
-                    {header}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Formato dos valores
-              <select
-                value={mapping.numberFormat}
-                onChange={(event) => {
-                  setMapping({ ...mapping, numberFormat: event.target.value as 'br' | 'decimal' });
-                  setCandidates([]);
-                }}
-              >
-                <option value="br">1.234,56</option>
-                <option value="decimal">1234.56 (sem separador de milhar)</option>
-              </select>
-            </label>
-            <label>
-              Formato das datas
-              <select
-                value={mapping.dateFormat}
-                onChange={(event) => {
-                  setMapping({ ...mapping, dateFormat: event.target.value as 'iso' | 'br' });
-                  setCandidates([]);
-                }}
-              >
-                <option value="br">DD/MM/AAAA</option>
-                <option value="iso">AAAA-MM-DD</option>
-              </select>
-            </label>
-          </div>
-        )}
-        {text && (
-          <div>
-            <p className="muted">{name}</p>
-            <Button onClick={review} disabled={pending}>
-              <Upload size={18} />
-              Revisar registros
-            </Button>
-          </div>
-        )}
+        <Button
+          variant="secondary"
+          onClick={() =>
+            download(
+              'nexo-modelo.csv',
+              'Data;Descrição;Valor;Tipo\n04/10/2026;Mercado;-25,50;Gasto\n04/10/2026;Salário;2000,00;Entrada',
+              'text/csv;charset=utf-8',
+            )
+          }
+        >
+          <Download size={18} /> Baixar modelo CSV
+        </Button>
+        {!text && <p className="muted">O Nexo só lê o arquivo escolhido. Não pedimos sua senha do banco.</p>}
       </section>
+      {text && (
+        <section className="profile-detail-section">
+          <p className="muted">Arquivo selecionado: {name}</p>
+          <label>
+            Conta deste extrato
+            <select
+              value={account}
+              onChange={(event) => {
+                setAccount(event.target.value);
+                setCandidates([]);
+              }}
+            >
+              <option value="">Sem conta vinculada</option>
+              {app.data.financial_accounts.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {headers.length > 0 && (
+            <details
+              className="profile-disclosure"
+              open={mappingOpen}
+              onToggle={(event) => setMappingOpen(event.currentTarget.open)}
+            >
+              <summary>Ajustar colunas</summary>
+              <div className="import-mapping profile-import-mapping">
+                {column('date')}
+                {column('description')}
+                {column('amount')}
+                <label>
+                  Coluna de tipo
+                  <select
+                    value={mapping.type ?? ''}
+                    onChange={(event) => {
+                      setMapping({
+                        ...mapping,
+                        type: event.target.value === '' ? null : Number(event.target.value),
+                      });
+                      setCandidates([]);
+                    }}
+                  >
+                    <option value="">Valor negativo = gasto; positivo = entrada</option>
+                    {headers.map((header, index) => (
+                      <option key={index} value={index}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Formato dos valores
+                  <select
+                    value={mapping.numberFormat}
+                    onChange={(event) => {
+                      setMapping({ ...mapping, numberFormat: event.target.value as 'br' | 'decimal' });
+                      setCandidates([]);
+                    }}
+                  >
+                    <option value="br">1.234,56</option>
+                    <option value="decimal">1234.56 (sem separador de milhar)</option>
+                  </select>
+                </label>
+                <label>
+                  Formato das datas
+                  <select
+                    value={mapping.dateFormat}
+                    onChange={(event) => {
+                      setMapping({ ...mapping, dateFormat: event.target.value as 'iso' | 'br' });
+                      setCandidates([]);
+                    }}
+                  >
+                    <option value="br">DD/MM/AAAA</option>
+                    <option value="iso">AAAA-MM-DD</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+          )}
+          <Button onClick={review} disabled={pending}>
+            <Upload size={18} /> Revisar registros
+          </Button>
+        </section>
+      )}
       {error && (
         <p className="error-message" role="alert">
           {error}
@@ -283,7 +288,8 @@ export function StatementImport() {
                   <span>
                     {transaction.description}
                     <small>
-                      {transaction.date} · {transaction.type === 'expense' ? 'Gasto' : 'Entrada'} ·{' '}
+                      {formatDatePtBr(transaction.date) ?? 'Data indisponível'} ·{' '}
+                      {transaction.type === 'expense' ? 'Gasto' : 'Entrada'} ·{' '}
                       {displayMoney(transaction.amount)}
                       {duplicate === 'confirmed'
                         ? ' · Já importado'
@@ -308,7 +314,8 @@ export function StatementImport() {
                       <option value="">Salvar como compra separada</option>
                       {matches.map((match) => (
                         <option key={match.id} value={match.id}>
-                          Mesmo gasto: {match.description} · {match.date}
+                          Mesmo gasto: {match.description} ·{' '}
+                          {formatDatePtBr(match.date) ?? 'Data indisponível'}
                         </option>
                       ))}
                     </select>
@@ -356,13 +363,18 @@ export function StatementImport() {
           </ul>
         </section>
       )}
-      <section className="open-finance-note">
-        <h2>Conexão automática com bancos</h2>
-        <p className="muted">
-          Ainda não disponível. CSV e OFX não exigem sua senha bancária. A conexão futura terá consentimento e
-          opção de revogar acesso.
+      <details className="profile-disclosure">
+        <summary>Conexão automática com bancos</summary>
+        <p className="profile-disclosure-content">
+          Ainda não disponível. Arquivos CSV e OFX não exigem sua senha bancária.
         </p>
-      </section>
-    </>
+      </details>
+      <details className="profile-disclosure">
+        <summary>Importar um recibo por foto</summary>
+        <Link className="profile-secondary-link" to="/recibo">
+          Ler recibo por foto
+        </Link>
+      </details>
+    </ProfileSubpageLayout>
   );
 }
