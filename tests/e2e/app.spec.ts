@@ -371,16 +371,16 @@ test('navegação desktop e ocultação de valores persistem entre páginas', as
   await page.getByRole('button', { name: 'Ocultar valores' }).click();
   await expect(page.locator('.home-month-result strong')).toHaveText('R$ •••••');
   await page.goto('/#/movimentos');
-  await expect(page.locator('.money-row-top > strong').first()).toContainText('R$ •••••');
+  await expect(page.locator('.money-row-amount').first()).toContainText('R$ •••••');
   await page.reload();
   await expect(page.getByRole('button', { name: 'Mostrar valores' })).toBeVisible();
-  await expect(page.locator('.money-row-top > strong').first()).toContainText('R$ •••••');
+  await expect(page.locator('.money-row-amount').first()).toContainText('R$ •••••');
   await page.goto('/#/inicio');
   await expect(page.getByRole('button', { name: 'Mostrar valores' })).toBeVisible();
   await expect(page.locator('.home-month-result strong')).toHaveText('R$ •••••');
   await page.getByRole('button', { name: 'Mostrar valores' }).click();
   await page.goto('/#/movimentos');
-  await expect(page.locator('.money-row-top > strong').first()).not.toContainText('•••••');
+  await expect(page.locator('.money-row-amount').first()).not.toContainText('•••••');
 
   await page.goto('/#/inicio');
   await page.getByRole('button', { name: 'Ocultar valores' }).click();
