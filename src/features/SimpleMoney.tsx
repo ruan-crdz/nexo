@@ -1199,7 +1199,6 @@ export function MoneyRows({
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [details, setDetails] = useState<Transaction | null>(null);
-  const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   async function remove() {
@@ -1231,7 +1230,6 @@ export function MoneyRows({
                   <button
                     className="money-detail-trigger"
                     onClick={() => {
-                      setMoreOptionsOpen(false);
                       setDetails(t);
                     }}
                   >
@@ -1304,7 +1302,6 @@ export function MoneyRows({
           className={timeline ? 'history-detail-sheet' : ''}
           onClose={() => {
             setDetails(null);
-            setMoreOptionsOpen(false);
           }}
         >
           <div className="movement-detail">
@@ -1365,25 +1362,15 @@ export function MoneyRows({
               <Pencil size={16} /> Corrigir movimento
             </Button>
             <Button
-              variant="secondary"
-              aria-expanded={moreOptionsOpen}
-              onClick={() => setMoreOptionsOpen((open) => !open)}
+              variant="danger"
+              onClick={() => {
+                setError('');
+                setDeleting(details);
+                setDetails(null);
+              }}
             >
-              <MoreVertical size={18} /> Mais opções
+              <Trash2 size={16} /> Excluir movimento
             </Button>
-            {moreOptionsOpen && (
-              <Button
-                variant="danger"
-                onClick={() => {
-                  setError('');
-                  setDeleting(details);
-                  setDetails(null);
-                  setMoreOptionsOpen(false);
-                }}
-              >
-                <Trash2 size={16} /> Excluir registro
-              </Button>
-            )}
           </div>
         </Dialog>
       )}
