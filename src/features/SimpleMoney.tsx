@@ -15,7 +15,6 @@ import {
   Camera,
   Mic,
   Plus,
-  MoreVertical,
   Search,
   SlidersHorizontal,
   X,
