@@ -245,11 +245,21 @@ test('navegação oferece os cinco destinos principais em celular e desktop', as
   }
 });
 
-test('Família fica no Perfil e explica a limitação dos dados de demonstração', async ({ page }) => {
+test('Perfil na demonstração mantém só destinos disponíveis e Família explica a limitação', async ({
+  page,
+}) => {
   await page.goto('/#/perfil');
-  const family = page.getByRole('link', { name: 'Família', exact: true });
-  await expect(family).toBeVisible();
-  await family.click();
+  await expect(page.getByRole('heading', { name: 'Perfil', exact: true })).toBeVisible();
+  await expect(page.locator('.simple-topbar')).toHaveCount(0);
+  await expect(
+    page.locator('.profile-demo-intro').getByRole('link', { name: 'Criar minha conta', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Aparência', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Como usar o Nexo' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Família', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.locator('.profile-page input')).toHaveCount(0);
+  await page.goto('/#/familia');
   await expect(page.getByRole('heading', { name: 'Finanças em família' })).toBeVisible();
   await expect(page.getByText(/Compartilhamento requer duas contas reais/)).toBeVisible();
 });
@@ -453,12 +463,15 @@ test('Anotar abre opções em uma folha e permite iniciar uma entrada manual', a
   await expect(page.getByLabel('De onde veio?', { exact: true })).toBeVisible();
 });
 
-test('Home identifica a demonstração e oferece a ferramenta Posso gastar?', async ({ page }) => {
+test('Home identifica a demonstração e abre o índice de Perfil', async ({ page }) => {
   await expect(page.locator('.simple-demo')).toContainText('dados de exemplo');
   await page.getByRole('banner').getByRole('link', { name: 'Abrir seu perfil', exact: true }).click();
-  await page.getByRole('link', { name: 'Posso gastar?' }).click();
-  await expect(page).toHaveURL(/#\/controle$/);
-  await expect(page.locator('h1')).toHaveText('Posso gastar?');
+  await expect(page).toHaveURL(/#\/perfil$/);
+  await expect(page.getByRole('heading', { name: 'Perfil', exact: true })).toBeVisible();
+  await expect(
+    page.locator('.profile-demo-intro').getByRole('link', { name: 'Criar minha conta', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Posso gastar?', exact: true })).toHaveCount(0);
 });
 
 test('Proteção descreve somente MFA realmente disponível', async ({ page }) => {
@@ -540,26 +553,27 @@ test('demonstração explica WhatsApp sem fingir conexão ou envio', async ({ pa
 });
 
 test('modo noturno persiste e acompanha a preferência do aparelho', async ({ page }) => {
-  await page.goto('/#/perfil');
-  await page.getByLabel('Escolha o fundo').selectOption('dark');
+  await page.goto('/#/perfil/aparencia');
+  await page.getByLabel('Escuro', { exact: true }).check();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
-  await expect(page.getByLabel('Escolha o fundo')).toHaveValue('dark');
+  await expect(page.getByLabel('Escuro', { exact: true })).toBeChecked();
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.getByLabel('Escolha o fundo').selectOption('system');
+  await page.getByLabel('Usar configuração do celular').check();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
 test('nome persiste e exclusão de conta exige confirmação explícita', async ({ page }) => {
-  await page.goto('/#/perfil');
-  await page.getByLabel('Como podemos chamar você?').fill('Maria');
-  await page.getByRole('button', { name: 'Salvar nome' }).click();
-  await expect(page.getByRole('status')).toContainText('Seu nome foi atualizado');
+  await page.goto('/#/perfil/editar');
+  await page.getByLabel('Nome', { exact: true }).fill('Maria');
+  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByRole('status')).toContainText('Alterações salvas');
   await page.goto('/#/inicio');
   await expect(page.locator('.simple-nav-avatar')).toHaveText('M');
   await page.goto('/#/privacidade');
+  await expect(page.getByRole('checkbox', { name: /Compartilhar métricas técnicas/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Quero excluir minha conta' }).click();
   await expect(page.getByRole('button', { name: 'Confirmar exclusão permanente' })).toBeDisabled();
   await page.getByRole('button', { name: 'Cancelar e voltar' }).click();
@@ -570,8 +584,8 @@ test('nome persiste e exclusão de conta exige confirmação explícita', async 
 test('telas em claro e escuro passam verificações de acessibilidade', async ({ page }) => {
   test.setTimeout(60_000);
   for (const theme of ['light', 'dark']) {
-    await page.goto('/#/perfil');
-    await page.getByLabel('Escolha o fundo').selectOption(theme);
+    await page.goto('/#/perfil/aparencia');
+    await page.getByLabel(theme === 'light' ? 'Claro' : 'Escuro', { exact: true }).check();
     for (const route of [
       'inicio',
       'anotar',
@@ -1023,8 +1037,8 @@ test('modal não rola horizontalmente e trava o fundo em celular e PC', async ({
 
 test('capturas da nova experiência', async ({ page }) => {
   await page.screenshot({ path: `docs/screenshots/home-${test.info().project.name}.png`, fullPage: true });
-  await page.goto('/#/perfil');
-  await page.getByLabel('Escolha o fundo').selectOption('dark');
+  await page.goto('/#/perfil/aparencia');
+  await page.getByLabel('Escuro', { exact: true }).check();
   await page.goto('/#/inicio');
   await page.screenshot({
     path: `docs/screenshots/home-dark-${test.info().project.name}.png`,
@@ -1167,11 +1181,11 @@ test('limite e meta têm cálculo verificável e avisos exigem consentimento', a
   await page.getByRole('button', { name: 'Quanto falta para minha Caixinha?' }).click();
   await expect(page.locator('.verified-answer')).toContainText('Viagem e2e');
   await expect(page.locator('.verified-answer')).toContainText('800,00');
-  await page.goto('/#/perfil');
-  await page.getByRole('checkbox', { name: 'Quero avisos de vencimentos e limites no app.' }).check();
-  await expect(
-    page.getByRole('checkbox', { name: 'Quero avisos de vencimentos e limites no app.' }),
-  ).toBeChecked();
+  await page.goto('/#/perfil/avisos');
+  await page.getByRole('checkbox', { name: 'Vencimentos e limites' }).check();
+  await expect(page.getByRole('checkbox', { name: 'Vencimentos e limites' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Métricas de uso' })).toHaveCount(0);
+  await expect(page.getByText(/Conferindo disponibilidade/)).toHaveCount(0);
   await page.goto('/#/inicio');
   await expect(page.locator('.attention-band')).toHaveCount(0);
   expect(await page.locator('.home-insight').count()).toBeLessThanOrEqual(1);

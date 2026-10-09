@@ -4,7 +4,7 @@ import { Shell } from './features/Shell';
 import { AuthPage } from './features/Auth';
 import { SimpleLanding, SimpleOnboarding } from './features/SimpleWelcome';
 import { SimpleHome, SimpleHistory, CapturePage } from './features/SimpleMoney';
-import { SimpleSettings, SimpleHelp } from './features/SimpleSettings';
+import { SimpleHelp } from './features/SimpleSettings';
 import { AppUpdate } from './features/AppUpdate';
 import { FeatureTour } from './features/FeatureTour';
 const SimplePrivacy = lazy(async () => ({
@@ -16,6 +16,9 @@ const IntegrationsPage = lazy(async () => ({
 const MfaPage = lazy(async () => ({ default: (await import('./features/Mfa')).MfaPage }));
 const PlanningExperience = lazy(async () => ({
   default: (await import('./features/PlanningExperience')).PlanningExperience,
+}));
+const ProfileExperience = lazy(async () => ({
+  default: (await import('./features/ProfileExperience')).ProfileExperience,
 }));
 const FinancialQuestions = lazy(async () => ({
   default: (await import('./features/FinancialQuestions')).FinancialQuestions,
@@ -59,7 +62,7 @@ export default function App() {
               <Route path="/anotar" element={<CapturePage />} />
               <Route path="/movimentos" element={<SimpleHistory />} />
               <Route path="/integracoes" element={<IntegrationsPage />} />
-              <Route path="/perfil" element={<SimpleSettings />} />
+              <Route path="/perfil/*" element={<ProfileExperience />} />
               <Route path="/ajuda" element={<SimpleHelp />} />
               <Route path="/privacidade" element={<SimplePrivacy />} />
               <Route path="/planejar/*" element={<PlanningExperience />} />

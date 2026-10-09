@@ -38,6 +38,7 @@ export function Shell() {
   const { sheetOpen, choosingType, entryType, close, chooseType, closeEntry } = useCaptureFlow();
   const location = useLocation();
   const { pathname } = location;
+  const isProfileRoute = pathname === '/perfil' || pathname.startsWith('/perfil/');
   const onboardingConnection =
     pathname === '/integracoes' && new URLSearchParams(location.search).get('onboarding') === '1';
   const main = useRef<HTMLElement>(null);
@@ -80,7 +81,7 @@ export function Shell() {
       >
         Pular para o conteúdo
       </a>
-      {pathname !== '/nexo' && (
+      {pathname !== '/nexo' && !isProfileRoute && (
         <header className="simple-topbar">
           <div className="topbar-mobile-controls">
             <Link className="simple-profile topbar-mobile-avatar" to="/perfil" aria-label="Abrir seu perfil">

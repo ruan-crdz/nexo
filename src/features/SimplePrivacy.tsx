@@ -12,6 +12,29 @@ export function SimplePrivacy() {
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState('');
+  const [metricsEnabled, setMetricsEnabled] = useState(app.data.profile.metrics_enabled);
+  async function updateMetrics(enabled: boolean) {
+    if (pending) return;
+    const previous = metricsEnabled;
+    setMetricsEnabled(enabled);
+    setPending(true);
+    setError('');
+    let stored = false;
+    try {
+      await app.repository.profile({ ...app.data.profile, metrics_enabled: enabled });
+      stored = true;
+      await app.refresh();
+    } catch {
+      if (!stored) setMetricsEnabled(previous);
+      setError(
+        stored
+          ? 'Sua preferência foi salva, mas não conseguimos atualizar a tela. Recarregue para conferir.'
+          : 'Não foi possível atualizar sua preferência. O estado anterior foi mantido.',
+      );
+    } finally {
+      setPending(false);
+    }
+  }
   async function exportData() {
     setPending(true);
     setError('');
@@ -70,6 +93,19 @@ export function SimplePrivacy() {
         <Link className="button button-secondary" to="/integracoes">
           Gerenciar meu WhatsApp
         </Link>
+      </section>
+      <section className="privacy-section simple-form">
+        <h2>Métricas de uso</h2>
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={metricsEnabled}
+            disabled={pending || app.demo}
+            onChange={(event) => void updateMetrics(event.target.checked)}
+          />
+          Compartilhar métricas técnicas sem texto, imagens ou valores financeiros.
+        </label>
+        {app.demo && <p className="muted">Métricas ficam disponíveis em uma conta real.</p>}
       </section>
       <section className="privacy-section simple-form">
         <h2>Guardar uma cópia</h2>
