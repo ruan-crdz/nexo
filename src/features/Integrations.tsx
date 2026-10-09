@@ -184,7 +184,7 @@ export function IntegrationsPage() {
           </p>
         )}
         {onboarding && (
-          <Link className="profile-secondary-link" to="/onboarding?step=objective">
+          <Link className="profile-secondary-link" to="/onboarding?step=whatsapp">
             {connected ? 'Continuar' : 'Continuar sem conectar'}
           </Link>
         )}

@@ -27,7 +27,8 @@ Escopo: índice de Perfil e páginas acessíveis por ele, mantendo identidade vi
 ## Validação
 
 - `npm run check`: lint, typecheck, 162 testes unitários e build.
-- `npx playwright test --workers=1`: 112 cenários em desktop/mobile.
+- `npx playwright test --workers=1`: 114 cenários em desktop/mobile.
 - `npx prettier --check`: arquivos da refatoração.
 - Capturas antes/depois em 390×844 e 1440×900: `docs/screenshots/profile-before-*` e `docs/screenshots/profile-after-*`.
+- Capturas de portfólio das 25 telas principais em viewport equivalente ao iPhone 18 Pro Max (440×956 CSS, DPR 3; PNG 1320×2868): índice em `docs/screenshots/iphone-18-pro-max/README.md`.
 - Limitação: a suíte local usa demonstração. Não substitui homologação com duas contas Supabase reais para Família, nem sessão real para TOTP e fila offline autenticada.

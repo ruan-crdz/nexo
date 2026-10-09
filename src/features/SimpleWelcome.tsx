@@ -120,17 +120,35 @@ export function SimpleOnboarding() {
     try {
       await app.repository.profile({ ...app.data.profile, name: name.trim(), onboarded: false });
       await app.refresh();
-      setStep('whatsapp');
-      navigate('/onboarding?step=whatsapp', { replace: true });
+      setStep('objective');
+      navigate('/onboarding?step=objective', { replace: true });
     } catch {
       setError('Não foi possível salvar seu nome. Confira a conexão e tente novamente.');
     } finally {
       setPending(false);
     }
   }
-  async function finish(event: React.FormEvent) {
-    event.preventDefault();
-    if (!objective) return;
+  async function saveObjective(value: string) {
+    setPending(true);
+    setError('');
+    try {
+      await app.repository.profile({
+        ...app.data.profile,
+        name: name.trim(),
+        objective: value,
+        onboarded: false,
+      });
+      await app.refresh();
+      setObjective(value);
+      setStep('whatsapp');
+      navigate('/onboarding?step=whatsapp', { replace: true });
+    } catch {
+      setError('Não foi possível salvar sua preferência. Tente novamente.');
+    } finally {
+      setPending(false);
+    }
+  }
+  async function finish() {
     setPending(true);
     setError('');
     try {
@@ -154,15 +172,11 @@ export function SimpleOnboarding() {
       setPending(false);
     }
   }
-  function continueWithoutWhatsApp() {
-    setStep('objective');
-    navigate('/onboarding?step=objective', { replace: true });
-  }
   return (
     <main className="simple-onboarding">
       <Brand />
       <p className="onboarding-progress">
-        {step === 'name' ? '1 de 3' : step === 'whatsapp' ? '2 de 3' : '3 de 3'}
+        {step === 'name' ? '1 de 3' : step === 'objective' ? '2 de 3' : '3 de 3'}
       </p>
       {step === 'name' && (
         <>
@@ -188,25 +202,14 @@ export function SimpleOnboarding() {
           </form>
         </>
       )}
-      {step === 'whatsapp' && (
-        <section className="onboarding-step">
-          <h1>Use pelo WhatsApp</h1>
-          <p>Envie gastos, entradas ou áudios normalmente.</p>
-          <div className="chat-example-user">“gastei 10 na coxinha”</div>
-          <div className="chat-example-nexo">
-            <strong>Nexo</strong>
-            <p>R$ 10 · Alimentação</p>
-          </div>
-          <Link className="button button-primary" to="/integracoes?onboarding=1">
-            Conectar WhatsApp
-          </Link>
-          <Button variant="secondary" onClick={continueWithoutWhatsApp}>
-            Conectar depois
-          </Button>
-        </section>
-      )}
       {step === 'objective' && (
-        <form className="simple-form" onSubmit={(event) => void finish(event)}>
+        <form
+          className="simple-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveObjective(objective);
+          }}
+        >
           <h1>O que você mais quer melhorar?</h1>
           <div className="onboarding-objectives" role="group" aria-label="Seu objetivo principal">
             {['Sair das dívidas', 'Guardar dinheiro', 'Me organizar', 'Conquistar algo'].map((option) => (
@@ -227,7 +230,27 @@ export function SimpleOnboarding() {
             </p>
           )}
           <Button disabled={pending || !objective}>{pending ? 'Salvando…' : 'Continuar'}</Button>
+          <Button variant="ghost" type="button" disabled={pending} onClick={() => void saveObjective('')}>
+            Pular por enquanto
+          </Button>
         </form>
+      )}
+      {step === 'whatsapp' && (
+        <section className="onboarding-step">
+          <h1>Use pelo WhatsApp</h1>
+          <p>Envie gastos, entradas ou áudios normalmente.</p>
+          <div className="chat-example-user">“gastei 10 na coxinha”</div>
+          <div className="chat-example-nexo">
+            <strong>Nexo</strong>
+            <p>R$ 10 · Alimentação</p>
+          </div>
+          <Link className="button button-primary" to="/integracoes?onboarding=1">
+            Conectar WhatsApp
+          </Link>
+          <Button variant="secondary" disabled={pending} onClick={() => void finish()}>
+            Conectar depois
+          </Button>
+        </section>
       )}
     </main>
   );

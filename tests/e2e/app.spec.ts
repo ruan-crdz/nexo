@@ -429,7 +429,7 @@ test('títulos principais seguem o padrão visual da Home e têm respiro do cabe
   }
 });
 
-test('onboarding pergunta nome, oferece WhatsApp e salva objetivo opcional', async ({ page }) => {
+test('onboarding pergunta nome e objetivo antes de oferecer WhatsApp', async ({ page }) => {
   await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('nexo.demo.v1')!);
     data.profile.name = 'Nome anterior';
@@ -442,6 +442,9 @@ test('onboarding pergunta nome, oferece WhatsApp e salva objetivo opcional', asy
   await expect(page.getByRole('heading', { name: 'Como podemos chamar você?' })).toBeVisible();
   await page.getByLabel('Seu nome', { exact: true }).fill('Ruan');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'O que você mais quer melhorar?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Guardar dinheiro' }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Use pelo WhatsApp' })).toBeVisible();
   await page.getByRole('link', { name: 'Conectar WhatsApp' }).click();
   await expect(page).toHaveURL(/#\/integracoes\?onboarding=1$/);
@@ -451,9 +454,8 @@ test('onboarding pergunta nome, oferece WhatsApp e salva objetivo opcional', asy
   await page.getByRole('link', { name: 'Conectar WhatsApp' }).click();
   await expect(page.getByRole('link', { name: 'Continuar sem conectar' })).toBeVisible();
   await page.getByRole('link', { name: 'Continuar sem conectar' }).click();
-  await expect(page.getByRole('heading', { name: 'O que você mais quer melhorar?' })).toBeVisible();
-  await page.getByRole('button', { name: 'Guardar dinheiro' }).click();
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Use pelo WhatsApp' })).toBeVisible();
+  await page.getByRole('button', { name: 'Conectar depois' }).click();
   await expect(page).toHaveURL(/#\/tour$/);
   await expect(page.getByRole('heading', { name: 'Acompanhe seu mês' })).toBeVisible();
   await page.evaluate(() => localStorage.removeItem('nexo.feature-tour.demo'));

@@ -19,11 +19,11 @@ Abra `http://localhost:5173` e escolha **Experimentar sem cadastro**. Dados fict
 
 ## Implementado
 
-- Quatro destinos: Início, Anotações, WhatsApp e Ajustes; textos grandes, ações escritas e modo noturno.
+- Cinco destinos principais: Início, Histórico, Nexo, Objetivos e Planejar. Anotar, WhatsApp, recibos e importação ficam em ações e áreas dedicadas; textos grandes, ações escritas e modo noturno.
 - Resumo mensal de entradas, gastos e diferença; não representa saldo bancário. Previsões e datas futuras não entram no resumo até acontecerem.
 - Anotação manual com valor, descrição e data; detalhes opcionais. Correção preserva origem, categoria e conta de registros anteriores.
 - WhatsApp com mensagem pronta para conexão, confirmação, texto/áudio, “resumo”, “ajuda” e “desfazer”; gravação idempotente.
-- Cadastro inicial pede só nome. Login/recuperação, MFA existente e isolamento RLS preservados.
+- Onboarding curto: nome, objetivo opcional e conexão WhatsApp opcional. Login/recuperação, MFA e isolamento RLS preservados.
 - Privacidade: exportação, exclusão de conta e desconexão do WhatsApp.
 - Demonstração local e persistência real em Supabase, com atualização após mensagens recebidas.
 - CI de qualidade e publicação manual no GitHub Pages.
@@ -43,7 +43,7 @@ Abra `http://localhost:5173` e escolha **Experimentar sem cadastro**. Dados fict
 - Hábitos opcionais: check-in diário/semanal, revisão semanal, mensagens vinculadas e anotações com pontos limitados. Níveis não são score de crédito, saldo ou medida do valor da pessoa. Pausas e urgências não descontam pontos.
 - Recompensas pessoais: cartão PNG local sem saldo bancário, cor da jornada, carta e quadro de conquistas. Funções financeiras e privacidade nunca exigem nível. Lembretes personalizados continuam dependentes da Meta e do agendamento consentido.
 
-**Escopo simplificado em outubro de 2026.** Empresa, score e simuladores saíram da navegação e das rotas públicas. Planejamento, perguntas e importação ficam em áreas secundárias, preservando os quatro destinos principais. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp usa o status real das entregas para informar falhas, sem avisos fixos de bloqueio.
+**Escopo simplificado em outubro de 2026.** Empresa, score e simuladores saíram da navegação e das rotas públicas. Planejamento, perguntas e importação ficam em áreas secundárias, preservando os cinco destinos principais. Dados antigos e migrações foram preservados, sem exclusão de registros. Documentos de planejamento anteriores podem descrever o escopo original. O WhatsApp usa o status real das entregas para informar falhas, sem avisos fixos de bloqueio.
 
 ## Produto e arquitetura
 
@@ -88,6 +88,8 @@ Fontes técnicas: [Structured Outputs](https://developers.openai.com/api/docs/gu
 ## Documentação
 
 [Arquitetura](ARCHITECTURE.md) · [Banco](DATABASE.md) · [Motor](FINANCIAL_ENGINE.md) · [Design](DESIGN_SYSTEM.md) · [RAG](RAG.md) · [WhatsApp](WHATSAPP.md) · [Segurança](SECURITY.md) · [Privacidade](PRIVACY.md) · [Contribuição](CONTRIBUTING.md) · [Roadmap](docs/ROADMAP.md) · [Árvore](docs/PROJECT_TREE.md)
+
+Capturas de portfólio no viewport iPhone Pro Max: [galeria 1320×2868](docs/screenshots/iphone-18-pro-max/README.md). Vídeo demo local: [Nexo 1.0 (WebM)](docs/videos/nexo-1.0-demo.webm). Matriz de refatoração do Perfil: [PROFILE_UX_REFACTOR.md](PROFILE_UX_REFACTOR.md); matriz de validação: [NEXO_1.0_VALIDATION.md](docs/NEXO_1.0_VALIDATION.md).
 
 ## RUAN, PARA COLOCAR O NEXO NO AR, FAÇA ISSO.
 
