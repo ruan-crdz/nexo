@@ -30,12 +30,10 @@ test('anota, persiste, corrige e exclui um gasto com confirmação', async ({ pa
   await page.getByRole('button', { name: 'Salvar movimento' }).click();
   await expect(page.locator('.money-row-top > strong')).toContainText('50,00');
   await page.getByRole('button', { name: 'Farmácia teste' }).click();
-  await page.getByRole('button', { name: 'Mais opções' }).click();
-  await page.getByRole('button', { name: 'Excluir registro' }).click();
+  await page.getByRole('button', { name: 'Excluir movimento' }).click();
   await page.getByRole('button', { name: 'Não, voltar' }).click();
   await page.getByRole('button', { name: 'Farmácia teste' }).click();
-  await page.getByRole('button', { name: 'Mais opções' }).click();
-  await page.getByRole('button', { name: 'Excluir registro' }).click();
+  await page.getByRole('button', { name: 'Excluir movimento' }).click();
   await page.getByRole('button', { name: 'Sim, excluir movimento' }).click();
   await expect(page.getByRole('button', { name: 'Farmácia teste' })).not.toBeVisible();
 });
