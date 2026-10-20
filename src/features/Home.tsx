@@ -29,6 +29,7 @@ import { personalSummary, monthlyFlow, weeklyPlan } from '../../shared/insights'
 import { recurringTransactions } from '../../shared/planning';
 import { civilDate, formatMoney, shiftDays, shiftMonths, sum } from '../../shared/financial-engine';
 import { Card, Stat, SectionTitle, Badge, Progress, Why, Button } from '../design-system/components';
+import { useMoneyDisplay } from '../design-system/financial-visibility';
 import { Editor } from './Editor';
 import type { Dataset, Transaction } from '../../shared/domain';
 
@@ -188,6 +189,7 @@ function projectionHasInputs(data: Dataset, today: string) {
 }
 
 export function CategorySpendChart({ data, today }: { data: Dataset; today: string }) {
+  const displayMoney = useMoneyDisplay();
   const categories = spendingByCategory(data.transactions, today);
   const total = sum(categories.map((category) => category.value));
   const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' })
@@ -197,51 +199,12 @@ export function CategorySpendChart({ data, today }: { data: Dataset; today: stri
       <SectionTitle action={<Badge>Este mês</Badge>}>Gastos por categoria</SectionTitle>
       <p className="muted category-total">
         {total > 0
-          ? `${formatMoney(total)} em gastos pagos até agora`
+          ? `${displayMoney(total)} em gastos pagos até agora`
           : 'Sem gastos pagos registrados neste mês'}
       </p>
       {categories.length ? (
         <>
-          <div
-            className="category-chart"
-            role="img"
-            aria-label={`Gastos por categoria em ${monthLabel}: ${categories.map(({ label, value }) => `${label}, ${formatMoney(value)}`).join('; ')}`}
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={categories}
-                layout="vertical"
-                margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
-              >
-                <CartesianGrid horizontal={false} stroke="#e5e1d5" strokeDasharray="3 5" />
-                <XAxis
-                  type="number"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontSize: 9, fill: '#706e64' }}
-                  tickFormatter={(value: number) =>
-                    new Intl.NumberFormat('pt-BR', {
-                      notation: 'compact',
-                      maximumFractionDigits: 1,
-                    }).format(value / 100)
-                  }
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={88}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontSize: 10, fill: '#706e64' }}
-                />
-                <Tooltip
-                  formatter={(value) => formatMoney(Number(value))}
-                  contentStyle={{ borderRadius: 10, border: '1px solid #e5e1d5', fontSize: 12 }}
-                />
-                <Bar dataKey="value" name="Gastos pagos" fill="#64715a" radius={[0, 5, 5, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <CategorySpendBars categories={categories} monthLabel={monthLabel} displayMoney={displayMoney} />
           <p className="muted category-caption">Considera apenas gastos pagos registrados em {monthLabel}.</p>
         </>
       ) : (
@@ -250,6 +213,91 @@ export function CategorySpendChart({ data, today }: { data: Dataset; today: stri
     </Card>
   );
 }
+
+function CategorySpendBars({
+  categories,
+  monthLabel,
+  displayMoney,
+}: {
+  categories: { label: string; value: number }[];
+  monthLabel: string;
+  displayMoney: (amount: number) => string;
+}) {
+  return (
+    <div
+      className="category-chart"
+      role="img"
+      aria-label={`Gastos por categoria em ${monthLabel}: ${categories.map(({ label, value }) => `${label}, ${displayMoney(value)}`).join('; ')}`}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={categories} layout="vertical" margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid horizontal={false} stroke="#e5e1d5" strokeDasharray="3 5" />
+          <XAxis
+            type="number"
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 9, fill: '#706e64' }}
+            tickFormatter={(value: number) =>
+              new Intl.NumberFormat('pt-BR', {
+                notation: 'compact',
+                maximumFractionDigits: 1,
+              }).format(value / 100)
+            }
+          />
+          <YAxis
+            type="category"
+            dataKey="label"
+            width={88}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 10, fill: '#706e64' }}
+          />
+          <Tooltip
+            formatter={(value) => displayMoney(Number(value))}
+            contentStyle={{ borderRadius: 10, border: '1px solid #e5e1d5', fontSize: 12 }}
+          />
+          <Bar dataKey="value" name="Gastos pagos" fill="#64715a" radius={[0, 5, 5, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function FreeCashForecastCard({
+  data,
+  startingFree,
+  today,
+}: {
+  data: Dataset;
+  startingFree: number;
+  today: string;
+}) {
+  const displayMoney = useMoneyDisplay();
+  const forecast = projectFreeCash(data, today, startingFree);
+  const canProject = projectionHasInputs(data, today);
+  return (
+    <Card>
+      <SectionTitle action={<Badge>Próximos 6 meses</Badge>}>Dinheiro livre projetado</SectionTitle>
+      <p className="muted forecast-baseline">
+        Partindo de {displayMoney(startingFree)} livres após os compromissos deste mês.
+      </p>
+      {canProject ? (
+        <>
+          <TrendChart data={forecast} valueName="Livre ao fim do mês" />
+          <p className="muted forecast-caption">
+            Estimativa com renda mensal, entradas previstas, gastos planejados, recorrências e aportes para metas.
+            Não é saldo bancário; despesas não cadastradas podem alterar os valores.
+          </p>
+        </>
+      ) : (
+        <p className="muted forecast-empty">
+          Informe sua renda mensal ou cadastre gastos planejados e contas fixas para ver a projeção.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 export function TransactionList({ rows }: { rows: Transaction[] }) {
   return (
     <div className="transaction-list">
@@ -302,8 +350,6 @@ export function HomePage() {
     [adding, setAdding] = useState(false);
   const s = personalSummary(data),
     today = civilDate(new Date(), data.profile.timezone);
-  const forecast = projectFreeCash(data, today, s.free);
-  const canProject = projectionHasInputs(data, today);
   const history = Array.from({ length: 6 }, (_, i) => {
     const date = shiftMonths(`${today.slice(0, 7)}-01`, i - 5);
     const flow = monthlyFlow(data.transactions, date.slice(0, 7));
@@ -397,27 +443,7 @@ export function HomePage() {
               </Link>
             </div>
           </Card>
-          <Card>
-            <SectionTitle action={<Badge tone="green">Próximos 6 meses</Badge>}>
-              Dinheiro livre projetado
-            </SectionTitle>
-            <p className="muted forecast-baseline">
-              Partindo de {formatMoney(s.free)} livres após os compromissos deste mês.
-            </p>
-            {canProject ? (
-              <>
-                <TrendChart data={forecast} valueName="Livre ao fim do mês" />
-                <p className="muted forecast-caption">
-                  Estimativa com renda mensal, entradas previstas, gastos planejados, recorrências e aportes para metas.
-                  Não é saldo bancário; despesas não cadastradas podem alterar os valores.
-                </p>
-              </>
-            ) : (
-              <p className="muted forecast-empty">
-                Informe sua renda mensal ou cadastre gastos planejados e contas fixas para ver a projeção.
-              </p>
-            )}
-          </Card>
+          <FreeCashForecastCard data={data} startingFree={s.free} today={today} />
           <Card>
             <SectionTitle
               action={

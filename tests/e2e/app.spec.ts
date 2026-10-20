@@ -827,6 +827,8 @@ test('Home mostra o resumo, ações rápidas, objetivos e até três movimentos'
   const net = totals.income - totals.expenses;
   await expect(page.getByRole('heading', { name: 'Seu mês', exact: true })).toBeVisible();
   await expect(page.locator('.home-month-result')).toContainText(net < 0 ? 'faltou' : 'livre para planejar');
+  await expect(page.getByRole('heading', { name: 'Dinheiro livre projetado' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gastos por categoria' })).toBeVisible();
   await expect(page.locator('.home-flow-line')).toHaveText(
     `Entrou ${formatMoney(totals.income)} · Saiu ${formatMoney(totals.expenses)}`,
   );

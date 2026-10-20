@@ -30,6 +30,7 @@ import { monthlyFlow } from '../../shared/insights';
 import { goalMonthlyBudget, goalMonthlyPlan } from '../../shared/journey';
 import { merchantKey } from '../../shared/financial-decisions';
 import { useCaptureFlow } from '../design-system/capture-flow';
+import { CategorySpendChart, FreeCashForecastCard } from './Home';
 
 function monthLabel(month: string) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
@@ -1120,6 +1121,8 @@ export function SimpleHome() {
             </Link>
           </section>
         )}
+        <FreeCashForecastCard data={app.data} startingFree={goalBudget.available} today={today} />
+        <CategorySpendChart data={app.data} today={today} />
         <section className="home-goal" aria-labelledby="home-goal-title">
           <div className="home-goal-heading">
             <h2 id="home-goal-title">Objetivos</h2>
