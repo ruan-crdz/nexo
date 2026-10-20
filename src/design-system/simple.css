@@ -4366,7 +4366,7 @@ label {
   opacity: 0.55;
 }
 .planning-overflow-menu .planning-destructive-action {
-  color: var(--terracotta, #a84f35);
+  color: var(--terra);
 }
 .planning-overview-section {
   display: grid;
@@ -4426,7 +4426,7 @@ label {
   text-transform: uppercase;
 }
 .planning-bill-group.is-overdue > time {
-  color: var(--terracotta, #a84f35);
+  color: var(--terra);
 }
 .planning-bill-group ul {
   margin: 0;
@@ -4451,7 +4451,7 @@ label {
   font-variant-numeric: tabular-nums;
 }
 .planning-bill-group.is-overdue li strong {
-  color: var(--terracotta, #a84f35);
+  color: var(--terra);
 }
 .planning-section-link {
   display: inline-flex;
@@ -4510,7 +4510,7 @@ label {
 }
 .planning-limit-values > .is-over-budget,
 .planning-detail-page .is-over-budget {
-  color: var(--terracotta, #a84f35);
+  color: var(--terra);
 }
 .planning-limit-row .progress {
   grid-area: progress;
@@ -4890,7 +4890,7 @@ label {
   padding: 8px 0;
   border: 0;
   background: transparent;
-  color: var(--terracotta, #a84f35);
+  color: var(--terra);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
