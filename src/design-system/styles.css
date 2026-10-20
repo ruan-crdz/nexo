@@ -695,6 +695,27 @@ fieldset {
   min-width: 0;
   width: 100%;
 }
+.category-chart {
+  height: 220px;
+  min-width: 0;
+  width: 100%;
+}
+.category-total,
+.forecast-baseline {
+  font-size: 11px;
+  margin: -8px 0 10px;
+}
+.category-caption,
+.forecast-caption {
+  font-size: 10px;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+.category-empty,
+.forecast-empty {
+  font-size: 12px;
+  margin: 18px 0 6px;
+}
 .chart-legend {
   display: flex;
   gap: 18px;

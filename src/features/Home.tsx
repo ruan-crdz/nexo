@@ -1,6 +1,16 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import {
   Plus,
   ArrowUpRight,
@@ -16,18 +26,22 @@ import {
 } from 'lucide-react';
 import { useApp } from '../data/context';
 import { personalSummary, monthlyFlow, weeklyPlan } from '../../shared/insights';
-import { civilDate, formatMoney, shiftMonths } from '../../shared/financial-engine';
+import { recurringTransactions } from '../../shared/planning';
+import { civilDate, formatMoney, shiftDays, shiftMonths, sum } from '../../shared/financial-engine';
 import { Card, Stat, SectionTitle, Badge, Progress, Why, Button } from '../design-system/components';
 import { Editor } from './Editor';
-import type { Transaction } from '../../shared/domain';
+import type { Dataset, Transaction } from '../../shared/domain';
 
 export function TrendChart({
   data,
   second = false,
+  valueName,
 }: {
   data: { label: string; value: number; expenses?: number }[];
   second?: boolean;
+  valueName?: string;
 }) {
+  const gradientId = useId();
   return (
     <div
       className="chart"
@@ -37,7 +51,7 @@ export function TrendChart({
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 15, right: 8, left: -25, bottom: 0 }}>
           <defs>
-            <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#64715A" stopOpacity={0.13} />
               <stop offset="100%" stopColor="#64715A" stopOpacity={0} />
             </linearGradient>
@@ -54,7 +68,14 @@ export function TrendChart({
             tickLine={false}
             axisLine={false}
             tick={{ fontSize: 9, fill: '#706e64' }}
-            tickFormatter={(v: number) => `${v / 100000}k`}
+            tickFormatter={(v: number) =>
+              new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+                notation: 'compact',
+                maximumFractionDigits: 1,
+              }).format(v / 100)
+            }
           />
           <Tooltip
             formatter={(v) => formatMoney(Number(v))}
@@ -74,14 +95,159 @@ export function TrendChart({
           <Area
             type="monotone"
             dataKey="value"
-            name={second ? 'Entradas' : 'Saldo projetado'}
+            name={valueName ?? (second ? 'Entradas' : 'Saldo projetado')}
             stroke="#64715a"
-            fill="url(#chart-fill)"
+            fill={`url(#${gradientId})`}
             strokeWidth={2.5}
           />
         </AreaChart>
       </ResponsiveContainer>
     </div>
+  );
+}
+
+function projectFreeCash(data: Dataset, today: string, startingFree: number) {
+  let free = startingFree;
+  const remainingGoals = data.goals.map((goal) => Math.max(0, goal.target - goal.saved));
+  return Array.from({ length: 6 }, (_, index) => {
+    const monthStart = shiftMonths(`${today.slice(0, 7)}-01`, index + 1);
+    const monthEnd = shiftDays(shiftMonths(monthStart, 1), -1);
+    const planned = data.transactions.filter(
+      (transaction) =>
+        transaction.status === 'planned' &&
+        transaction.date >= monthStart &&
+        transaction.date <= monthEnd,
+    );
+    const recurring = recurringTransactions(
+      data.recurring_rules,
+      data.transactions,
+      monthStart,
+      data.recurring_occurrences,
+    ).filter((transaction) => transaction.date >= monthStart && transaction.date <= monthEnd);
+    const forecastRows = [...planned, ...recurring];
+    const incomeRows = forecastRows.filter((transaction) => transaction.type === 'income');
+    const salaryIncome = sum(
+      incomeRows
+        .filter((transaction) => transaction.category.toLowerCase() === 'salário')
+        .map((transaction) => transaction.amount),
+    );
+    const otherIncome = sum(
+      incomeRows
+        .filter((transaction) => transaction.category.toLowerCase() !== 'salário')
+        .map((transaction) => transaction.amount),
+    );
+    const income = sum([Math.max(data.profile.monthly_income, salaryIncome), otherIncome]);
+    const expenses = sum(
+      forecastRows
+        .filter((transaction) => transaction.type === 'expense')
+        .map((transaction) => transaction.amount),
+    );
+    const goalContributions = remainingGoals.reduce((total, remaining, goalIndex) => {
+      const contribution = Math.min(data.goals[goalIndex].monthly_contribution, remaining);
+      remainingGoals[goalIndex] -= contribution;
+      return sum([total, contribution]);
+    }, 0);
+    free = sum([free, income, -expenses, -goalContributions]);
+    return {
+      label: new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
+        .format(new Date(`${monthStart}T12:00:00Z`))
+        .replace('.', ''),
+      value: free,
+    };
+  });
+}
+
+function spendingByCategory(transactions: Transaction[], today: string) {
+  const month = today.slice(0, 7);
+  const totals = new Map<string, number>();
+  for (const transaction of transactions) {
+    if (
+      transaction.type !== 'expense' ||
+      transaction.status !== 'paid' ||
+      !transaction.date.startsWith(month) ||
+      transaction.date > today
+    )
+      continue;
+    totals.set(transaction.category, sum([totals.get(transaction.category) ?? 0, transaction.amount]));
+  }
+  const sorted = [...totals].sort((first, second) => second[1] - first[1]);
+  const top = sorted.slice(0, 5).map(([label, value]) => ({ label, value }));
+  const other = sum(sorted.slice(5).map(([, value]) => value));
+  if (other) top.push({ label: 'Outras', value: other });
+  return top;
+}
+
+function projectionHasInputs(data: Dataset, today: string) {
+  const nextMonth = shiftMonths(`${today.slice(0, 7)}-01`, 1);
+  return (
+    data.profile.monthly_income > 0 ||
+    data.transactions.some((transaction) => transaction.status === 'planned' && transaction.date >= nextMonth) ||
+    data.recurring_rules.some((rule) => rule.active) ||
+    data.goals.some((goal) => goal.monthly_contribution > 0 && goal.saved < goal.target)
+  );
+}
+
+export function CategorySpendChart({ data, today }: { data: Dataset; today: string }) {
+  const categories = spendingByCategory(data.transactions, today);
+  const total = sum(categories.map((category) => category.value));
+  const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' })
+    .format(new Date(`${today.slice(0, 7)}-01T12:00:00Z`));
+  return (
+    <Card>
+      <SectionTitle action={<Badge>Este mês</Badge>}>Gastos por categoria</SectionTitle>
+      <p className="muted category-total">
+        {total > 0
+          ? `${formatMoney(total)} em gastos pagos até agora`
+          : 'Sem gastos pagos registrados neste mês'}
+      </p>
+      {categories.length ? (
+        <>
+          <div
+            className="category-chart"
+            role="img"
+            aria-label={`Gastos por categoria em ${monthLabel}: ${categories.map(({ label, value }) => `${label}, ${formatMoney(value)}`).join('; ')}`}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={categories}
+                layout="vertical"
+                margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+              >
+                <CartesianGrid horizontal={false} stroke="#e5e1d5" strokeDasharray="3 5" />
+                <XAxis
+                  type="number"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 9, fill: '#706e64' }}
+                  tickFormatter={(value: number) =>
+                    new Intl.NumberFormat('pt-BR', {
+                      notation: 'compact',
+                      maximumFractionDigits: 1,
+                    }).format(value / 100)
+                  }
+                />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  width={88}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 10, fill: '#706e64' }}
+                />
+                <Tooltip
+                  formatter={(value) => formatMoney(Number(value))}
+                  contentStyle={{ borderRadius: 10, border: '1px solid #e5e1d5', fontSize: 12 }}
+                />
+                <Bar dataKey="value" name="Gastos pagos" fill="#64715a" radius={[0, 5, 5, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="muted category-caption">Considera apenas gastos pagos registrados em {monthLabel}.</p>
+        </>
+      ) : (
+        <p className="muted category-empty">Seus gastos registrados aparecerão aqui, organizados por categoria.</p>
+      )}
+    </Card>
   );
 }
 export function TransactionList({ rows }: { rows: Transaction[] }) {
@@ -136,6 +302,8 @@ export function HomePage() {
     [adding, setAdding] = useState(false);
   const s = personalSummary(data),
     today = civilDate(new Date(), data.profile.timezone);
+  const forecast = projectFreeCash(data, today, s.free);
+  const canProject = projectionHasInputs(data, today);
   const history = Array.from({ length: 6 }, (_, i) => {
     const date = shiftMonths(`${today.slice(0, 7)}-01`, i - 5);
     const flow = monthlyFlow(data.transactions, date.slice(0, 7));
@@ -230,6 +398,27 @@ export function HomePage() {
             </div>
           </Card>
           <Card>
+            <SectionTitle action={<Badge tone="green">Próximos 6 meses</Badge>}>
+              Dinheiro livre projetado
+            </SectionTitle>
+            <p className="muted forecast-baseline">
+              Partindo de {formatMoney(s.free)} livres após os compromissos deste mês.
+            </p>
+            {canProject ? (
+              <>
+                <TrendChart data={forecast} valueName="Livre ao fim do mês" />
+                <p className="muted forecast-caption">
+                  Estimativa com renda mensal, entradas previstas, gastos planejados, recorrências e aportes para metas.
+                  Não é saldo bancário; despesas não cadastradas podem alterar os valores.
+                </p>
+              </>
+            ) : (
+              <p className="muted forecast-empty">
+                Informe sua renda mensal ou cadastre gastos planejados e contas fixas para ver a projeção.
+              </p>
+            )}
+          </Card>
+          <Card>
             <SectionTitle
               action={
                 <Link className="text-link" to="/relatorios">
@@ -255,6 +444,7 @@ export function HomePage() {
           </Card>
         </div>
         <div className="stack">
+          <CategorySpendChart data={data} today={today} />
           <Card className="score-card">
             <div>
               <Badge tone="green">Nexo Score</Badge>
